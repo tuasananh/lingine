@@ -1,14 +1,12 @@
 use crate::uci::engine::UCIEngine;
 
 pub struct UCIHandler<T: UCIEngine> {
-    engine: T
+    engine: T,
 }
 
 impl<T: UCIEngine> UCIHandler<T> {
     pub fn new() -> Self {
-        Self {
-            engine: T::new()
-        }
+        Self { engine: T::new() }
     }
 
     pub fn run(self) {
@@ -23,15 +21,23 @@ impl<T: UCIEngine> UCIHandler<T> {
             let mut token_stream = tokens.iter();
             let mut quit = false;
 
-            while let Some(token ) = token_stream.next() && !quit {
+            while let Some(token) = token_stream.next()
+                && !quit
+            {
                 let token = *token;
                 match token {
                     "uci" => {
                         self.engine.uci();
                     }
                     "debug" => {
-                        let val = *token_stream.next().expect("Expect 'on' or 'off', got nothing");
-                        assert!(val != "on" || val != "off", "Expect 'on' or 'off', got {}", val);
+                        let val = *token_stream
+                            .next()
+                            .expect("Expect 'on' or 'off', got nothing");
+                        assert!(
+                            val == "on" || val == "off",
+                            "Expect 'on' or 'off', got {}",
+                            val
+                        );
                         self.engine.debug(val == "on");
                     }
                     "isready" => {
@@ -74,7 +80,7 @@ impl<T: UCIEngine> UCIHandler<T> {
             }
 
             if quit {
-                break
+                break;
             }
         }
     }

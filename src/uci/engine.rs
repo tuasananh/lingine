@@ -8,7 +8,7 @@ pub trait UCIEngine {
     fn debug(&self, is_on: bool);
 
     fn isready(&self);
-    
+
     fn setoption(&self, option: UCISetOption);
 
     fn ucinewgame(&self);
