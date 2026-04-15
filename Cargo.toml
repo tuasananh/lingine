@@ -1,6 +1,14 @@
 [package]
-name = "LiNgine"
+name = "lingine"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.102"
+arrayvec = "0.7.6"
+derive_more = { version = "2.1.1", features = ["full"] }
+strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2.0.18"
+
+[toolchain]
+channel = "nightly"
