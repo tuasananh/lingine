@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use crate::uci::engine::UCIEngine;
 
 pub struct UCIHandler<T: UCIEngine> {
@@ -5,11 +7,11 @@ pub struct UCIHandler<T: UCIEngine> {
 }
 
 impl<T: UCIEngine> UCIHandler<T> {
-    pub fn new() -> Self {
-        Self { engine: T::new() }
+    pub fn new() -> Result<Self> {
+        Ok(Self { engine: T::new()? })
     }
 
-    pub fn run(self) {
+    pub fn run(mut self) {
         let mut full_command = String::new();
 
         loop {

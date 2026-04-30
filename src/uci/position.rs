@@ -1,38 +1,11 @@
 use std::slice::Iter;
 
-#[derive(Clone, Debug)]
-pub struct UCIMove(u32);
-
-impl UCIMove {
-    pub fn as_u32(&self) -> u32 {
-        self.0
-    }
-}
-
-impl PartialEq for UCIMove {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for UCIMove {}
-
-impl From<&str> for UCIMove {
-    fn from(value: &str) -> Self {
-        assert!(value.len() == 4, "Expect move to be of 4 characters");
-        let value = value.as_bytes();
-        let r1 = value[0] - 'a' as u8;
-        let f1 = value[1] - '0' as u8;
-        let r2 = value[2] - 'a' as u8;
-        let f2 = value[3] - '0' as u8;
-        Self((r1 as u32) | ((f1 as u32) << 8) | ((r2 as u32) << 16) | ((f2 as u32) << 24))
-    }
-}
+use crate::types::Move;
 
 #[derive(Clone, Debug)]
 pub struct UCIPosition {
-    fen: String,
-    moves: Vec<UCIMove>,
+    pub fen: String,
+    pub moves: Vec<Move>,
 }
 
 const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
@@ -72,7 +45,7 @@ impl From<&mut Iter<'_, &str>> for UCIPosition {
             START_FEN.to_string()
         };
 
-        let moves: Vec<UCIMove> = value.map(|tok| UCIMove::from(*tok)).collect();
+        let moves: Vec<Move> = value.map(|tok| Move::from(*tok)).collect();
 
         Self { fen, moves }
     }
@@ -80,7 +53,9 @@ impl From<&mut Iter<'_, &str>> for UCIPosition {
 
 #[cfg(test)]
 mod tests {
-    use super::{UCIMove, UCIPosition};
+    use crate::types::Move;
+
+    use super::UCIPosition;
 
     #[test]
     fn parses_startpos_without_moves() {
@@ -129,7 +104,7 @@ mod tests {
         let parsed = UCIPosition::from(&mut iter);
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 b");
-        assert_eq!(parsed.moves, &[UCIMove::from("a0a1")]);
+        assert_eq!(parsed.moves, &[Move::from("a0a1")]);
     }
 
     #[test]

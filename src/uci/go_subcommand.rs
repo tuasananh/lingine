@@ -1,10 +1,10 @@
 use std::{num::NonZeroU32, slice::Iter, time::Duration};
 
-use crate::uci::position::UCIMove;
+use crate::types::Move;
 
 #[derive(Clone, Debug, Default)]
 pub struct UCIGoSubcommand {
-    searchmoves: Option<Vec<UCIMove>>,
+    searchmoves: Option<Vec<Move>>,
     ponder: bool,
     wtime: Option<Duration>,
     btime: Option<Duration>,
@@ -47,7 +47,7 @@ impl From<&mut Iter<'_, &str>> for UCIGoSubcommand {
                                 break;
                             }
                             _ => {
-                                searchmoves.push(UCIMove::from(
+                                searchmoves.push(Move::from(
                                     *value.next().expect("Expect search move, got nothing"),
                                 ));
                             }
