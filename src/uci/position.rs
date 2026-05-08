@@ -41,8 +41,10 @@ impl TryFrom<&mut Iter<'_, &str>> for Position {
             }
             val
         } else {
-            if let Some(tok) = value.next() {
-                ensure!(*tok == "moves", "Expect 'moves', got {}", tok);
+            for &tok in value.by_ref() {
+                if tok == "moves" {
+                    break;
+                }
             }
             START_FEN.to_string()
         };

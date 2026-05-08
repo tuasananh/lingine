@@ -19,7 +19,10 @@ impl<T: Engine> UCIHandler<T> {
         loop {
             full_command.clear();
 
-            reader.read_line(&mut full_command).ok().unwrap();
+            if reader.read_line(&mut full_command)? == 0 {
+                // Reached EOF
+                break Ok(());
+            }
 
             let tokens = full_command.split_whitespace().collect::<Vec<&str>>();
             let mut token_stream = tokens.iter();
@@ -34,15 +37,11 @@ impl<T: Engine> UCIHandler<T> {
                         self.engine.uci()?;
                     }
                     "debug" => {
-                        let val = *token_stream
-                            .next()
-                            .expect("Expect 'on' or 'off', got nothing");
-                        assert!(
-                            val == "on" || val == "off",
-                            "Expect 'on' or 'off', got {}",
-                            val
-                        );
-                        self.engine.debug(val == "on")?;
+                        if let Some(&val) = token_stream.next()
+                            && (val == "on" || val == "off")
+                        {
+                            self.engine.debug(val == "on")?;
+                        }
                     }
                     "isready" => {
                         self.engine.isready()?;
