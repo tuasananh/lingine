@@ -7,6 +7,10 @@ impl Move {
     pub fn as_u32(&self) -> u32 {
         self.0
     }
+
+    pub fn is_null(&self) -> bool {
+        self.0 == 0
+    }
 }
 
 impl PartialEq for Move {
@@ -26,6 +30,11 @@ impl TryFrom<&str> for Move {
             "A move must be 4 characters, got {} characters",
             value.len()
         );
+
+        if value[0] == value[1] && value[1] == value[2] && value[2] == value[3] && value[3] == b'0'
+        {
+            return Ok(Self(0));
+        }
         ensure!(
             b'a' <= value[0] && value[0] <= b'i',
             "File must be between 'a' to 'i'"

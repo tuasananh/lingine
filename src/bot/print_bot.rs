@@ -12,7 +12,9 @@ impl PrintBot {
 
 impl Engine for PrintBot {
     fn uci(&self) -> Result<()> {
-        println!("uci called!");
+        println!("id name PrintBot");
+        println!("id author tuasananh");
+        println!("uciok");
         Ok(())
     }
 
@@ -22,7 +24,7 @@ impl Engine for PrintBot {
     }
 
     fn isready(&self) -> Result<()> {
-        println!("isready called!");
+        println!("readyok");
         Ok(())
     }
 
@@ -45,7 +47,11 @@ impl Engine for PrintBot {
             position.fen, position.moves
         );
         if let Some(first_move) = position.moves.first() {
-            println!("First move as u32: {:?}", first_move.as_u32());
+            println!(
+                "First move as u32: {:?}, is null: {:?}",
+                first_move.as_u32(),
+                first_move.is_null()
+            );
         }
 
         Ok(())

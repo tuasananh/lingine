@@ -29,16 +29,16 @@ impl TryFrom<&mut Iter<'_, &str>> for Position {
         );
 
         let fen = if next_token == "fen" {
-            let mut val = value
-                .next()
-                .expect("Expect fen string, got nothing")
-                .to_string();
+            let mut val = String::new();
             while let Some(tok) = value.next()
                 && *tok != "moves"
             {
-                val += " ";
+                if !val.is_empty() {
+                    val += " ";
+                }
                 val += *tok;
             }
+            ensure!(!val.is_empty(), "Expect fen string, got nothing");
             val
         } else {
             for &tok in value.by_ref() {

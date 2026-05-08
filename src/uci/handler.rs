@@ -73,7 +73,7 @@ impl<T: Engine> UCIHandler<T> {
                         break;
                     }
                     _ => {
-                        print!("Unknown command {}", token);
+                        // Unknown command, ignore
                         continue;
                     }
                 }
