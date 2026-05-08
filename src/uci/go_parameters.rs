@@ -1,10 +1,12 @@
 use std::{num::NonZeroU32, slice::Iter, time::Duration};
 
-use crate::uci::position::UCIMove;
+use anyhow::{Error, Result};
+
+use crate::uci::Move;
 
 #[derive(Clone, Debug, Default)]
-pub struct UCIGoSubcommand {
-    searchmoves: Option<Vec<UCIMove>>,
+pub struct GoParameters {
+    searchmoves: Option<Vec<Move>>,
     ponder: bool,
     wtime: Option<Duration>,
     btime: Option<Duration>,
@@ -18,8 +20,9 @@ pub struct UCIGoSubcommand {
     infinite: bool,
 }
 
-impl From<&mut Iter<'_, &str>> for UCIGoSubcommand {
-    fn from(value: &mut Iter<'_, &str>) -> Self {
+impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
+    type Error = Error;
+    fn try_from(value: &mut Iter<'_, &str>) -> Result<Self> {
         let mut res = Self {
             searchmoves: None,
             ponder: false,
@@ -40,16 +43,14 @@ impl From<&mut Iter<'_, &str>> for UCIGoSubcommand {
                 "searchmoves" => {
                     let mut searchmoves = Vec::new();
 
-                    while let Some(next_token) = value.clone().next() {
+                    for next_token in value.by_ref() {
                         match *next_token {
                             "ponder" | "wtime" | "btime" | "winc" | "binc" | "movestogo"
                             | "depth" | "nodes" | "mate" | "movetime" | "infinite" => {
                                 break;
                             }
                             _ => {
-                                searchmoves.push(UCIMove::from(
-                                    *value.next().expect("Expect search move, got nothing"),
-                                ));
+                                searchmoves.push((*next_token).try_into()?);
                             }
                         }
                     }
@@ -115,13 +116,13 @@ impl From<&mut Iter<'_, &str>> for UCIGoSubcommand {
             }
         }
 
-        res
+        Ok(res)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::UCIGoSubcommand;
+    use super::GoParameters;
     use std::time::Duration;
 
     #[test]
@@ -131,7 +132,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIGoSubcommand::from(&mut iter);
+        let parsed = GoParameters::try_from(&mut iter).unwrap();
 
         assert!(parsed.searchmoves.is_some());
         assert_eq!(parsed.searchmoves.unwrap().len(), 2);
@@ -147,7 +148,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIGoSubcommand::from(&mut iter);
+        let parsed = GoParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.wtime, Some(Duration::from_millis(1200)));
         assert_eq!(parsed.btime, Some(Duration::from_millis(3400)));
@@ -168,7 +169,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIGoSubcommand::from(&mut iter);
+        let parsed = GoParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.depth, Some(3));
     }

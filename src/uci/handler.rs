@@ -1,21 +1,25 @@
-use crate::uci::engine::UCIEngine;
+use std::io::BufRead;
 
-pub struct UCIHandler<T: UCIEngine> {
+use anyhow::Result;
+
+use crate::uci::Engine;
+
+pub struct UCIHandler<T: Engine> {
     engine: T,
 }
 
-impl<T: UCIEngine> UCIHandler<T> {
-    pub fn new() -> Self {
-        Self { engine: T::new() }
+impl<T: Engine> UCIHandler<T> {
+    pub fn new(engine: T) -> Self {
+        Self { engine }
     }
 
-    pub fn run(self) {
+    pub fn run<R: BufRead>(self, mut reader: R) -> Result<()> {
         let mut full_command = String::new();
 
         loop {
             full_command.clear();
 
-            std::io::stdin().read_line(&mut full_command).ok().unwrap();
+            reader.read_line(&mut full_command).ok().unwrap();
 
             let tokens = full_command.split_whitespace().collect::<Vec<&str>>();
             let mut token_stream = tokens.iter();
@@ -27,7 +31,7 @@ impl<T: UCIEngine> UCIHandler<T> {
                 let token = *token;
                 match token {
                     "uci" => {
-                        self.engine.uci();
+                        self.engine.uci()?;
                     }
                     "debug" => {
                         let val = *token_stream
@@ -38,35 +42,34 @@ impl<T: UCIEngine> UCIHandler<T> {
                             "Expect 'on' or 'off', got {}",
                             val
                         );
-                        self.engine.debug(val == "on");
+                        self.engine.debug(val == "on")?;
                     }
                     "isready" => {
-                        self.engine.isready();
+                        self.engine.isready()?;
                     }
                     "setoption" => {
-                        self.engine.setoption((&mut token_stream).into());
+                        self.engine.setoption((&mut token_stream).try_into()?)?;
                     }
-                    // Probably not needed
-                    // "register" => {
-                    //     todo!("handle registration")
-                    // }
+                    "register" => {
+                        self.engine.register((&mut token_stream).try_into()?)?;
+                    }
                     "ucinewgame" => {
-                        self.engine.ucinewgame();
+                        self.engine.ucinewgame()?;
                     }
                     "position" => {
-                        self.engine.position((&mut token_stream).into());
+                        self.engine.position((&mut token_stream).try_into()?)?;
                     }
                     "go" => {
-                        self.engine.go((&mut token_stream).into());
+                        self.engine.go((&mut token_stream).try_into()?)?;
                     }
                     "stop" => {
-                        self.engine.stop();
+                        self.engine.stop()?;
                     }
                     "ponderhit" => {
-                        self.engine.ponderhit();
+                        self.engine.ponderhit()?;
                     }
                     "quit" => {
-                        self.engine.quit();
+                        self.engine.quit()?;
                         quit = true;
                         break;
                     }
@@ -80,7 +83,7 @@ impl<T: UCIEngine> UCIHandler<T> {
             }
 
             if quit {
-                break;
+                break Ok(());
             }
         }
     }

@@ -1,49 +1,28 @@
 use std::slice::Iter;
 
-#[derive(Clone, Debug)]
-pub struct UCIMove(u32);
+use anyhow::{Error, Result, ensure};
 
-impl UCIMove {
-    pub fn as_u32(&self) -> u32 {
-        self.0
-    }
-}
-
-impl PartialEq for UCIMove {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for UCIMove {}
-
-impl From<&str> for UCIMove {
-    fn from(value: &str) -> Self {
-        assert!(value.len() == 4, "Expect move to be of 4 characters");
-        let value = value.as_bytes();
-        let r1 = value[0] - 'a' as u8;
-        let f1 = value[1] - '0' as u8;
-        let r2 = value[2] - 'a' as u8;
-        let f2 = value[3] - '0' as u8;
-        Self((r1 as u32) | ((f1 as u32) << 8) | ((r2 as u32) << 16) | ((f2 as u32) << 24))
-    }
-}
+use crate::uci::r#move::Move;
 
 #[derive(Clone, Debug)]
-pub struct UCIPosition {
-    fen: String,
-    moves: Vec<UCIMove>,
+pub struct Position {
+    pub fen: String,
+    pub moves: Vec<Move>,
 }
 
 const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
-impl From<&mut Iter<'_, &str>> for UCIPosition {
-    fn from(value: &mut Iter<'_, &str>) -> Self {
-        let next_token = *value
-            .next()
-            .expect("Expect 'fen' or 'startpos', but got nothing");
+impl TryFrom<&mut Iter<'_, &str>> for Position {
+    type Error = Error;
+    fn try_from(value: &mut Iter<'_, &str>) -> Result<Self> {
+        let next_token = value.next();
 
-        assert!(
+        ensure!(
+            next_token.is_some(),
+            "Expect 'fen' or 'startpos', but got nothing"
+        );
+        let next_token = *next_token.unwrap();
+        ensure!(
             next_token == "fen" || next_token == "startpos",
             "Expect 'fen' or 'startpos', but got {}",
             next_token
@@ -62,32 +41,30 @@ impl From<&mut Iter<'_, &str>> for UCIPosition {
             }
             val
         } else {
-            // consumes next token, which should be moves
-            if let Some(tok) = value.next()
-                && *tok != "moves"
-            {
-                // this should not happen
-                panic!("Expect 'moves', got {}", tok);
+            if let Some(tok) = value.next() {
+                ensure!(*tok == "moves", "Expect 'moves', got {}", tok);
             }
             START_FEN.to_string()
         };
 
-        let moves: Vec<UCIMove> = value.map(|tok| UCIMove::from(*tok)).collect();
+        let moves = value
+            .map(|tok| Move::try_from(*tok))
+            .collect::<Result<Vec<_>>>()?;
 
-        Self { fen, moves }
+        Ok(Self { fen, moves })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{UCIMove, UCIPosition};
+    use super::{Move, Position};
 
     #[test]
     fn parses_startpos_without_moves() {
         let tokens = "startpos".split_whitespace().collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIPosition::from(&mut iter);
+        let parsed = Position::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, super::START_FEN);
         assert!(parsed.moves.is_empty());
@@ -100,7 +77,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIPosition::from(&mut iter);
+        let parsed = Position::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, super::START_FEN);
         assert_eq!(parsed.moves.len(), 2);
@@ -113,7 +90,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIPosition::from(&mut iter);
+        let parsed = Position::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 w");
         assert!(parsed.moves.is_empty());
@@ -126,15 +103,15 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UCIPosition::from(&mut iter);
+        let parsed = Position::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 b");
-        assert_eq!(parsed.moves, &[UCIMove::from("a0a1")]);
+        assert_eq!(parsed.moves, &[Move::try_from("a0a1").unwrap()]);
     }
 
     #[test]
     fn encodes_move_bytes_consistently() {
-        let mv = UCIMove::from("b2c3");
+        let mv = Move::try_from("b2c3").unwrap();
         let expected = (1_u32) | (2_u32 << 8) | (2_u32 << 16) | (3_u32 << 24);
         assert_eq!(mv.as_u32(), expected);
     }
