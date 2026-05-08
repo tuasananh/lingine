@@ -1,25 +1,27 @@
-use crate::uci::{go_subcommand::UCIGoSubcommand, option::UCISetOption, position::UCIPosition};
+use anyhow::Result;
 
-pub trait UCIEngine {
-    fn new() -> Self;
+use crate::uci::{GoParameters, Position, RegisterParameters, SetOptionParameters};
 
-    fn uci(&self);
+pub trait Engine {
+    fn uci(&self) -> Result<()>;
 
-    fn debug(&self, is_on: bool);
+    fn debug(&self, is_on: bool) -> Result<()>;
 
-    fn isready(&self);
+    fn isready(&self) -> Result<()>;
 
-    fn setoption(&self, option: UCISetOption);
+    fn setoption(&self, params: SetOptionParameters) -> Result<()>;
 
-    fn ucinewgame(&self);
+    fn ucinewgame(&self) -> Result<()>;
 
-    fn position(&self, position: UCIPosition);
+    fn register(&self, params: RegisterParameters) -> Result<()>;
 
-    fn go(&self, position: UCIGoSubcommand);
+    fn position(&self, position: Position) -> Result<()>;
 
-    fn stop(&self);
+    fn go(&self, params: GoParameters) -> Result<()>;
 
-    fn ponderhit(&self);
+    fn stop(&self) -> Result<()>;
 
-    fn quit(&self);
+    fn ponderhit(&self) -> Result<()>;
+
+    fn quit(&self) -> Result<()>;
 }

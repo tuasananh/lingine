@@ -1,86 +1,97 @@
-use crate::uci::engine::UCIEngine;
+use std::io::BufRead;
 
-pub struct UCIHandler<T: UCIEngine> {
+use anyhow::Result;
+
+use crate::uci::Engine;
+
+pub struct UCIHandler<T: Engine> {
     engine: T,
 }
 
-impl<T: UCIEngine> UCIHandler<T> {
-    pub fn new() -> Self {
-        Self { engine: T::new() }
+impl<T: Engine> UCIHandler<T> {
+    pub fn new(engine: T) -> Self {
+        Self { engine }
     }
 
-    pub fn run(self) {
+    fn handle_command(&mut self, full_command: &str) -> Result<bool> {
+        let tokens = full_command.split_whitespace().collect::<Vec<&str>>();
+        let mut token_stream = tokens.iter();
+        let mut quit = false;
+
+        while let Some(token) = token_stream.next()
+            && !quit
+        {
+            let token = *token;
+            match token {
+                "uci" => {
+                    self.engine.uci()?;
+                }
+                "debug" => {
+                    if let Some(&val) = token_stream.next()
+                        && (val == "on" || val == "off")
+                    {
+                        self.engine.debug(val == "on")?;
+                    }
+                }
+                "isready" => {
+                    self.engine.isready()?;
+                }
+                "setoption" => {
+                    self.engine.setoption((&mut token_stream).try_into()?)?;
+                }
+                "register" => {
+                    self.engine.register((&mut token_stream).try_into()?)?;
+                }
+                "ucinewgame" => {
+                    self.engine.ucinewgame()?;
+                }
+                "position" => {
+                    self.engine.position((&mut token_stream).try_into()?)?;
+                }
+                "go" => {
+                    self.engine.go((&mut token_stream).try_into()?)?;
+                }
+                "stop" => {
+                    self.engine.stop()?;
+                }
+                "ponderhit" => {
+                    self.engine.ponderhit()?;
+                }
+                "quit" => {
+                    self.engine.quit()?;
+                    quit = true;
+                    break;
+                }
+                _ => {
+                    // Unknown command, ignore
+                    continue;
+                }
+            }
+
+            break;
+        }
+
+        Ok(quit)
+    }
+
+    pub fn run<R: BufRead>(mut self, mut reader: R) -> Result<()> {
         let mut full_command = String::new();
 
         loop {
             full_command.clear();
 
-            std::io::stdin().read_line(&mut full_command).ok().unwrap();
-
-            let tokens = full_command.split_whitespace().collect::<Vec<&str>>();
-            let mut token_stream = tokens.iter();
-            let mut quit = false;
-
-            while let Some(token) = token_stream.next()
-                && !quit
-            {
-                let token = *token;
-                match token {
-                    "uci" => {
-                        self.engine.uci();
-                    }
-                    "debug" => {
-                        let val = *token_stream
-                            .next()
-                            .expect("Expect 'on' or 'off', got nothing");
-                        assert!(
-                            val == "on" || val == "off",
-                            "Expect 'on' or 'off', got {}",
-                            val
-                        );
-                        self.engine.debug(val == "on");
-                    }
-                    "isready" => {
-                        self.engine.isready();
-                    }
-                    "setoption" => {
-                        self.engine.setoption((&mut token_stream).into());
-                    }
-                    // Probably not needed
-                    // "register" => {
-                    //     todo!("handle registration")
-                    // }
-                    "ucinewgame" => {
-                        self.engine.ucinewgame();
-                    }
-                    "position" => {
-                        self.engine.position((&mut token_stream).into());
-                    }
-                    "go" => {
-                        self.engine.go((&mut token_stream).into());
-                    }
-                    "stop" => {
-                        self.engine.stop();
-                    }
-                    "ponderhit" => {
-                        self.engine.ponderhit();
-                    }
-                    "quit" => {
-                        self.engine.quit();
-                        quit = true;
-                        break;
-                    }
-                    _ => {
-                        print!("Unknown command {}", token);
-                        continue;
-                    }
-                }
-
-                break;
+            if reader.read_line(&mut full_command)? == 0 {
+                // Reached EOF
+                break Ok(());
             }
 
-            if quit {
-                break;
+            match self.handle_command(&full_command) {
+                Ok(quit) => {
+                    if quit {
+                        break Ok(());
+                    }
+                }
+                Err(err) => log::error!("{:?}", err),
             }
         }
     }
