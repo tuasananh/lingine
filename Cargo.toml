@@ -7,5 +7,7 @@ edition = "2024"
 anyhow = "1.0.102"
 arrayvec = "0.7.6"
 derive_more = { version = "2.1.1", features = ["full"] }
+log = "0.4.29"
+simple_logger = "5.2.0"
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.18"
