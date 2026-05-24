@@ -7,19 +7,20 @@ use super::tables::{FILE_TABLE, RANK_TABLE};
 /// Shifts, masks, and packs these bits dynamically in O(1) time without standard loops.
 #[inline(always)]
 pub fn gather_file_bits(bits: u128, f: usize) -> usize {
-    let mut file_occ = 0;
     let occ = bits >> f;
-    file_occ |= (occ & 1) as usize;
-    file_occ |= (((occ >> 9) & 1) as usize) << 1;
-    file_occ |= (((occ >> 18) & 1) as usize) << 2;
-    file_occ |= (((occ >> 27) & 1) as usize) << 3;
-    file_occ |= (((occ >> 36) & 1) as usize) << 4;
-    file_occ |= (((occ >> 45) & 1) as usize) << 5;
-    file_occ |= (((occ >> 54) & 1) as usize) << 6;
-    file_occ |= (((occ >> 63) & 1) as usize) << 7;
-    file_occ |= (((occ >> 72) & 1) as usize) << 8;
-    file_occ |= (((occ >> 81) & 1) as usize) << 9;
-    file_occ
+    let low = occ as u64;
+    let high = (occ >> 45) as u64;
+
+    // Mask the 5 bits at positions 0, 9, 18, 27, 36 for low and high.
+    let val_low = low & 0x10_0804_0201;
+    let val_high = high & 0x10_0804_0201;
+
+    // Multiply by a magic factor that packs the 5 spaced bits into contiguous bits
+    // starting at bit 36, then shift down by 36 and mask the lowest 5 bits.
+    let key_low = (val_low.wrapping_mul(0x1010101010) >> 36) & 0x1F;
+    let key_high = (val_high.wrapping_mul(0x1010101010) >> 36) & 0x1F;
+
+    (key_low | (key_high << 5)) as usize
 }
 
 /// Computes horizontal and vertical attack/move targets for a Rook (Chariot).
