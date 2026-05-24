@@ -90,9 +90,11 @@ fn run_reader<R: BufRead>(
 
         match EngineCommand::parse(&line) {
             Ok(Some(cmd)) => {
-                // Set the flag before enqueuing Stop so the engine's search
-                // loop can observe it immediately without queue-drain delay.
-                if matches!(cmd, EngineCommand::Stop) {
+                // Set the flag before enqueuing Stop *or* Quit so the engine's
+                // search loop can observe it immediately without waiting for the
+                // command queue to drain. This ensures engine.go() exits
+                // promptly even if the GUI sends `quit` during infinite search.
+                if matches!(cmd, EngineCommand::Stop | EngineCommand::Quit) {
                     stop_flag.store(true, Ordering::SeqCst);
                 }
                 let quit = matches!(cmd, EngineCommand::Quit);
@@ -106,7 +108,19 @@ fn run_reader<R: BufRead>(
             Err(e) => log::error!("UCI parse error: {e:?}"),
         }
     }
-    // Dropping cmd_tx here signals Thread B's for-loop to exit.
+    // The loop exited: either via `quit`, EOF, or an I/O error.
+    //
+    // Guarantee 1: any in-progress engine.go() exits promptly by setting the
+    // stop flag. (For the `quit` path this is already true from the arm above;
+    // the store here is a harmless no-op in that case.)
+    stop_flag.store(true, Ordering::SeqCst);
+    //
+    // Guarantee 2: engine.quit() is always called for clean teardown, even
+    // when the session ended with EOF rather than an explicit `quit` command.
+    // If Thread B's receiver is already gone the send returns Err, which we
+    // ignore with `.ok()` — engine.quit() will not be called twice.
+    cmd_tx.send(EngineCommand::Quit).ok();
+    // Dropping cmd_tx here signals Thread B's cmd_rx loop to exit.
 }
 
 // ---------------------------------------------------------------------------
