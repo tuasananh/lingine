@@ -1,8 +1,9 @@
 use anyhow::Result;
 
 use crate::{
-    movegen::{MoveGenType, generate_moves},
+    movegen::generate_moves,
     position::Position,
+    types::MoveGenType,
 };
 
 #[derive(Debug)]
@@ -36,7 +37,7 @@ impl Perft {
     fn perft_helper<const ROOT: bool>(&mut self, pos: &mut Position, depth: u32) {
         let mut cnt = 0;
 
-        let moves = generate_moves::<{ MoveGenType::Legal }>();
+        let moves = generate_moves(pos, MoveGenType::Legal);
         let start_timepoint = if ROOT {
             Some(std::time::Instant::now())
         } else {
@@ -53,7 +54,7 @@ impl Perft {
                 pos.do_move(m);
 
                 if leaf {
-                    let next_moves = generate_moves::<{ MoveGenType::Legal }>();
+                    let next_moves = generate_moves(pos, MoveGenType::Legal);
 
                     cnt = next_moves.len() as u64;
 
@@ -63,7 +64,7 @@ impl Perft {
                                 self.captures += 1;
                             }
 
-                            if pos.gives_check(m) {
+                            if pos.gives_check(nm) {
                                 self.checks += 1;
                             }
                         }
@@ -102,6 +103,51 @@ mod tests {
     fn test_perft_startpos_depth_1() -> Result<()> {
         let mut perft = Perft::new();
         perft.perft(STARTPOS_FEN, 1)?;
+        assert_eq!(perft.nodes, 44);
+        Ok(())
+    }
+
+    #[test]
+    fn test_perft_startpos_depth_2() -> Result<()> {
+        let mut perft = Perft::new();
+        perft.perft(STARTPOS_FEN, 2)?;
+        assert_eq!(perft.nodes, 1920);
+        assert_eq!(perft.captures, 72);
+        assert_eq!(perft.checks, 6);
+        assert_eq!(perft.mates, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_perft_startpos_depth_3() -> Result<()> {
+        let mut perft = Perft::new();
+        perft.perft(STARTPOS_FEN, 3)?;
+        assert_eq!(perft.nodes, 79666);
+        assert_eq!(perft.captures, 3159);
+        assert_eq!(perft.checks, 384);
+        assert_eq!(perft.mates, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_perft_startpos_depth_4() -> Result<()> {
+        let mut perft = Perft::new();
+        perft.perft(STARTPOS_FEN, 4)?;
+        assert_eq!(perft.nodes, 3290240);
+        assert_eq!(perft.captures, 115365);
+        assert_eq!(perft.checks, 19380);
+        assert_eq!(perft.mates, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_perft_startpos_depth_5() -> Result<()> {
+        let mut perft = Perft::new();
+        perft.perft(STARTPOS_FEN, 5)?;
+        assert_eq!(perft.nodes, 133312995);
+        assert_eq!(perft.captures, 4917734);
+        assert_eq!(perft.checks, 953251);
+        assert_eq!(perft.mates, 0);
         Ok(())
     }
 }

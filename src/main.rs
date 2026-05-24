@@ -3,7 +3,13 @@ use simple_logger::SimpleLogger;
 
 use crate::{bot::PrintBot, uci::UCIHandler};
 
+#[cfg(test)]
+mod benchmark;
+mod bitboard;
 mod bot;
+mod movegen;
+mod position;
+mod types;
 mod uci;
 
 fn main() -> Result<()> {

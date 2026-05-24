@@ -5,16 +5,38 @@ use strum::EnumCount;
 
 use crate::types::{Color, File, Rank, Square};
 
-#[derive(BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not)]
-pub struct Bitboard(u128);
+#[derive(BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Bitboard(pub u128);
 
 impl Bitboard {
-    fn new() -> Self {
+    pub const fn new() -> Self {
         Self(0)
     }
 
-    fn is_occupied(&self, square: Square) -> bool {
+    pub fn is_occupied(&self, square: Square) -> bool {
         (self.0 & (1u128 << (square as u8))) != 0
+    }
+
+    pub fn set_bit(&mut self, square: Square) {
+        self.0 |= 1u128 << (square as u8);
+    }
+
+    pub fn clear_bit(&mut self, square: Square) {
+        self.0 &= !(1u128 << (square as u8));
+    }
+
+    pub fn count_ones(&self) -> u32 {
+        self.0.count_ones()
+    }
+
+    pub fn pop_lsb(&mut self) -> Option<Square> {
+        if self.0 == 0 {
+            None
+        } else {
+            let lsb = self.0.trailing_zeros() as u8;
+            self.0 &= self.0 - 1;
+            Square::from_repr(lsb)
+        }
     }
 
     pub const fn const_or(&self, b: Self) -> Self {

@@ -7,7 +7,7 @@ pub type Key = u64;
 pub type Value = i32;
 
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount)]
+#[derive(FromRepr, EnumCount, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Color {
     White,
@@ -24,21 +24,21 @@ impl Color {
 }
 
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter)]
+#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Rank {
     R0, R1, R2, R3, R4, R5, R6, R7, R8, R9,
 }
 
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter)]
+#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum File {
     FA, FB, FC, FD, FE, FF, FG, FH, FI,
 }
 
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter)]
+#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Square {
     A0, B0, C0, D0, E0, F0, G0, H0, I0,
@@ -60,10 +60,18 @@ impl Square {
         let square_index = rank_index * 9 + file_index;
         Self::from_repr(square_index).unwrap()
     }
+
+    pub fn file(&self) -> File {
+        File::from_repr((*self as u8) % 9).unwrap()
+    }
+
+    pub fn rank(&self) -> Rank {
+        Rank::from_repr((*self as u8) / 9).unwrap()
+    }
 }
 
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter)]
+#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum PieceType {
     NoPiece, Rook, Advisor, Cannon, Pawn, Knight, Bishop, King, KnightTo, PawnTo
@@ -74,7 +82,7 @@ impl PieceType {
 }
 
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter)]
+#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Piece {
     NoPiece,
@@ -82,8 +90,41 @@ pub enum Piece {
     BlackRook = 9, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
 }
 
+impl Piece {
+    pub fn color(&self) -> Option<Color> {
+        match *self {
+            Piece::NoPiece => None,
+            Piece::WhiteRook | Piece::WhiteAdvisor | Piece::WhiteCannon | Piece::WhitePawn | Piece::WhiteKnight | Piece::WhiteBishop | Piece::WhiteKing => Some(Color::White),
+            _ => Some(Color::Black),
+        }
+    }
+
+    pub fn piece_type(&self) -> PieceType {
+        match *self {
+            Piece::NoPiece => PieceType::NoPiece,
+            Piece::WhiteRook | Piece::BlackRook => PieceType::Rook,
+            Piece::WhiteAdvisor | Piece::BlackAdvisor => PieceType::Advisor,
+            Piece::WhiteCannon | Piece::BlackCannon => PieceType::Cannon,
+            Piece::WhitePawn | Piece::BlackPawn => PieceType::Pawn,
+            Piece::WhiteKnight | Piece::BlackKnight => PieceType::Knight,
+            Piece::WhiteBishop | Piece::BlackBishop => PieceType::Bishop,
+            Piece::WhiteKing | Piece::BlackKing => PieceType::King,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MoveGenType {
+    Captures,
+    Quiets,
+    Evasions,
+    PseudoLegal,
+    Legal,
+}
+
 const BLOOM_FILTER_SIZE: usize = 1 << 14;
 
+#[derive(Clone)]
 pub struct BloomFilter {
     table: [u8; BLOOM_FILTER_SIZE],
 }
@@ -116,20 +157,38 @@ impl IndexMut<Key> for BloomFilter {
 //
 // bit  0- 6: destination square (from 0 to 89)
 // bit  7-13: origin square (from 0 to 89)
-//
-// Special cases are Move::none() and Move::null(). We can sneak these in because
-// in any normal move the destination square and origin square are always different,
-// but Move::none() and Move::null() have the same origin and destination square.
+// bit 14-15: move flags (00 = quiet, 01 = capture, 10 = check, 11 = reserved)
 
-#[derive(Debug, Clone, Copy)]
-pub struct Move(u16);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Move(pub u16);
 
 impl Move {
-    pub fn square_from(&self) -> Square {
-        todo!();
+    pub fn new(from: Square, to: Square) -> Self {
+        Self((to as u16) | ((from as u16) << 7))
     }
+
+    pub fn new_with_flags(from: Square, to: Square, flags: u16) -> Self {
+        Self((to as u16) | ((from as u16) << 7) | ((flags & 3) << 14))
+    }
+
+    pub fn square_from(&self) -> Square {
+        Square::from_repr(((self.0 >> 7) & 0x7F) as u8).unwrap()
+    }
+
     pub fn square_to(&self) -> Square {
-        todo!();
+        Square::from_repr((self.0 & 0x7F) as u8).unwrap()
+    }
+
+    pub fn flags(&self) -> u16 {
+        self.0 >> 14
+    }
+
+    pub fn none() -> Self {
+        Self(0)
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.0 == 0
     }
 }
 
@@ -147,9 +206,7 @@ impl From<&str> for Move {
         let from_square = Square::from_file_rank(from_file, from_rank);
         let to_square = Square::from_file_rank(to_file, to_rank);
 
-        // Encode the move as a u16
-        let move_value = (to_square as u16) | ((from_square as u16) << 7);
-        Move(move_value)
+        Move::new(from_square, to_square)
     }
 }
 
