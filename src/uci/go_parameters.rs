@@ -1,42 +1,46 @@
-use std::{num::NonZeroU32, slice::Iter, time::Duration};
+use std::{num::NonZeroU32, slice::Iter, sync::atomic::AtomicBool, sync::Arc, time::Duration};
 
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 
-use crate::uci::Move;
+use crate::uci::UciMove;
 
 #[derive(Clone, Debug, Default)]
 pub struct GoParameters {
-    searchmoves: Option<Vec<Move>>,
-    ponder: bool,
-    wtime: Option<Duration>,
-    btime: Option<Duration>,
-    winc: Option<Duration>,
-    binc: Option<Duration>,
-    movestogo: Option<NonZeroU32>,
-    depth: Option<u32>,
-    nodes: Option<u32>,
-    mate: Option<u32>,
-    movetime: Option<u32>,
-    infinite: bool,
+    /// Restrict search to these moves only.
+    pub searchmoves: Option<Vec<UciMove>>,
+    /// Search in pondering mode.
+    pub ponder: bool,
+    /// Time remaining for White in milliseconds.
+    pub wtime: Option<Duration>,
+    /// Time remaining for Black in milliseconds.
+    pub btime: Option<Duration>,
+    /// White's increment per move in milliseconds.
+    pub winc: Option<Duration>,
+    /// Black's increment per move in milliseconds.
+    pub binc: Option<Duration>,
+    /// Moves until the next time control (only sent when > 0).
+    pub movestogo: Option<NonZeroU32>,
+    /// Search to this depth in plies only.
+    pub depth: Option<u32>,
+    /// Search at most this many nodes.
+    pub nodes: Option<u64>,
+    /// Search for a forced mate in this many moves.
+    pub mate: Option<u32>,
+    /// Search for exactly this many milliseconds.
+    pub movetime: Option<Duration>,
+    /// Search until a `stop` command is received.
+    pub infinite: bool,
+    /// Shared flag set by the handler when `stop` is received.
+    ///
+    /// The engine's `go` implementation should check this periodically and
+    /// exit the search loop when it is `true`.
+    pub stop: Arc<AtomicBool>,
 }
 
 impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
     type Error = Error;
     fn try_from(value: &mut Iter<'_, &str>) -> Result<Self> {
-        let mut res = Self {
-            searchmoves: None,
-            ponder: false,
-            wtime: None,
-            btime: None,
-            winc: None,
-            binc: None,
-            movestogo: None,
-            depth: None,
-            nodes: None,
-            mate: None,
-            movetime: None,
-            infinite: false,
-        };
+        let mut res = Self::default();
 
         while let Some(tok) = value.next() {
             match *tok {
@@ -61,51 +65,70 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                     res.ponder = true;
                 }
                 "wtime" => {
-                    let wtime = value.next().expect("Expect wtime, got nothing");
-                    res.wtime = Some(Duration::from_millis(
-                        wtime.parse::<u64>().expect("Expect u64"),
-                    ));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'wtime'"))?;
+                    let ms = val
+                        .parse::<u64>()
+                        .map_err(|_| anyhow!("invalid 'wtime' value: {val}"))?;
+                    res.wtime = Some(Duration::from_millis(ms));
                 }
                 "btime" => {
-                    let btime = value.next().expect("Expect btime, got nothing");
-                    res.btime = Some(Duration::from_millis(
-                        btime.parse::<u64>().expect("Expect u64"),
-                    ));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'btime'"))?;
+                    let ms = val
+                        .parse::<u64>()
+                        .map_err(|_| anyhow!("invalid 'btime' value: {val}"))?;
+                    res.btime = Some(Duration::from_millis(ms));
                 }
                 "winc" => {
-                    let winc = value.next().expect("Expect winc, got nothing");
-                    res.winc = Some(Duration::from_millis(
-                        winc.parse::<u64>().expect("Expect u64"),
-                    ));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'winc'"))?;
+                    let ms = val
+                        .parse::<u64>()
+                        .map_err(|_| anyhow!("invalid 'winc' value: {val}"))?;
+                    res.winc = Some(Duration::from_millis(ms));
                 }
                 "binc" => {
-                    let binc = value.next().expect("Expect binc, got nothing");
-                    res.binc = Some(Duration::from_millis(
-                        binc.parse::<u64>().expect("Expect u64"),
-                    ));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'binc'"))?;
+                    let ms = val
+                        .parse::<u64>()
+                        .map_err(|_| anyhow!("invalid 'binc' value: {val}"))?;
+                    res.binc = Some(Duration::from_millis(ms));
                 }
                 "movestogo" => {
-                    let movestogo = value.next().expect("Expect movestogo, got nothing");
-                    res.movestogo = Some(
-                        NonZeroU32::new(movestogo.parse::<u32>().expect("Expect u32"))
-                            .expect("Expect non-zero value"),
-                    );
+                    let val =
+                        value.next().ok_or_else(|| anyhow!("missing value for 'movestogo'"))?;
+                    let n = val
+                        .parse::<u32>()
+                        .map_err(|_| anyhow!("invalid 'movestogo' value: {val}"))?;
+                    res.movestogo =
+                        Some(NonZeroU32::new(n).ok_or_else(|| anyhow!("'movestogo' must be > 0"))?);
                 }
                 "depth" => {
-                    let depth = value.next().expect("Expect depth, got nothing");
-                    res.depth = Some(depth.parse::<u32>().expect("Expect u32"));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'depth'"))?;
+                    res.depth = Some(
+                        val.parse::<u32>()
+                            .map_err(|_| anyhow!("invalid 'depth' value: {val}"))?,
+                    );
                 }
                 "nodes" => {
-                    let nodes = value.next().expect("Expect nodes, got nothing");
-                    res.nodes = Some(nodes.parse::<u32>().expect("Expect u32"));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'nodes'"))?;
+                    res.nodes = Some(
+                        val.parse::<u64>()
+                            .map_err(|_| anyhow!("invalid 'nodes' value: {val}"))?,
+                    );
                 }
                 "mate" => {
-                    let mate = value.next().expect("Expect mate, got nothing");
-                    res.mate = Some(mate.parse::<u32>().expect("Expect u32"));
+                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'mate'"))?;
+                    res.mate = Some(
+                        val.parse::<u32>()
+                            .map_err(|_| anyhow!("invalid 'mate' value: {val}"))?,
+                    );
                 }
                 "movetime" => {
-                    let movetime = value.next().expect("Expect movetime, got nothing");
-                    res.movetime = Some(movetime.parse::<u32>().expect("Expect u32"));
+                    let val =
+                        value.next().ok_or_else(|| anyhow!("missing value for 'movetime'"))?;
+                    let ms = val
+                        .parse::<u64>()
+                        .map_err(|_| anyhow!("invalid 'movetime' value: {val}"))?;
+                    res.movetime = Some(Duration::from_millis(ms));
                 }
                 "infinite" => {
                     res.infinite = true;
@@ -158,7 +181,7 @@ mod tests {
         assert_eq!(parsed.depth, Some(4));
         assert_eq!(parsed.nodes, Some(1000));
         assert_eq!(parsed.mate, Some(2));
-        assert_eq!(parsed.movetime, Some(1500));
+        assert_eq!(parsed.movetime, Some(Duration::from_millis(1500)));
         assert!(parsed.infinite);
     }
 
@@ -172,5 +195,26 @@ mod tests {
         let parsed = GoParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.depth, Some(3));
+    }
+
+    #[test]
+    fn returns_error_on_missing_wtime_value() {
+        let tokens = "wtime".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+        assert!(GoParameters::try_from(&mut iter).is_err());
+    }
+
+    #[test]
+    fn returns_error_on_invalid_depth_value() {
+        let tokens = "depth abc".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+        assert!(GoParameters::try_from(&mut iter).is_err());
+    }
+
+    #[test]
+    fn returns_error_on_zero_movestogo() {
+        let tokens = "movestogo 0".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+        assert!(GoParameters::try_from(&mut iter).is_err());
     }
 }
