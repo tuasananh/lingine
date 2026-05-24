@@ -14,31 +14,26 @@ pub struct UciMove(u32);
 
 impl UciMove {
     /// Source file index (0 = 'a', …, 8 = 'i').
-    #[allow(dead_code)]
     pub fn src_file(&self) -> u8 {
         (self.0 & 0xFF) as u8
     }
 
     /// Source rank index (0–9).
-    #[allow(dead_code)]
     pub fn src_rank(&self) -> u8 {
         ((self.0 >> 8) & 0xFF) as u8
     }
 
     /// Destination file index (0 = 'a', …, 8 = 'i').
-    #[allow(dead_code)]
     pub fn dst_file(&self) -> u8 {
         ((self.0 >> 16) & 0xFF) as u8
     }
 
     /// Destination rank index (0–9).
-    #[allow(dead_code)]
     pub fn dst_rank(&self) -> u8 {
         ((self.0 >> 24) & 0xFF) as u8
     }
 
     /// Returns `true` if this is the null move (`"0000"`).
-    #[allow(dead_code)]
     pub fn is_null(&self) -> bool {
         self.0 == 0
     }

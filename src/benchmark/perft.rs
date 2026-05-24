@@ -14,7 +14,6 @@ struct Perft {
     mates: u64,
 }
 
-#[allow(dead_code)]
 impl Perft {
     fn new() -> Self {
         Self {

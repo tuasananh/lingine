@@ -24,7 +24,6 @@ impl fmt::Display for UciId {
 ///
 /// Corresponds to the five option types defined in the UCI specification:
 /// `check`, `spin`, `combo`, `button`, and `string`.
-#[allow(dead_code)]
 pub enum UciOption {
     /// A boolean checkbox.
     /// Serialises as: `option name <name> type check default <true|false>`
@@ -105,14 +104,12 @@ impl fmt::Display for UciOption {
 // ---------------------------------------------------------------------------
 
 /// Whether the score is an exact value, a lower bound, or an upper bound.
-#[allow(dead_code)]
 pub enum Bound {
     Lower,
     Upper,
 }
 
 /// The type of score the engine reports.
-#[allow(dead_code)]
 pub enum UciScore {
     /// Score in centipawns from the engine's point of view.
     Centipawns(i32),
