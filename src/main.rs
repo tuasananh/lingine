@@ -8,7 +8,7 @@ mod uci;
 
 fn main() -> Result<()> {
     SimpleLogger::new().init()?;
-    let bot = PrintBot;
+    let bot = PrintBot::default();
     let uci_handler = UCIHandler::new(bot);
     let reader = std::io::stdin().lock();
     uci_handler.run(reader)?;
