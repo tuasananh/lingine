@@ -65,6 +65,7 @@ pub struct Position {
 
     id_board: [u8; Square::COUNT],
     pub zobrist_hash: u64,
+    king_squares: [Square; 2],
 }
 
 #[derive(Error, Debug)]
@@ -86,6 +87,7 @@ impl Position {
             filter: BloomFilter::new(),
             id_board: [0; Square::COUNT],
             zobrist_hash: 0,
+            king_squares: [Square::E0, Square::E9],
         };
         // Setup initial empty history state
         pos.history.push(StateInfo {
@@ -124,6 +126,11 @@ impl Position {
             self.bitboard_by_type[pt as usize].set_bit(square);
             self.bitboard_by_color[c as usize].set_bit(square);
             self.piece_count[piece as usize] += 1;
+
+            if pt == PieceType::King {
+                self.king_squares[c as usize] = square;
+            }
+
             let table = ZOBRIST.get_or_init(ZobristTable::init);
             self.zobrist_hash ^= table.pieces[piece as usize][square as usize];
         }
@@ -323,27 +330,14 @@ impl Position {
     }
 
     pub fn king_square(&self, color: Color) -> Option<Square> {
-        let king_piece = match color {
-            Color::White => Piece::WhiteKing,
-            Color::Black => Piece::BlackKing,
-        };
-        for sq in 0..90 {
-            if self.board[sq] == king_piece {
-                return Some(Square::from_repr(sq as u8).unwrap());
-            }
-        }
-        None
+        Some(self.king_squares[color as usize])
     }
 
-    pub fn gives_check(&self, m: Move) -> bool {
-        let mut temp_pos = self.clone();
-        temp_pos.do_move(m);
-        let opp_king_square = temp_pos.king_square(temp_pos.side_to_move);
-        if let Some(sq) = opp_king_square {
-            temp_pos.is_square_attacked(sq, temp_pos.side_to_move.opposite())
-        } else {
-            false
-        }
+    pub fn gives_check(&mut self, m: Move) -> bool {
+        self.do_move(m);
+        let checked = self.is_in_check(self.side_to_move);
+        self.undo_move(m);
+        checked
     }
 
     pub fn is_in_check(&self, color: Color) -> bool {
@@ -352,6 +346,10 @@ impl Position {
         } else {
             false
         }
+    }
+
+    pub fn last_captured_piece(&self) -> Piece {
+        self.history.last().map(|s| s.captured_piece).unwrap_or(Piece::NoPiece)
     }
 
     pub fn is_square_attacked(&self, square: Square, attacker: Color) -> bool {

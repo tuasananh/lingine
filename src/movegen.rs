@@ -3,18 +3,15 @@ use crate::{
     types::{Color, File, Move, MoveGenType, MoveList, Piece, PieceType, Rank, Square},
 };
 
-pub fn generate_moves(pos: &Position, gen_type: MoveGenType) -> MoveList {
+pub fn generate_moves(pos: &mut Position, gen_type: MoveGenType) -> MoveList {
     let mut pseudo_moves = MoveList::new();
     let color = pos.side_to_move();
     let is_white = color == Color::White;
 
-    for from_idx in 0..90 {
-        let piece = pos.piece_at(Square::from_repr(from_idx as u8).unwrap());
-        if piece == Piece::NoPiece || piece.color() != Some(color) {
-            continue;
-        }
-
-        let from_sq = Square::from_repr(from_idx as u8).unwrap();
+    let mut occupied = pos.bitboard_by_color(color);
+    while let Some(from_sq) = occupied.pop_lsb() {
+        let piece = pos.piece_at(from_sq);
+        let from_idx = from_sq as usize;
         let f = (from_idx as i8) % 9;
         let r = (from_idx as i8) / 9;
 
@@ -183,10 +180,9 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType) -> MoveList {
 
     let mut legal_moves = MoveList::new();
     for &m in &pseudo_moves {
-        let mut temp_pos = pos.clone();
-        temp_pos.do_move(m);
-        if !temp_pos.is_in_check(color) {
-            let is_capture = !pos.is_empty(m.square_to());
+        let is_capture = !pos.is_empty(m.square_to());
+        pos.do_move(m);
+        if !pos.is_in_check(color) {
             match gen_type {
                 MoveGenType::Legal | MoveGenType::Evasions => {
                     legal_moves.push(m);
@@ -204,6 +200,7 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType) -> MoveList {
                 _ => {}
             }
         }
+        pos.undo_move(m);
     }
 
     legal_moves
