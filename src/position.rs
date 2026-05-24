@@ -656,3 +656,21 @@ impl Position {
             != 0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Move, Square};
+
+    #[test]
+    fn test_knight_leg_pin() {
+        let mut pos = Position::new();
+        // White King at E0, White Advisor at F1, Black Knight at F2 (aligned to jump onto E0)
+        pos.set("4k4/9/9/9/9/9/9/5h3/5A3/4K4 w - - 0 1").unwrap();
+        // Since F1 blocks the Knight's jump, the Advisor is fully pinned and cannot move away
+        assert!(!pos.legal(Move::new(Square::F1, Square::E2)));
+        assert!(!pos.legal(Move::new(Square::F1, Square::G2)));
+        assert!(!pos.legal(Move::new(Square::F1, Square::E0)));
+        assert!(!pos.legal(Move::new(Square::F1, Square::G0)));
+    }
+}

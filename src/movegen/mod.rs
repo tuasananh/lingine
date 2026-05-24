@@ -296,3 +296,206 @@ pub fn generate_moves(
 
     count
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::position::Position;
+    use crate::types::{Move, Square, MoveGenType, MAX_MOVES};
+
+    fn count_moves(pos: &Position, gen_type: MoveGenType) -> usize {
+        let mut moves = [Move::none(); MAX_MOVES];
+        generate_moves(pos, gen_type, &mut moves)
+    }
+
+    fn has_move(pos: &Position, gen_type: MoveGenType, m: Move) -> bool {
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(pos, gen_type, &mut moves);
+        moves[..count].contains(&m)
+    }
+
+    #[test]
+    fn test_king_moves() {
+        let mut pos = Position::new();
+        // Setup King in the middle of palace (E0)
+        pos.set("9/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let count = count_moves(&pos, MoveGenType::Legal);
+        // E0 has 4 directions: D0, F0, E1 (E-1 is offboard, so 3 legal moves)
+        assert_eq!(count, 3);
+        assert!(has_move(&pos, MoveGenType::Legal, Move::new(Square::E0, Square::D0)));
+        assert!(has_move(&pos, MoveGenType::Legal, Move::new(Square::E0, Square::F0)));
+        assert!(has_move(&pos, MoveGenType::Legal, Move::new(Square::E0, Square::E1)));
+
+        // Block with a friendly piece at E1
+        pos.set("9/9/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
+        // Advisor is on E1. Advisor moves: FD0, FF0.
+        // Let's generate moves for E0
+        let mut moves = [Move::none(); MAX_MOVES];
+        let c = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let king_moves: Vec<Move> = moves[..c].iter().filter(|m| m.square_from() == Square::E0).copied().collect();
+        assert_eq!(king_moves.len(), 2);
+        assert!(king_moves.contains(&Move::new(Square::E0, Square::D0)));
+        assert!(king_moves.contains(&Move::new(Square::E0, Square::F0)));
+    }
+
+    #[test]
+    fn test_advisor_moves() {
+        let mut pos = Position::new();
+        // Setup Advisor at center of Palace (E1)
+        pos.set("9/9/9/9/9/9/9/9/4A4/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let adv_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E1).copied().collect();
+        // E1 has 4 corners: D0, F0, D2, F2
+        assert_eq!(adv_moves.len(), 4);
+        assert!(adv_moves.contains(&Move::new(Square::E1, Square::D0)));
+        assert!(adv_moves.contains(&Move::new(Square::E1, Square::F0)));
+        assert!(adv_moves.contains(&Move::new(Square::E1, Square::D2)));
+        assert!(adv_moves.contains(&Move::new(Square::E1, Square::F2)));
+
+        // Corner Advisor (D0)
+        pos.set("9/9/9/9/9/9/9/9/9/3A5 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let adv_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::D0).copied().collect();
+        // D0 only has 1 diagonal square: E1
+        assert_eq!(adv_moves.len(), 1);
+        assert!(adv_moves.contains(&Move::new(Square::D0, Square::E1)));
+    }
+
+    #[test]
+    fn test_bishop_moves() {
+        let mut pos = Position::new();
+        // Bishop (Elephant) at C0
+        pos.set("9/9/9/9/9/9/9/9/9/2B6 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let bish_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::C0).copied().collect();
+        // C0 can go to A2, E2. (Can't cross river or go off board)
+        assert_eq!(bish_moves.len(), 2);
+        assert!(bish_moves.contains(&Move::new(Square::C0, Square::A2)));
+        assert!(bish_moves.contains(&Move::new(Square::C0, Square::E2)));
+
+        // Block with a piece on the Elephant eye (D1)
+        pos.set("9/9/9/9/9/9/9/9/3p5/2B6 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let bish_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::C0).copied().collect();
+        // D1 eye blocked, can only go to A2
+        assert_eq!(bish_moves.len(), 1);
+        assert!(bish_moves.contains(&Move::new(Square::C0, Square::A2)));
+    }
+
+    #[test]
+    fn test_knight_moves() {
+        let mut pos = Position::new();
+        // Knight at E2
+        pos.set("9/9/9/9/9/9/9/4H4/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let kn_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E2).copied().collect();
+        // Knight at E2 should have 8 moves on empty board
+        assert_eq!(kn_moves.len(), 8);
+
+        // Block with a piece on the Horse Leg (E3)
+        pos.set("9/9/9/9/9/9/4p4/4H4/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let kn_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E2).copied().collect();
+        // E3 leg blocked, so moves to D4 and F4 are blocked. 8 - 2 = 6 moves left.
+        assert_eq!(kn_moves.len(), 6);
+        assert!(!kn_moves.contains(&Move::new(Square::E2, Square::D4)));
+        assert!(!kn_moves.contains(&Move::new(Square::E2, Square::F4)));
+    }
+
+    #[test]
+    fn test_pawn_moves() {
+        let mut pos = Position::new();
+        // Unpromoted Pawn (C3)
+        pos.set("9/9/9/9/9/9/2P6/9/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let pawn_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::C3).copied().collect();
+        // Only 1 step forward (C4)
+        assert_eq!(pawn_moves.len(), 1);
+        assert!(pawn_moves.contains(&Move::new(Square::C3, Square::C4)));
+
+        // Promoted Pawn (C6 - crossed river)
+        pos.set("9/9/9/2P6/9/9/9/9/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let pawn_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::C6).copied().collect();
+        // Forward (C7), Left (B6), Right (D6)
+        assert_eq!(pawn_moves.len(), 3);
+        assert!(pawn_moves.contains(&Move::new(Square::C6, Square::C7)));
+        assert!(pawn_moves.contains(&Move::new(Square::C6, Square::B6)));
+        assert!(pawn_moves.contains(&Move::new(Square::C6, Square::D6)));
+    }
+
+    #[test]
+    fn test_rook_moves() {
+        let mut pos = Position::new();
+        // Rook at E5
+        pos.set("9/9/9/9/4R4/9/9/9/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let r_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E5).copied().collect();
+        // Rank 5 has 8 other squares, File E has 9 other squares. Total 17 moves.
+        assert_eq!(r_moves.len(), 17);
+
+        // Friendly blocker at E6, opponent at E3
+        pos.set("9/9/9/4A4/4R4/9/4p4/9/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let r_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E5).copied().collect();
+        // Upwards blocked at E6 (so no E6, E7, E8, E9).
+        // Downwards blocked by opponent at E3 (so E4 is quiet, E3 is capture, but no E2, E1, E0).
+        // Plus 8 horizontal moves.
+        // File moves allowed: E4, E3. (2 moves)
+        // Rank moves: A5, B5, C5, D5, F5, G5, H5, I5 (8 moves)
+        // Total: 10 moves.
+        assert_eq!(r_moves.len(), 10);
+        assert!(r_moves.contains(&Move::new(Square::E5, Square::E3))); // capture
+        assert!(!r_moves.contains(&Move::new(Square::E5, Square::E6))); // friendly block
+    }
+
+    #[test]
+    fn test_cannon_moves() {
+        let mut pos = Position::new();
+        // Cannon at E5, empty board.
+        pos.set("9/9/9/9/4C4/9/9/9/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let c_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E5).copied().collect();
+        // Quiet moves only (behaves like Rook) = 17 moves.
+        assert_eq!(c_moves.len(), 17);
+
+        // Friendly screen at E6, opponent behind at E8
+        pos.set("9/4r4/9/4A4/4C4/9/9/9/9/9 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let c_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E5).copied().collect();
+        // Upwards quiet moves: none (E6 blocked).
+        // Leap capture: E8 (opponent) using E6 (friendly) as hurdle!
+        // Downwards: E4, E3, E2, E1, E0. (5 moves)
+        // Rank: 8 moves.
+        // Total: 5 (file quiet) + 1 (file capture) + 8 (rank quiet) = 14 moves.
+        assert_eq!(c_moves.len(), 14);
+        assert!(c_moves.contains(&Move::new(Square::E5, Square::E8))); // leap capture
+    }
+
+    #[test]
+    fn test_facing_kings() {
+        let mut pos = Position::new();
+        // Kings facing each other on file E with only 1 friendly Rook in between (E3)
+        pos.set("4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1").unwrap();
+        let mut moves = [Move::none(); MAX_MOVES];
+        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let r_moves: Vec<Move> = moves[..count].iter().filter(|m| m.square_from() == Square::E3).copied().collect();
+        // Moving the Rook horizontally (off file E) is illegal because it exposes the Kings to face each other!
+        // So the Rook can only move vertically along file E (D3, F3, etc. are illegal).
+        for m in r_moves {
+            assert_eq!(m.square_to() as u8 % 9, 4); // must stay on file E (index 4)
+        }
+    }
+}
