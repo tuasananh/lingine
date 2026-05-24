@@ -30,6 +30,8 @@ pub struct GoParameters {
     pub movetime: Option<Duration>,
     /// Search until a `stop` command is received.
     pub infinite: bool,
+    /// Do perft from current position up to depth
+    pub perft: Option<u32>,
     /// Shared flag set by the handler when `stop` is received.
     ///
     /// The engine's `go` implementation should check this periodically and
@@ -50,7 +52,7 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                     for next_token in value.by_ref() {
                         match *next_token {
                             "ponder" | "wtime" | "btime" | "winc" | "binc" | "movestogo"
-                            | "depth" | "nodes" | "mate" | "movetime" | "infinite" => {
+                            | "depth" | "nodes" | "mate" | "movetime" | "infinite" | "perft" => {
                                 break;
                             }
                             _ => {
@@ -148,6 +150,15 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                 }
                 "infinite" => {
                     res.infinite = true;
+                }
+                "perft" => {
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'perft'"))?;
+                    res.perft = Some(
+                        val.parse::<u32>()
+                            .map_err(|_| anyhow!("invalid 'perft' value: {val}"))?,
+                    );
                 }
                 _ => {
                     // Unknown go tokens are ignored per UCI convention.

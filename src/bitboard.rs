@@ -24,6 +24,12 @@ use crate::types::{Color, File, Rank, Square};
 )]
 pub struct Bitboard(pub u128);
 
+impl Default for Bitboard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bitboard {
     /// Creates a new, completely empty bitboard (all bits set to 0).
     #[inline(always)]

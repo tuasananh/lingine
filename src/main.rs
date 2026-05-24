@@ -3,16 +3,7 @@
 use anyhow::Result;
 use simple_logger::SimpleLogger;
 
-use crate::{bot::PrintBot, uci::UCIHandler};
-
-#[cfg(test)]
-mod benchmark;
-mod bitboard;
-mod bot;
-mod movegen;
-mod position;
-mod types;
-mod uci;
+use lingine::{bot::PrintBot, uci::UCIHandler};
 
 fn main() -> Result<()> {
     SimpleLogger::new().init()?;

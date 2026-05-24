@@ -1,4 +1,7 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 use arrayvec::ArrayVec;
 use strum::{EnumCount, EnumIter, FromRepr};
@@ -93,11 +96,7 @@ impl Square {
 #[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum PieceType {
-    NoPiece, Rook, Advisor, Cannon, Pawn, Knight, Bishop, King, KnightTo, PawnTo
-}
-
-impl PieceType {
-    pub const ALL_PIECE: PieceType = PieceType::NoPiece;
+    None, Rook, Advisor, Cannon, Pawn, Knight, Bishop, King, KnightTo, PawnTo
 }
 
 /// Represents standard Xiangqi pieces, categorized by color and piece type.
@@ -112,7 +111,7 @@ pub enum Piece {
 }
 
 impl Piece {
-    /// Extracts the `Color` of the piece, or returns `None` if it is `NoPiece`.
+    /// Extracts the `Color` of the piece, or returns `None` if it is `None`.
     #[inline(always)]
     pub fn color(&self) -> Option<Color> {
         match *self {
@@ -132,7 +131,7 @@ impl Piece {
     #[inline(always)]
     pub fn piece_type(&self) -> PieceType {
         match *self {
-            Piece::None => PieceType::NoPiece,
+            Piece::None => PieceType::None,
             Piece::WhiteRook | Piece::BlackRook => PieceType::Rook,
             Piece::WhiteAdvisor | Piece::BlackAdvisor => PieceType::Advisor,
             Piece::WhiteCannon | Piece::BlackCannon => PieceType::Cannon,
@@ -160,6 +159,12 @@ const BLOOM_FILTER_SIZE: usize = 1 << 14;
 #[derive(Clone)]
 pub struct BloomFilter {
     table: [u8; BLOOM_FILTER_SIZE],
+}
+
+impl Default for BloomFilter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BloomFilter {
@@ -195,6 +200,12 @@ impl IndexMut<Key> for BloomFilter {
 /// * **Bits 14 - 15**: Move flags (Quiet, Capture, Check, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Move(pub u16);
+
+impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} to {:?}", self.square_from(), self.square_to())
+    }
+}
 
 impl Move {
     /// Constructs a basic quiet or capture move from an origin and destination square.

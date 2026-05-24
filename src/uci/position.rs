@@ -10,7 +10,16 @@ pub struct UciPosition {
     pub moves: Vec<UciMove>,
 }
 
-const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
+impl Default for UciPosition {
+    fn default() -> Self {
+        Self {
+            fen: START_FEN.to_string(),
+            moves: Vec::new(),
+        }
+    }
+}
+
+pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
 impl TryFrom<&mut Iter<'_, &str>> for UciPosition {
     type Error = Error;

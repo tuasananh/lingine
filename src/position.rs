@@ -65,7 +65,7 @@ impl ZobristTable {
 /// allowing incremental undo_move restorations.
 #[derive(Clone, Copy, Debug)]
 pub struct StateInfo {
-    /// The piece captured during this move, or `Piece::NoPiece` if it was quiet.
+    /// The piece captured during this move, or `Piece::None` if it was quiet.
     pub captured_piece: Piece,
     /// The prior Zobrist position hash value before the move occurred.
     pub old_zobrist: u64,
@@ -93,8 +93,10 @@ pub struct Position {
     /// The player active to play next.
     side_to_move: Color,
 
+    #[allow(dead_code)]
     filter: BloomFilter,
 
+    #[allow(dead_code)]
     id_board: [u8; Square::COUNT],
     /// Current transposition hash of the board position.
     pub zobrist_hash: u64,
@@ -106,6 +108,12 @@ pub struct Position {
 #[error("Failed to set position: {msg}")]
 pub struct PositionSetError {
     msg: String,
+}
+
+impl Default for Position {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Position {
@@ -267,6 +275,11 @@ impl Position {
                     }
                     file_idx += 1;
                 }
+            }
+            if file_idx != 9 {
+                return Err(PositionSetError {
+                    msg: format!("Invalid rank width: expected 9 files, got {}", file_idx),
+                });
             }
         }
 
