@@ -2,17 +2,17 @@ use std::slice::Iter;
 
 use anyhow::{Error, Result, ensure};
 
-use crate::uci::r#move::Move;
+use crate::uci::r#move::UciMove;
 
 #[derive(Clone, Debug)]
-pub struct Position {
+pub struct UciPosition {
     pub fen: String,
-    pub moves: Vec<Move>,
+    pub moves: Vec<UciMove>,
 }
 
 const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
-impl TryFrom<&mut Iter<'_, &str>> for Position {
+impl TryFrom<&mut Iter<'_, &str>> for UciPosition {
     type Error = Error;
     fn try_from(value: &mut Iter<'_, &str>) -> Result<Self> {
         let next_token = value.next();
@@ -50,7 +50,7 @@ impl TryFrom<&mut Iter<'_, &str>> for Position {
         };
 
         let moves = value
-            .map(|tok| Move::try_from(*tok))
+            .map(|tok| UciMove::try_from(*tok))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self { fen, moves })
@@ -59,14 +59,14 @@ impl TryFrom<&mut Iter<'_, &str>> for Position {
 
 #[cfg(test)]
 mod tests {
-    use super::{Move, Position};
+    use super::{UciMove, UciPosition};
 
     #[test]
     fn parses_startpos_without_moves() {
         let tokens = "startpos".split_whitespace().collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = Position::try_from(&mut iter).unwrap();
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, super::START_FEN);
         assert!(parsed.moves.is_empty());
@@ -79,7 +79,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = Position::try_from(&mut iter).unwrap();
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, super::START_FEN);
         assert_eq!(parsed.moves.len(), 2);
@@ -92,7 +92,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = Position::try_from(&mut iter).unwrap();
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 w");
         assert!(parsed.moves.is_empty());
@@ -105,16 +105,20 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = Position::try_from(&mut iter).unwrap();
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 b");
-        assert_eq!(parsed.moves, &[Move::try_from("a0a1").unwrap()]);
+        assert_eq!(parsed.moves, &[UciMove::try_from("a0a1").unwrap()]);
     }
 
     #[test]
     fn encodes_move_bytes_consistently() {
-        let mv = Move::try_from("b2c3").unwrap();
-        let expected = (1_u32) | (2_u32 << 8) | (2_u32 << 16) | (3_u32 << 24);
-        assert_eq!(mv.as_u32(), expected);
+        let mv = UciMove::try_from("b2c3").unwrap();
+        // from: file 'b' = 1, rank '2' = 2
+        // to:   file 'c' = 2, rank '3' = 3
+        assert_eq!(mv.src_file(), 1);
+        assert_eq!(mv.src_rank(), 2);
+        assert_eq!(mv.dst_file(), 2);
+        assert_eq!(mv.dst_rank(), 3);
     }
 }
