@@ -157,7 +157,7 @@ impl Bitboard {
             Color::Black => Self::rank(Rank::R5).const_or(Self::rank(Rank::R6)),
         });
 
-        return my_side.const_or(other_side);
+        my_side.const_or(other_side)
     }
 }
 

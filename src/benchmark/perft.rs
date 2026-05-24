@@ -48,8 +48,7 @@ impl Perft {
 
         let leaf = depth == 2;
 
-        for i in 0..moves_count {
-            let m = moves[i];
+        for m in moves.iter().copied().take(moves_count) {
             if ROOT && depth <= 1 {
                 cnt = 1;
                 self.nodes += 1;
@@ -71,8 +70,7 @@ impl Perft {
                     cnt = next_count as u64;
 
                     if cnt > 0 {
-                        for j in 0..next_count {
-                            let nm = next_moves[j];
+                        for nm in next_moves.iter().copied().take(next_count) {
                             if !pos.is_empty(nm.square_to()) {
                                 self.captures += 1;
                             }

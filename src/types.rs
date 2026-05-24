@@ -106,7 +106,7 @@ impl PieceType {
 #[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Piece {
-    NoPiece,
+    None,
     WhiteRook,     WhiteAdvisor, WhiteCannon, WhitePawn, WhiteKnight, WhiteBishop, WhiteKing, 
     BlackRook = 9, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
 }
@@ -116,7 +116,7 @@ impl Piece {
     #[inline(always)]
     pub fn color(&self) -> Option<Color> {
         match *self {
-            Piece::NoPiece => None,
+            Piece::None => None,
             Piece::WhiteRook
             | Piece::WhiteAdvisor
             | Piece::WhiteCannon
@@ -132,7 +132,7 @@ impl Piece {
     #[inline(always)]
     pub fn piece_type(&self) -> PieceType {
         match *self {
-            Piece::NoPiece => PieceType::NoPiece,
+            Piece::None => PieceType::NoPiece,
             Piece::WhiteRook | Piece::BlackRook => PieceType::Rook,
             Piece::WhiteAdvisor | Piece::BlackAdvisor => PieceType::Advisor,
             Piece::WhiteCannon | Piece::BlackCannon => PieceType::Cannon,

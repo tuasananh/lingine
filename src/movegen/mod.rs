@@ -70,10 +70,10 @@ fn generate_bishop_moves<const IS_WHITE: bool>(
 
         let mut i = 0;
         while i < 4 {
-            if let Some(eye_sq) = entry.eyes[i] {
-                if occupied.is_occupied(eye_sq) {
-                    occ_idx |= 1 << i;
-                }
+            if let Some(eye_sq) = entry.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx |= 1 << i;
             }
             i += 1;
         }
@@ -103,10 +103,10 @@ fn generate_knight_moves<const IS_WHITE: bool>(
 
         let mut i = 0;
         while i < 4 {
-            if let Some(eye_sq) = entry.eyes[i] {
-                if occupied.is_occupied(eye_sq) {
-                    occ_idx |= 1 << i;
-                }
+            if let Some(eye_sq) = entry.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx |= 1 << i;
             }
             i += 1;
         }

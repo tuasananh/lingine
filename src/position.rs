@@ -51,9 +51,9 @@ impl ZobristTable {
     fn init() -> Self {
         let mut prng = Lcg::new(1070372);
         let mut pieces = [[0u64; 90]; 16];
-        for p in 0..16 {
-            for sq in 0..90 {
-                pieces[p][sq] = prng.next();
+        for piece in &mut pieces {
+            for square in piece {
+                *square = prng.next();
             }
         }
         let side = prng.next();
@@ -112,7 +112,7 @@ impl Position {
     /// Constructs a clean, completely empty board position state.
     pub fn new() -> Self {
         let mut pos = Self {
-            board: [Piece::NoPiece; Square::COUNT],
+            board: [Piece::None; Square::COUNT],
             bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
             bitboard_by_color: [Bitboard::new(); Color::COUNT],
             piece_count: [0; 16],
@@ -126,7 +126,7 @@ impl Position {
         };
         // Setup initial empty history state
         pos.history.push(StateInfo {
-            captured_piece: Piece::NoPiece,
+            captured_piece: Piece::None,
             old_zobrist: 0,
             rule50: 0,
         });
@@ -162,7 +162,7 @@ impl Position {
     /// King Palace trackers, and XORing its random signature into the Zobrist hash.
     pub fn put_piece(&mut self, piece: Piece, square: Square) {
         self.board[square as usize] = piece;
-        if piece != Piece::NoPiece {
+        if piece != Piece::None {
             let pt = piece.piece_type();
             let c = piece.color().unwrap();
             self.bitboard_by_type[pt as usize].set_bit(square);
@@ -182,7 +182,7 @@ impl Position {
     /// Zobrist position signatures, and returning the removed piece.
     pub fn remove_piece(&mut self, square: Square) -> Piece {
         let piece = self.board[square as usize];
-        if piece != Piece::NoPiece {
+        if piece != Piece::None {
             let pt = piece.piece_type();
             let c = piece.color().unwrap();
             self.bitboard_by_type[pt as usize].clear_bit(square);
@@ -190,7 +190,7 @@ impl Position {
             self.piece_count[piece as usize] -= 1;
             let table = ZOBRIST.get_or_init(ZobristTable::init);
             self.zobrist_hash ^= table.pieces[piece as usize][square as usize];
-            self.board[square as usize] = Piece::NoPiece;
+            self.board[square as usize] = Piece::None;
         }
         piece
     }
@@ -218,7 +218,7 @@ impl Position {
 
     /// Parses and initializes the position state from a standard FEN string.
     pub fn set(&mut self, fen: &str) -> Result<(), PositionSetError> {
-        self.board = [Piece::NoPiece; Square::COUNT];
+        self.board = [Piece::None; Square::COUNT];
         self.bitboard_by_type = [Bitboard::new(); PieceType::COUNT];
         self.bitboard_by_color = [Bitboard::new(); Color::COUNT];
         self.piece_count = [0; 16];
@@ -290,22 +290,22 @@ impl Position {
         }
 
         let mut rule50 = 0;
-        if tokens.len() > 4 {
-            if let Ok(r50) = tokens[4].parse::<u16>() {
-                rule50 = r50;
-            }
+        if tokens.len() > 4
+            && let Ok(r50) = tokens[4].parse::<u16>()
+        {
+            rule50 = r50;
         }
 
         let mut fullmove = 1;
-        if tokens.len() > 5 {
-            if let Ok(fm) = tokens[5].parse::<u16>() {
-                fullmove = fm;
-            }
+        if tokens.len() > 5
+            && let Ok(fm) = tokens[5].parse::<u16>()
+        {
+            fullmove = fm;
         }
         self.game_ply = (fullmove.saturating_sub(1) * 2) + (self.side_to_move as u16);
 
         self.history.push(StateInfo {
-            captured_piece: Piece::NoPiece,
+            captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
             rule50,
         });
@@ -332,13 +332,13 @@ impl Position {
         });
 
         self.remove_piece(from);
-        if captured != Piece::NoPiece {
+        if captured != Piece::None {
             self.remove_piece(to);
         }
         self.put_piece(piece, to);
 
         // Update rule50 halfmove clock
-        let new_rule50 = if piece.piece_type() == PieceType::Pawn || captured != Piece::NoPiece {
+        let new_rule50 = if piece.piece_type() == PieceType::Pawn || captured != Piece::None {
             0
         } else {
             rule50 + 1
@@ -365,7 +365,7 @@ impl Position {
 
         self.remove_piece(to);
         self.put_piece(piece, from);
-        if state.captured_piece != Piece::NoPiece {
+        if state.captured_piece != Piece::None {
             self.put_piece(state.captured_piece, to);
         }
 
@@ -376,7 +376,7 @@ impl Position {
 
     #[inline(always)]
     pub fn is_empty(&self, square: Square) -> bool {
-        self.board[square as usize] == Piece::NoPiece
+        self.board[square as usize] == Piece::None
     }
 
     #[inline(always)]
@@ -476,7 +476,7 @@ impl Position {
         moved_piece: Piece,
     ) -> Bitboard {
         let captured = self.board[to as usize];
-        let was_captured = captured != Piece::NoPiece && captured.color() == Some(attacker);
+        let was_captured = captured != Piece::None && captured.color() == Some(attacker);
 
         let mut opponent_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
             & self.bitboard_by_color[attacker as usize];
@@ -536,10 +536,10 @@ impl Position {
         let mut occ_idx = 0;
         let mut i = 0;
         while i < 6 {
-            if let Some(eye_sq) = entry.eyes[i] {
-                if occupied.is_occupied(eye_sq) {
-                    occ_idx |= 1 << i;
-                }
+            if let Some(eye_sq) = entry.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx |= 1 << i;
             }
             i += 1;
         }
@@ -590,7 +590,7 @@ impl Position {
         self.history
             .last()
             .map(|s| s.captured_piece)
-            .unwrap_or(Piece::NoPiece)
+            .unwrap_or(Piece::None)
     }
 
     /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is not left in check).

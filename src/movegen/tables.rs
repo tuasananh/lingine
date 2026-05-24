@@ -146,7 +146,7 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
         }
         if r >= 5 {
             // Crossed river (R5 to R9 are opponent's ranks)
-            if f - 1 >= 0 {
+            if f > 0 {
                 mask |= 1 << (r * 9 + f - 1); // Left sideways move
             }
             if f + 1 < 9 {
@@ -163,12 +163,12 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
         let f = (from_idx % 9) as i8;
         let r = (from_idx / 9) as i8;
         let mut mask = 0u128;
-        if r - 1 >= 0 {
+        if r > 0 {
             mask |= 1 << ((r - 1) * 9 + f); // Forward move
         }
         if r <= 4 {
             // Crossed river (R0 to R4 are opponent's ranks)
-            if f - 1 >= 0 {
+            if f > 0 {
                 mask |= 1 << (r * 9 + f - 1); // Left sideways move
             }
             if f + 1 < 9 {
@@ -194,11 +194,11 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
         let f = (square_idx % 9) as i8;
         let r = (square_idx / 9) as i8;
         let mut mask = 0u128;
-        if r - 1 >= 0 {
+        if r > 0 {
             mask |= 1 << ((r - 1) * 9 + f); // Came from behind
         }
         if r >= 5 {
-            if f - 1 >= 0 {
+            if f > 0 {
                 mask |= 1 << (r * 9 + f - 1); // Came from left
             }
             if f + 1 < 9 {
@@ -219,7 +219,7 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
             mask |= 1 << ((r + 1) * 9 + f); // Came from in front
         }
         if r <= 4 {
-            if f - 1 >= 0 {
+            if f > 0 {
                 mask |= 1 << (r * 9 + f - 1); // Came from left
             }
             if f + 1 < 9 {
@@ -581,11 +581,11 @@ const fn init_knight_to_table() -> [KnightToEntry; 90] {
                 let mut found = false;
                 let mut j = 0;
                 while j < num_legs {
-                    if let Some(l) = unique_legs[j] {
-                        if l as u8 == leg_sq as u8 {
-                            found = true;
-                            break;
-                        }
+                    if let Some(l) = unique_legs[j]
+                        && l as u8 == leg_sq as u8
+                    {
+                        found = true;
+                        break;
                     }
                     j += 1;
                 }
@@ -635,20 +635,18 @@ const fn init_knight_to_table() -> [KnightToEntry; 90] {
                     let mut found = false;
                     let mut j = 0;
                     while j < num_legs {
-                        if let Some(l) = unique_legs[j] {
-                            if l as u8 == leg_sq as u8 {
-                                leg_idx = j;
-                                found = true;
-                                break;
-                            }
+                        if let Some(l) = unique_legs[j]
+                            && l as u8 == leg_sq as u8
+                        {
+                            leg_idx = j;
+                            found = true;
+                            break;
                         }
                         j += 1;
                     }
 
-                    if found {
-                        if (occ_idx & (1 << leg_idx)) == 0 {
-                            mask |= 1 << (from_r * 9 + from_f);
-                        }
+                    if found && (occ_idx & (1 << leg_idx)) == 0 {
+                        mask |= 1 << (from_r * 9 + from_f);
                     }
                 }
                 i += 1;
