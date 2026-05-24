@@ -32,11 +32,20 @@ pub enum UciOption {
 
     /// An integer spin-wheel in a closed range.
     /// Serialises as: `option name <name> type spin default <n> min <min> max <max>`
-    Spin { name: String, default: i64, min: i64, max: i64 },
+    Spin {
+        name: String,
+        default: i64,
+        min: i64,
+        max: i64,
+    },
 
     /// A combo-box with a fixed set of string choices.
     /// Serialises as: `option name <name> type combo default <default> var <v1> var <v2> ...`
-    Combo { name: String, default: String, vars: Vec<String> },
+    Combo {
+        name: String,
+        default: String,
+        vars: Vec<String>,
+    },
 
     /// A push-button with no value.
     /// Serialises as: `option name <name> type button`
@@ -54,10 +63,22 @@ impl fmt::Display for UciOption {
             UciOption::Check { name, default } => {
                 write!(f, "option name {name} type check default {default}")
             }
-            UciOption::Spin { name, default, min, max } => {
-                write!(f, "option name {name} type spin default {default} min {min} max {max}")
+            UciOption::Spin {
+                name,
+                default,
+                min,
+                max,
+            } => {
+                write!(
+                    f,
+                    "option name {name} type spin default {default} min {min} max {max}"
+                )
             }
-            UciOption::Combo { name, default, vars } => {
+            UciOption::Combo {
+                name,
+                default,
+                vars,
+            } => {
                 write!(f, "option name {name} type combo default {default}")?;
                 for var in vars {
                     write!(f, " var {var}")?;
@@ -68,7 +89,11 @@ impl fmt::Display for UciOption {
                 write!(f, "option name {name} type button")
             }
             UciOption::Str { name, default } => {
-                let value = if default.is_empty() { "<empty>" } else { default.as_str() };
+                let value = if default.is_empty() {
+                    "<empty>"
+                } else {
+                    default.as_str()
+                };
                 write!(f, "option name {name} type string default {value}")
             }
         }
@@ -257,20 +282,37 @@ mod tests {
 
     #[test]
     fn uci_id_format() {
-        let id = UciId { name: "Lingine".into(), author: "tuasananh".into() };
+        let id = UciId {
+            name: "Lingine".into(),
+            author: "tuasananh".into(),
+        };
         assert_eq!(id.to_string(), "id name Lingine\nid author tuasananh");
     }
 
     #[test]
     fn option_check_format() {
-        let opt = UciOption::Check { name: "Ponder".into(), default: false };
-        assert_eq!(opt.to_string(), "option name Ponder type check default false");
+        let opt = UciOption::Check {
+            name: "Ponder".into(),
+            default: false,
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name Ponder type check default false"
+        );
     }
 
     #[test]
     fn option_spin_format() {
-        let opt = UciOption::Spin { name: "Hash".into(), default: 16, min: 1, max: 1024 };
-        assert_eq!(opt.to_string(), "option name Hash type spin default 16 min 1 max 1024");
+        let opt = UciOption::Spin {
+            name: "Hash".into(),
+            default: 16,
+            min: 1,
+            max: 1024,
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name Hash type spin default 16 min 1 max 1024"
+        );
     }
 
     #[test]
@@ -288,37 +330,60 @@ mod tests {
 
     #[test]
     fn option_button_format() {
-        let opt = UciOption::Button { name: "Clear Hash".into() };
+        let opt = UciOption::Button {
+            name: "Clear Hash".into(),
+        };
         assert_eq!(opt.to_string(), "option name Clear Hash type button");
     }
 
     #[test]
     fn option_str_format_empty() {
-        let opt = UciOption::Str { name: "NalimovPath".into(), default: String::new() };
-        assert_eq!(opt.to_string(), "option name NalimovPath type string default <empty>");
+        let opt = UciOption::Str {
+            name: "NalimovPath".into(),
+            default: String::new(),
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name NalimovPath type string default <empty>"
+        );
     }
 
     #[test]
     fn option_str_format_nonempty() {
-        let opt = UciOption::Str { name: "NalimovPath".into(), default: "c:\\tb".into() };
-        assert_eq!(opt.to_string(), "option name NalimovPath type string default c:\\tb");
+        let opt = UciOption::Str {
+            name: "NalimovPath".into(),
+            default: "c:\\tb".into(),
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name NalimovPath type string default c:\\tb"
+        );
     }
 
     #[test]
     fn score_cp_format() {
-        let s = UciScoreBound { score: UciScore::Centipawns(214), bound: None };
+        let s = UciScoreBound {
+            score: UciScore::Centipawns(214),
+            bound: None,
+        };
         assert_eq!(s.to_string(), "score cp 214");
     }
 
     #[test]
     fn score_mate_lowerbound_format() {
-        let s = UciScoreBound { score: UciScore::Mate(3), bound: Some(Bound::Lower) };
+        let s = UciScoreBound {
+            score: UciScore::Mate(3),
+            bound: Some(Bound::Lower),
+        };
         assert_eq!(s.to_string(), "score mate 3 lowerbound");
     }
 
     #[test]
     fn score_mated_format() {
-        let s = UciScoreBound { score: UciScore::Mate(-2), bound: None };
+        let s = UciScoreBound {
+            score: UciScore::Mate(-2),
+            bound: None,
+        };
         assert_eq!(s.to_string(), "score mate -2");
     }
 
@@ -330,7 +395,10 @@ mod tests {
             time: Some(Duration::from_millis(1242)),
             nodes: Some(123456),
             nps: Some(100000),
-            score: Some(UciScoreBound { score: UciScore::Centipawns(214), bound: None }),
+            score: Some(UciScoreBound {
+                score: UciScore::Centipawns(214),
+                bound: None,
+            }),
             pv: Some(vec!["e2e4".into(), "e7e5".into(), "g1f3".into()]),
             ..UciInfo::new()
         };
@@ -354,19 +422,28 @@ mod tests {
 
     #[test]
     fn bestmove_without_ponder() {
-        let bm = BestMove { mv: "g1f3".into(), ponder: None };
+        let bm = BestMove {
+            mv: "g1f3".into(),
+            ponder: None,
+        };
         assert_eq!(bm.to_string(), "bestmove g1f3");
     }
 
     #[test]
     fn bestmove_with_ponder() {
-        let bm = BestMove { mv: "g1f3".into(), ponder: Some("d8f6".into()) };
+        let bm = BestMove {
+            mv: "g1f3".into(),
+            ponder: Some("d8f6".into()),
+        };
         assert_eq!(bm.to_string(), "bestmove g1f3 ponder d8f6");
     }
 
     #[test]
     fn bestmove_null_move() {
-        let bm = BestMove { mv: "0000".into(), ponder: None };
+        let bm = BestMove {
+            mv: "0000".into(),
+            ponder: None,
+        };
         assert_eq!(bm.to_string(), "bestmove 0000");
     }
 }

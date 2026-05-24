@@ -1,6 +1,6 @@
 use std::io::BufRead;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 
 use anyhow::Result;
 
@@ -26,7 +26,10 @@ pub struct UCIHandler<T: Engine> {
 
 impl<T: Engine> UCIHandler<T> {
     pub fn new(engine: T) -> Self {
-        Self { engine, stop_flag: Arc::new(AtomicBool::new(false)) }
+        Self {
+            engine,
+            stop_flag: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     /// Handle a single line of UCI input.
@@ -90,7 +93,10 @@ impl<T: Engine> UCIHandler<T> {
                         Ok(b) => b,
                         Err(e) => {
                             log::error!("go failed: {e:?}");
-                            BestMove { mv: "0000".into(), ponder: None }
+                            BestMove {
+                                mv: "0000".into(),
+                                ponder: None,
+                            }
                         }
                     };
                     // Drain all info messages the engine sent during search.

@@ -23,8 +23,16 @@ impl Engine for PrintBot {
             author: "tuasananh".into(),
         };
         let options = vec![
-            UciOption::Spin { name: "Hash".into(), default: 16, min: 1, max: 1024 },
-            UciOption::Check { name: "Ponder".into(), default: false },
+            UciOption::Spin {
+                name: "Hash".into(),
+                default: 16,
+                min: 1,
+                max: 1024,
+            },
+            UciOption::Check {
+                name: "Ponder".into(),
+                default: false,
+            },
         ];
         (id, options)
     }
@@ -70,7 +78,10 @@ impl Engine for PrintBot {
             string: Some("PrintBot has no search implemented".into()),
             ..UciInfo::new()
         });
-        Ok(BestMove { mv: "0000".into(), ponder: None })
+        Ok(BestMove {
+            mv: "0000".into(),
+            ponder: None,
+        })
     }
 
     fn stop(&mut self) {

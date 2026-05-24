@@ -1,6 +1,6 @@
-use std::{num::NonZeroU32, slice::Iter, sync::atomic::AtomicBool, sync::Arc, time::Duration};
+use std::{num::NonZeroU32, slice::Iter, sync::Arc, sync::atomic::AtomicBool, time::Duration};
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 
 use crate::uci::UciMove;
 
@@ -65,36 +65,45 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                     res.ponder = true;
                 }
                 "wtime" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'wtime'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'wtime'"))?;
                     let ms = val
                         .parse::<u64>()
                         .map_err(|_| anyhow!("invalid 'wtime' value: {val}"))?;
                     res.wtime = Some(Duration::from_millis(ms));
                 }
                 "btime" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'btime'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'btime'"))?;
                     let ms = val
                         .parse::<u64>()
                         .map_err(|_| anyhow!("invalid 'btime' value: {val}"))?;
                     res.btime = Some(Duration::from_millis(ms));
                 }
                 "winc" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'winc'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'winc'"))?;
                     let ms = val
                         .parse::<u64>()
                         .map_err(|_| anyhow!("invalid 'winc' value: {val}"))?;
                     res.winc = Some(Duration::from_millis(ms));
                 }
                 "binc" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'binc'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'binc'"))?;
                     let ms = val
                         .parse::<u64>()
                         .map_err(|_| anyhow!("invalid 'binc' value: {val}"))?;
                     res.binc = Some(Duration::from_millis(ms));
                 }
                 "movestogo" => {
-                    let val =
-                        value.next().ok_or_else(|| anyhow!("missing value for 'movestogo'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'movestogo'"))?;
                     let n = val
                         .parse::<u32>()
                         .map_err(|_| anyhow!("invalid 'movestogo' value: {val}"))?;
@@ -102,29 +111,36 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                         Some(NonZeroU32::new(n).ok_or_else(|| anyhow!("'movestogo' must be > 0"))?);
                 }
                 "depth" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'depth'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'depth'"))?;
                     res.depth = Some(
                         val.parse::<u32>()
                             .map_err(|_| anyhow!("invalid 'depth' value: {val}"))?,
                     );
                 }
                 "nodes" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'nodes'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'nodes'"))?;
                     res.nodes = Some(
                         val.parse::<u64>()
                             .map_err(|_| anyhow!("invalid 'nodes' value: {val}"))?,
                     );
                 }
                 "mate" => {
-                    let val = value.next().ok_or_else(|| anyhow!("missing value for 'mate'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'mate'"))?;
                     res.mate = Some(
                         val.parse::<u32>()
                             .map_err(|_| anyhow!("invalid 'mate' value: {val}"))?,
                     );
                 }
                 "movetime" => {
-                    let val =
-                        value.next().ok_or_else(|| anyhow!("missing value for 'movetime'"))?;
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'movetime'"))?;
                     let ms = val
                         .parse::<u64>()
                         .map_err(|_| anyhow!("invalid 'movetime' value: {val}"))?;

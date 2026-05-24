@@ -67,8 +67,14 @@ impl TryFrom<&str> for UciMove {
             return Ok(Self(0));
         }
 
-        ensure!(b'a' <= value[0] && value[0] <= b'i', "Source file must be between 'a' and 'i'");
-        ensure!(b'0' <= value[1] && value[1] <= b'9', "Source rank must be between '0' and '9'");
+        ensure!(
+            b'a' <= value[0] && value[0] <= b'i',
+            "Source file must be between 'a' and 'i'"
+        );
+        ensure!(
+            b'0' <= value[1] && value[1] <= b'9',
+            "Source rank must be between '0' and '9'"
+        );
         ensure!(
             b'a' <= value[2] && value[2] <= b'i',
             "Destination file must be between 'a' and 'i'"
@@ -83,7 +89,9 @@ impl TryFrom<&str> for UciMove {
         let to_file = (value[2] - b'a') as u32;
         let to_rank = (value[3] - b'0') as u32;
 
-        Ok(Self(from_file | (from_rank << 8) | (to_file << 16) | (to_rank << 24)))
+        Ok(Self(
+            from_file | (from_rank << 8) | (to_file << 16) | (to_rank << 24),
+        ))
     }
 }
 
