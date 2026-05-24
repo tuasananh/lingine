@@ -1,6 +1,6 @@
 use crate::{bitboard::Bitboard, types::Square};
 
-use super::tables::{FILE_TABLE, RANK_TABLE};
+use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};
 
 /// Collects (gathers) the vertical file occupancy states into a 10-bit integer.
 /// Every 9th bit in our `u128` bitboard represents the same file on successive ranks (R0 to R9).
@@ -40,15 +40,9 @@ pub fn rook_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let file_occ = gather_file_bits(occupied.0, f);
     let file_attack_mask = FILE_TABLE[r].rook[file_occ];
 
-    let low_mask = (file_attack_mask & 0x1F) as u64;
-    let high_mask = ((file_attack_mask >> 5) & 0x1F) as u64;
+    let file_mask_bb = FILE_ATTACKS_BY_MASK[f][file_attack_mask as usize];
 
-    let low_scatter = (low_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
-    let high_scatter = (high_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
-
-    let file_mask_bb = (low_scatter | (high_scatter << 45)) << f;
-
-    attack_bb.0 |= file_mask_bb;
+    attack_bb.0 |= file_mask_bb.0;
     attack_bb
 }
 
@@ -68,14 +62,8 @@ pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let file_occ = gather_file_bits(occupied.0, f);
     let file_attack_mask = FILE_TABLE[r].cannon[file_occ];
 
-    let low_mask = (file_attack_mask & 0x1F) as u64;
-    let high_mask = ((file_attack_mask >> 5) & 0x1F) as u64;
+    let file_mask_bb = FILE_ATTACKS_BY_MASK[f][file_attack_mask as usize];
 
-    let low_scatter = (low_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
-    let high_scatter = (high_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
-
-    let file_mask_bb = (low_scatter | (high_scatter << 45)) << f;
-
-    attack_bb.0 |= file_mask_bb;
+    attack_bb.0 |= file_mask_bb.0;
     attack_bb
 }

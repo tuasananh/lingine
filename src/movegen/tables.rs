@@ -671,3 +671,27 @@ pub(super) static KNIGHT_TABLE: [KnightEntry; 90] = init_knight_table();
 pub static RANK_TABLE: [RankEntry; 9] = init_rank_table();
 pub static FILE_TABLE: [FileEntry; 10] = init_file_table();
 pub static KNIGHT_TO_TABLE: [KnightToEntry; 90] = init_knight_to_table();
+
+const fn init_file_attacks_by_mask() -> [[Bitboard; 1024]; 9] {
+    let mut table = [[Bitboard(0); 1024]; 9];
+    let mut f = 0;
+    while f < 9 {
+        let mut mask = 0;
+        while mask < 1024 {
+            let mut bits = 0u128;
+            let mut r = 0;
+            while r < 10 {
+                if (mask & (1 << r)) != 0 {
+                    bits |= 1u128 << (r * 9 + f);
+                }
+                r += 1;
+            }
+            table[f as usize][mask as usize] = Bitboard(bits);
+            mask += 1;
+        }
+        f += 1;
+    }
+    table
+}
+
+pub static FILE_ATTACKS_BY_MASK: [[Bitboard; 1024]; 9] = init_file_attacks_by_mask();
