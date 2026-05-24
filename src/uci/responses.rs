@@ -196,9 +196,10 @@ impl fmt::Display for UciInfo {
 
         if let Some(d) = self.depth {
             write!(f, " depth {d}")?;
-        }
-        if let Some(sd) = self.seldepth {
-            write!(f, " seldepth {sd}")?;
+
+            if let Some(sd) = self.seldepth {
+                write!(f, " seldepth {sd}")?;
+            }
         }
         if let Some(t) = self.time {
             write!(f, " time {}", t.as_millis())?;
@@ -259,6 +260,17 @@ pub struct BestMove {
     pub mv: String,
     /// Optional move to ponder on while the opponent thinks.
     pub ponder: Option<String>,
+}
+
+impl BestMove {
+    /// A null move (`0000`), used as a fallback when `go` returns an error.
+    #[allow(dead_code)]
+    pub fn null() -> Self {
+        Self {
+            mv: "0000".into(),
+            ponder: None,
+        }
+    }
 }
 
 impl fmt::Display for BestMove {

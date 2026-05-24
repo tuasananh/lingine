@@ -2,8 +2,20 @@ use std::slice::Iter;
 
 use anyhow::{Error, Result};
 
+/// Parsed parameters from the `register` UCI command.
+///
+/// Lingine does not implement copy-protection, so `register` is effectively a
+/// no-op in `PrintBot` and the real engine. This type exists for spec
+/// completeness.
+///
+/// # Limitations
+/// - `code` captures only a **single token**. Multi-word codes are not
+///   supported; only the first token after `code` is stored. This is unlikely
+///   to matter in practice but is worth noting.
 pub enum RegisterParameters {
+    /// `register later` — engine is not yet registered; try again later.
     Later,
+    /// `register [name <n>] [code <c>]` — identity and/or registration code.
     Identity {
         name: Option<String>,
         code: Option<String>,

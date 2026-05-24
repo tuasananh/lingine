@@ -1,3 +1,5 @@
+mod command;
+
 mod engine;
 pub use engine::Engine;
 
@@ -6,6 +8,8 @@ pub use go_parameters::GoParameters;
 
 mod handler;
 pub use handler::UCIHandler;
+
+mod output;
 
 mod r#move;
 pub use r#move::UciMove;

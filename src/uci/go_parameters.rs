@@ -4,36 +4,69 @@ use anyhow::{Error, Result, anyhow};
 
 use crate::uci::UciMove;
 
+/// Parameters parsed from a `go` UCI command.
+///
+/// All fields are `pub` so the engine's `go` implementation can read them
+/// directly without getters.
+///
+/// # Time management
+/// The engine is solely responsible for respecting these limits. The handler
+/// imposes no wall-clock timeout. A typical priority order is:
+/// `movetime` > `infinite` > `wtime`/`btime` + `winc`/`binc` + `movestogo` >
+/// `depth` > `nodes`.
+///
+/// # Limitations
+/// - `nodes` is `u64` but `depth`, `mate`, and `movetime`-as-milliseconds use
+///   narrower integer types. A GUI sending an out-of-range value will get an
+///   `Err` from `TryFrom`, which the handler logs and discards.
+/// - `ponder` flag is parsed but there is no ponder-mode search yet.
 #[derive(Clone, Debug, Default)]
 pub struct GoParameters {
-    /// Restrict search to these moves only.
+    /// Restrict search to these moves only at the root.
     pub searchmoves: Option<Vec<UciMove>>,
-    /// Search in pondering mode.
+    /// If `true`, search in pondering mode (opponent's turn on the clock).
+    ///
+    /// # Limitation
+    /// Ponder mode is not yet implemented. This flag is parsed and stored but
+    /// the engine does not alter its behaviour based on it.
     pub ponder: bool,
-    /// Time remaining for White in milliseconds.
+    /// Time remaining for White.
     pub wtime: Option<Duration>,
-    /// Time remaining for Black in milliseconds.
+    /// Time remaining for Black.
     pub btime: Option<Duration>,
-    /// White's increment per move in milliseconds.
+    /// White's increment added after each move.
     pub winc: Option<Duration>,
-    /// Black's increment per move in milliseconds.
+    /// Black's increment added after each move.
     pub binc: Option<Duration>,
-    /// Moves until the next time control (only sent when > 0).
+    /// Number of moves until the next time control. `NonZeroU32` because the
+    /// UCI spec only sends this field when the value is greater than zero.
     pub movestogo: Option<NonZeroU32>,
-    /// Search to this depth in plies only.
+    /// Search to at most this depth in plies.
     pub depth: Option<u32>,
     /// Search at most this many nodes.
     pub nodes: Option<u64>,
-    /// Search for a forced mate in this many moves.
+    /// Search for a forced mate in this many moves (half-moves = plies / 2).
     pub mate: Option<u32>,
-    /// Search for exactly this many milliseconds.
+    /// Search for exactly this long, ignoring all other time parameters.
     pub movetime: Option<Duration>,
-    /// Search until a `stop` command is received.
+    /// Search until a `stop` command arrives. The engine must still honour
+    /// [`stop`][Self::stop] when set.
     pub infinite: bool,
-    /// Shared flag set by the handler when `stop` is received.
+    /// Shared stop signal injected by the engine actor just before `engine.go()`
+    /// is called.
     ///
-    /// The engine's `go` implementation should check this periodically and
-    /// exit the search loop when it is `true`.
+    /// Thread A (stdin reader) calls `stop_flag.store(true, SeqCst)` when it
+    /// receives a `stop` command. The engine's search loop must check this
+    /// periodically:
+    ///
+    /// ```rust,ignore
+    /// if params.stop.load(Ordering::Relaxed) {
+    ///     break; // return best move found so far
+    /// }
+    /// ```
+    ///
+    /// The `Default` value is a fresh, unshared `Arc<AtomicBool>` — it is
+    /// replaced by the real shared flag in the actor's `Go` arm.
     pub stop: Arc<AtomicBool>,
 }
 
@@ -47,14 +80,22 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                 "searchmoves" => {
                     let mut searchmoves = Vec::new();
 
-                    for next_token in value.by_ref() {
-                        match *next_token {
-                            "ponder" | "wtime" | "btime" | "winc" | "binc" | "movestogo"
-                            | "depth" | "nodes" | "mate" | "movetime" | "infinite" => {
-                                break;
-                            }
-                            _ => {
-                                searchmoves.push((*next_token).try_into()?);
+                    // Use as_slice().first() to *peek* at the next token
+                    // without consuming it. This ensures that when we see a
+                    // keyword like `wtime`, we break *before* pulling it out
+                    // of the iterator so the outer loop can match and parse it.
+                    loop {
+                        match value.as_slice().first().copied() {
+                            // Stop before any known go-parameter keyword.
+                            Some(
+                                "ponder" | "wtime" | "btime" | "winc" | "binc" | "movestogo"
+                                | "depth" | "nodes" | "mate" | "movetime" | "infinite",
+                            )
+                            | None => break,
+                            // Anything else is a move string; consume and parse.
+                            Some(_) => {
+                                let tok = value.next().unwrap();
+                                searchmoves.push((*tok).try_into()?);
                             }
                         }
                     }
@@ -175,6 +216,8 @@ mod tests {
 
         assert!(parsed.searchmoves.is_some());
         assert_eq!(parsed.searchmoves.unwrap().len(), 2);
+        // wtime must be parsed even though searchmoves appeared before it.
+        assert_eq!(parsed.wtime, Some(Duration::from_millis(1000)));
         assert!(parsed.ponder);
         assert_eq!(parsed.movetime, None);
         assert!(!parsed.infinite);
