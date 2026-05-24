@@ -1,89 +1,100 @@
-use crate::uci::{Engine, GoParameters, Position, RegisterParameters, SetOptionParameters};
+use std::sync::mpsc::Sender;
 
 use anyhow::Result;
 
-pub struct PrintBot {}
+use crate::uci::{
+    BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
+    UciOption, UciPosition,
+};
 
-impl PrintBot {
-    pub fn new() -> PrintBot {
-        PrintBot {}
-    }
-}
+/// A stub engine implementation that satisfies the [`Engine`] trait.
+///
+/// It does not actually search; it is used to verify that the UCI protocol
+/// layer works end-to-end before the real engine is wired in.
+///
+/// Use [`Default::default()`] to construct it.
+#[derive(Default)]
+pub struct PrintBot;
 
 impl Engine for PrintBot {
-    fn uci(&self) -> Result<()> {
-        println!("id name PrintBot");
-        println!("id author tuasananh");
-        println!("uciok");
-        Ok(())
-    }
-
-    fn debug(&self, _is_on: bool) -> Result<()> {
-        println!("debug called!");
-        Ok(())
-    }
-
-    fn isready(&self) -> Result<()> {
-        println!("readyok");
-        Ok(())
-    }
-
-    fn setoption(&self, option: SetOptionParameters) -> Result<()> {
-        println!(
-            "Set option: name={:?} value={:?}",
-            option.name, option.value
-        );
-        Ok(())
-    }
-
-    fn ucinewgame(&self) -> Result<()> {
-        println!("ucinewgame called!");
-        Ok(())
-    }
-
-    fn position(&self, position: Position) -> Result<()> {
-        println!(
-            "position called with fen={:?} moves={:?}!",
-            position.fen, position.moves
-        );
-        if let Some(first_move) = position.moves.first() {
-            println!(
-                "First move as u32: {:?}, is null: {:?}",
-                first_move.as_u32(),
-                first_move.is_null()
-            );
-        }
-
-        Ok(())
-    }
-
-    fn go(&self, params: GoParameters) -> Result<()> {
-        println!("go called {:?}", params);
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<()> {
-        println!("stop called");
-        Ok(())
-    }
-
-    fn ponderhit(&self) -> Result<()> {
-        println!("ponderhit called");
-        Ok(())
-    }
-
-    fn quit(&self) -> Result<()> {
-        println!("Quit called");
-        Ok(())
-    }
-
-    fn register(&self, params: RegisterParameters) -> Result<()> {
-        match params {
-            RegisterParameters::Later => println!("register later"),
-            RegisterParameters::Identity { name, code } => {
-                println!("register name={:?} code={:?}", name, code)
-            }
+    fn uci(&self) -> (UciId, Vec<UciOption>) {
+        let id = UciId {
+            name: "Lingine".into(),
+            author: "tuasananh".into(),
         };
+        let options = vec![
+            UciOption::Spin {
+                name: "Hash".into(),
+                default: 16,
+                min: 1,
+                max: 1024,
+            },
+            UciOption::Check {
+                name: "Ponder".into(),
+                default: false,
+            },
+        ];
+        (id, options)
+    }
+
+    fn debug(&self, is_on: bool) {
+        log::debug!("debug mode: {is_on}");
+    }
+
+    fn isready(&self) {
+        // Nothing to initialise yet.
+    }
+
+    fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
+        log::debug!("setoption: name={:?} value={:?}", params.name, params.value);
         Ok(())
+    }
+
+    fn ucinewgame(&mut self) {
+        log::debug!("ucinewgame");
+    }
+
+    fn register(&self, params: RegisterParameters) {
+        match params {
+            RegisterParameters::Later => log::debug!("register later"),
+            RegisterParameters::Identity { name, code } => {
+                log::debug!("register name={name:?} code={code:?}");
+            }
+        }
+    }
+
+    fn position(&mut self, position: UciPosition) -> Result<()> {
+        log::debug!("position fen={:?} moves={:?}", position.fen, position.moves);
+        Ok(())
+    }
+
+    fn go(&mut self, _params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove> {
+        // No real search — send a single info string so the protocol layer
+        // has something to print, then return a null move.
+        //
+        // When real search is added, check `_params.stop.load(Ordering::Relaxed)`
+        // periodically in the search loop to respect the stop command.
+        let _ = tx.send(UciInfo {
+            string: Some("PrintBot has no search implemented".into()),
+            ..UciInfo::new()
+        });
+        Ok(BestMove {
+            mv: "0000".into(),
+            ponder: None,
+        })
+    }
+
+    fn stop(&mut self) {
+        // The stop flag in GoParameters is already set by the handler before
+        // this method is called. Nothing extra to do for a synchronous stub.
+        log::debug!("stop");
+    }
+
+    fn ponderhit(&mut self) {
+        log::debug!("ponderhit");
+    }
+
+    fn quit(&self) {
+        log::debug!("quit");
     }
 }
