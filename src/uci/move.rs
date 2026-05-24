@@ -3,12 +3,26 @@ use anyhow::{Error, Result, ensure};
 /// A chess move as represented in the UCI protocol.
 ///
 /// Stored as a `u32` with four byte-sized fields:
-/// - bits  0– 7: source file (0 = 'a', …, 8 = 'i')
-/// - bits  8–15: source rank (0–9)
-/// - bits 16–23: destination file
-/// - bits 24–31: destination rank
+/// - bits  0– 7: source file (`src_file`, 0 = `'a'`, …, 8 = `'i'`)
+/// - bits  8–15: source rank (`src_rank`, 0–9)
+/// - bits 16–23: destination file (`dst_file`)
+/// - bits 24–31: destination rank (`dst_rank`)
 ///
 /// A null move is encoded as `0x00000000` (the string `"0000"`).
+///
+/// # Converting to an internal `engine::Move`
+/// When the real engine processes a `position` command it will convert each
+/// `UciMove` to its internal `u16` move encoding using the four accessors:
+/// ```rust,ignore
+/// engine::Move::from_squares(uci_mv.src_file(), uci_mv.src_rank(),
+///                            uci_mv.dst_file(), uci_mv.dst_rank())
+/// ```
+///
+/// # Limitations
+/// - No [`fmt::Display`] implementation — moves cannot currently be formatted
+///   back to UCI notation (e.g. for the `pv` field of [`UciInfo`]). Add
+///   `Display` when the search layer produces `UciMove` values to report.
+/// - Xiangqi has no promotion, so no promotion piece field is encoded.
 #[derive(Clone, Debug)]
 pub struct UciMove(u32);
 

@@ -1,153 +1,212 @@
 use std::io::BufRead;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
+use std::thread;
 
 use anyhow::Result;
 
-use crate::uci::{BestMove, Engine, GoParameters};
+use crate::uci::{BestMove, Engine, UciInfo};
 
-/// Reads UCI commands from a [`BufRead`] source (typically stdin), parses
-/// them, and dispatches to the provided [`Engine`] implementation.
+use super::command::EngineCommand;
+use super::output::EngineOutput;
+
+/// Orchestrates three persistent threads to implement the UCI protocol.
 ///
-/// The handler is the sole owner of stdout output. Engine methods return typed
-/// values; the handler formats and prints them.
+/// ## Thread A — Stdin reader (caller's thread)
+/// Reads lines from the provided [`BufRead`] source, parses them into typed
+/// [`EngineCommand`] values, and sends them to Thread B. On `stop` it sets the
+/// shared `stop_flag` atomically *before* enqueuing the command, so Thread B's
+/// engine can observe the flag without waiting for the command queue to drain.
 ///
-/// ## Stop flag
-/// The handler holds an `Arc<AtomicBool>` that is passed through
-/// [`GoParameters::stop`] to the engine's `go` implementation. When the GUI
-/// sends a `stop` command the handler sets this flag to `true` so the engine's
-/// search loop can exit cleanly and return the best move found so far.
+/// ## Thread B — Engine actor (spawned)
+/// Owns the engine. Receives commands from Thread A and calls the corresponding
+/// [`Engine`] trait methods. During `go` it blocks while the engine searches;
+/// a short-lived forwarder thread streams `UciInfo` messages to Thread C in
+/// real-time. Because Thread A remains unblocked, `stop` can interrupt the
+/// search via the shared `Arc<AtomicBool>`.
+///
+/// ## Thread C — Output printer (spawned)
+/// Drains the output channel and calls `println!` for every message. Owning
+/// all output in a single thread prevents any stdout races.
 pub struct UCIHandler<T: Engine> {
     engine: T,
-    /// Shared stop signal. Set to `true` by the `stop` handler; reset to
-    /// `false` at the beginning of every `go` handler.
-    stop_flag: Arc<AtomicBool>,
 }
 
-impl<T: Engine> UCIHandler<T> {
+impl<T: Engine + 'static> UCIHandler<T> {
     pub fn new(engine: T) -> Self {
-        Self {
-            engine,
-            stop_flag: Arc::new(AtomicBool::new(false)),
-        }
+        Self { engine }
     }
 
-    /// Handle a single line of UCI input.
+    /// Start the UCI loop.
     ///
-    /// Returns `true` when the engine should quit.
-    fn handle_command(&mut self, full_command: &str) -> Result<bool> {
-        let tokens = full_command.split_whitespace().collect::<Vec<&str>>();
-        let mut token_stream = tokens.iter();
+    /// Spawns Threads B and C, then runs Thread A logic on the calling thread
+    /// until EOF or a `quit` command. Joins both spawned threads before returning.
+    pub fn run<R: BufRead>(self, reader: R) -> Result<()> {
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        let (cmd_tx, cmd_rx) = mpsc::channel::<EngineCommand>();
+        let (out_tx, out_rx) = mpsc::channel::<EngineOutput>();
 
-        // Outer loop handles the first recognised command token on each line.
-        // Per the UCI spec, unknown tokens are silently ignored.
-        while let Some(&token) = token_stream.next() {
-            match token {
-                "uci" => {
-                    let (id, options) = self.engine.uci();
-                    println!("{id}");
-                    for opt in options {
-                        println!("{opt}");
-                    }
-                    println!("uciok");
-                }
-                "debug" => {
-                    if let Some(&val) = token_stream.next()
-                        && (val == "on" || val == "off")
-                    {
-                        self.engine.debug(val == "on");
-                    }
-                }
-                "isready" => {
-                    self.engine.isready();
-                    println!("readyok");
-                }
-                "setoption" => {
-                    if let Err(e) = self.engine.setoption((&mut token_stream).try_into()?) {
-                        log::error!("setoption failed: {e:?}");
-                    }
-                }
-                "register" => {
-                    self.engine.register((&mut token_stream).try_into()?);
-                }
-                "ucinewgame" => {
-                    self.engine.ucinewgame();
-                }
-                "position" => {
-                    if let Err(e) = self.engine.position((&mut token_stream).try_into()?) {
-                        log::error!("position failed: {e:?}");
-                    }
-                }
-                "go" => {
-                    // Reset the stop flag before each new search so stale
-                    // `stop` commands from a previous search don't affect this one.
-                    self.stop_flag.store(false, Ordering::SeqCst);
-
-                    let mut params = GoParameters::try_from(&mut token_stream)?;
-                    // Hand the engine a clone of the flag; the handler keeps
-                    // its own Arc to set when `stop` arrives.
-                    params.stop = Arc::clone(&self.stop_flag);
-
-                    let (tx, rx) = mpsc::channel();
-                    let best = match self.engine.go(params, tx) {
-                        Ok(b) => b,
-                        Err(e) => {
-                            log::error!("go failed: {e:?}");
-                            BestMove {
-                                mv: "0000".into(),
-                                ponder: None,
-                            }
-                        }
-                    };
-                    // Drain all info messages the engine sent during search.
-                    for info in rx.try_iter() {
-                        println!("{info}");
-                    }
-                    // The handler always prints bestmove, never the engine.
-                    println!("{best}");
-                }
-                "stop" => {
-                    // Signal the search loop to exit.
-                    self.stop_flag.store(true, Ordering::SeqCst);
-                    self.engine.stop();
-                }
-                "ponderhit" => {
-                    self.engine.ponderhit();
-                }
-                "quit" => {
-                    self.engine.quit();
-                    return Ok(true);
-                }
-                _ => {
-                    // Unknown command token — ignore per UCI spec.
-                    continue;
-                }
+        // Thread C — output printer: the sole owner of stdout.
+        let printer = thread::spawn(move || {
+            for output in out_rx {
+                println!("{output}");
             }
+        });
 
-            // Only one command is processed per line.
-            break;
-        }
+        // Thread B — engine actor: the sole owner of the engine.
+        let stop_flag_b = Arc::clone(&stop_flag);
+        let actor = thread::spawn(move || {
+            run_actor(self.engine, cmd_rx, out_tx, stop_flag_b);
+        });
 
-        Ok(false)
+        // Thread A — stdin reader: runs on the caller's thread.
+        run_reader(reader, cmd_tx, stop_flag);
+
+        actor.join().expect("engine actor thread panicked");
+        printer.join().expect("output printer thread panicked");
+        Ok(())
     }
+}
 
-    /// Run the UCI loop until EOF or a `quit` command.
-    pub fn run<R: BufRead>(mut self, mut reader: R) -> Result<()> {
-        let mut line = String::new();
+// ---------------------------------------------------------------------------
+// Thread A
+// ---------------------------------------------------------------------------
 
-        loop {
-            line.clear();
-
-            if reader.read_line(&mut line)? == 0 {
-                // Reached EOF — exit cleanly.
-                break Ok(());
+/// Reads UCI lines, parses them into [`EngineCommand`]s, and sends them to
+/// the engine actor. Dropping `cmd_tx` on exit signals Thread B to shut down.
+fn run_reader<R: BufRead>(
+    reader: R,
+    cmd_tx: mpsc::Sender<EngineCommand>,
+    stop_flag: Arc<AtomicBool>,
+) {
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(e) => {
+                log::error!("stdin read error: {e}");
+                break;
             }
+        };
 
-            match self.handle_command(&line) {
-                Ok(true) => break Ok(()),
-                Ok(false) => {}
-                Err(err) => log::error!("UCI error: {err:?}"),
+        match EngineCommand::parse(&line) {
+            Ok(Some(cmd)) => {
+                // Set the flag before enqueuing Stop *or* Quit so the engine's
+                // search loop can observe it immediately without waiting for the
+                // command queue to drain. This ensures engine.go() exits
+                // promptly even if the GUI sends `quit` during infinite search.
+                if matches!(cmd, EngineCommand::Stop | EngineCommand::Quit) {
+                    stop_flag.store(true, Ordering::SeqCst);
+                }
+                let quit = matches!(cmd, EngineCommand::Quit);
+                // Ignore send errors (Thread B exited early).
+                cmd_tx.send(cmd).ok();
+                if quit {
+                    break;
+                }
             }
+            Ok(None) => {} // blank line or unknown command — ignore per spec
+            Err(e) => log::error!("UCI parse error: {e:?}"),
         }
     }
+    // The loop exited: either via `quit`, EOF, or an I/O error.
+    //
+    // Guarantee 1: any in-progress engine.go() exits promptly by setting the
+    // stop flag. (For the `quit` path this is already true from the arm above;
+    // the store here is a harmless no-op in that case.)
+    stop_flag.store(true, Ordering::SeqCst);
+    //
+    // Guarantee 2: engine.quit() is always called for clean teardown, even
+    // when the session ended with EOF rather than an explicit `quit` command.
+    // If Thread B's receiver is already gone the send returns Err, which we
+    // ignore with `.ok()` — engine.quit() will not be called twice.
+    cmd_tx.send(EngineCommand::Quit).ok();
+    // Dropping cmd_tx here signals Thread B's cmd_rx loop to exit.
+}
+
+// ---------------------------------------------------------------------------
+// Thread B
+// ---------------------------------------------------------------------------
+
+/// Receives [`EngineCommand`]s and dispatches to the [`Engine`] trait.
+/// Dropping `out_tx` on exit signals Thread C to shut down.
+fn run_actor<T: Engine>(
+    mut engine: T,
+    cmd_rx: mpsc::Receiver<EngineCommand>,
+    out_tx: mpsc::Sender<EngineOutput>,
+    stop_flag: Arc<AtomicBool>,
+) {
+    for cmd in cmd_rx {
+        match cmd {
+            EngineCommand::Uci => {
+                let (id, options) = engine.uci();
+                out_tx.send(EngineOutput::Identity(id)).ok();
+                for opt in options {
+                    out_tx.send(EngineOutput::Opt(opt)).ok();
+                }
+                out_tx.send(EngineOutput::UciOk).ok();
+            }
+            EngineCommand::Debug(on) => engine.debug(on),
+            EngineCommand::IsReady => {
+                engine.isready();
+                out_tx.send(EngineOutput::ReadyOk).ok();
+            }
+            EngineCommand::SetOption(p) => {
+                if let Err(e) = engine.setoption(p) {
+                    log::error!("setoption failed: {e:?}");
+                }
+            }
+            EngineCommand::Register(p) => engine.register(p),
+            EngineCommand::NewGame => engine.ucinewgame(),
+            EngineCommand::Position(p) => {
+                if let Err(e) = engine.position(p) {
+                    log::error!("position failed: {e:?}");
+                }
+            }
+            EngineCommand::Go(mut params) => {
+                // Reset before each search so stale stops don't short-circuit
+                // the next go call.
+                stop_flag.store(false, Ordering::SeqCst);
+                // Inject the real shared flag so engine.go() can check it.
+                params.stop = Arc::clone(&stop_flag);
+
+                let (info_tx, info_rx) = mpsc::channel::<UciInfo>();
+
+                // Short-lived forwarder: bridges UciInfo → EngineOutput in
+                // real-time. Exits automatically when info_tx is dropped
+                // (i.e. when engine.go() returns and info_tx goes out of scope).
+                let out_tx2 = out_tx.clone();
+                let forwarder = thread::spawn(move || {
+                    for info in info_rx {
+                        out_tx2.send(EngineOutput::Info(info)).ok();
+                    }
+                });
+
+                // Blocks Thread B for the duration of the search.
+                // Thread A continues reading stdin and can set stop_flag at any time.
+                let best = match engine.go(params, info_tx) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        log::error!("go failed: {e:?}");
+                        BestMove::null()
+                    }
+                };
+
+                // Wait for the forwarder to flush all remaining info messages
+                // *before* sending bestmove, preserving output order.
+                forwarder.join().ok();
+                out_tx.send(EngineOutput::BestMove(best)).ok();
+            }
+            EngineCommand::Stop => {
+                // The flag was already set atomically by Thread A.
+                // Call engine.stop() for any engine-side cleanup.
+                engine.stop();
+            }
+            EngineCommand::PonderHit => engine.ponderhit(),
+            EngineCommand::Quit => {
+                engine.quit();
+                break;
+            }
+        }
+    }
+    // Dropping out_tx here signals Thread C's for-loop to exit.
 }

@@ -4,9 +4,26 @@ use anyhow::{Error, Result, ensure};
 
 use crate::uci::r#move::UciMove;
 
+/// The board position sent by the GUI via the `position` command.
+///
+/// Contains a FEN string describing the starting position and an ordered list
+/// of moves applied on top of it. When the GUI sends `position startpos`, the
+/// FEN is set to [`START_FEN`].
+///
+/// # Limitations
+/// - `fen` is stored as a raw [`String`] and is **not validated** here.
+///   FEN syntax errors (wrong piece counts, illegal side-to-move, etc.) will
+///   only be caught when the real engine constructs its internal `Board` from
+///   the FEN string inside `Engine::position()`.
+/// - Each `UciMove` in `moves` is validated for correct notation (4 chars,
+///   valid file/rank), but **not for legality**. The engine's `position()`
+///   implementation must apply the moves one by one and return `Err` if any
+///   is illegal.
 #[derive(Clone, Debug)]
 pub struct UciPosition {
+    /// The starting position in Forsyth-Edwards Notation.
     pub fen: String,
+    /// Moves applied after the FEN position, in order.
     pub moves: Vec<UciMove>,
 }
 
@@ -19,6 +36,9 @@ impl Default for UciPosition {
     }
 }
 
+/// The starting FEN for a standard Xiangqi game.
+///
+/// Used when the GUI sends `position startpos`.
 pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
 impl TryFrom<&mut Iter<'_, &str>> for UciPosition {

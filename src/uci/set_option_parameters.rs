@@ -2,9 +2,22 @@ use std::slice::Iter;
 
 use anyhow::{Error, Result, ensure};
 
+/// Parsed parameters from the `setoption` UCI command.
+///
+/// The `name` field is always **lowercased** because the UCI spec says option
+/// names are case-insensitive. Engine implementations should match against
+/// lowercase strings.
+///
+/// # Limitations
+/// - If the `"value"` keyword appears at the very end of the line with no
+///   following tokens, parsing returns `Err`. Some GUIs may send
+///   `setoption name Ponder value` without a value token for button-type
+///   options; add leniency here if that is observed in practice.
 #[derive(Debug)]
 pub struct SetOptionParameters {
+    /// Option name, lowercased and joined with spaces for multi-word names.
     pub name: String,
+    /// Option value, or `None` for button-type options (no `value` keyword).
     pub value: Option<String>,
 }
 

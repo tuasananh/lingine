@@ -7,16 +7,26 @@ use crate::uci::{
     UciOption, UciPosition,
 };
 
-/// A stub engine implementation that satisfies the [`Engine`] trait.
+/// A stub [`Engine`] implementation used to verify the UCI protocol layer
+/// end-to-end before the real search engine is written.
 ///
-/// It does not actually search; it is used to verify that the UCI protocol
-/// layer works end-to-end before the real engine is wired in.
+/// Every method is a no-op or log statement. `go` always returns
+/// [`BestMove::null()`] (`"bestmove 0000"`).
 ///
-/// Use [`Default::default()`] to construct it.
+/// # Usage
+/// Construct with the unit-struct literal:
+/// ```rust,ignore
+/// UCIHandler::new(PrintBot).run(stdin().lock())?;
+/// ```
+///
+/// Replace `PrintBot` with the real engine type once search is implemented.
 #[derive(Default)]
 pub struct PrintBot;
 
 impl Engine for PrintBot {
+    /// Returns the engine name `"Lingine"` and two options:
+    /// - `Hash` (spin, 1–1024 MB, default 16)
+    /// - `Ponder` (check, default false)
     fn uci(&self) -> (UciId, Vec<UciOption>) {
         let id = UciId {
             name: "Lingine".into(),
@@ -37,23 +47,29 @@ impl Engine for PrintBot {
         (id, options)
     }
 
+    /// Logs the debug mode change. No behaviour changes in the stub.
     fn debug(&self, is_on: bool) {
         log::debug!("debug mode: {is_on}");
     }
 
+    /// No initialisation needed for the stub; always ready immediately.
     fn isready(&self) {
         // Nothing to initialise yet.
     }
 
+    /// Logs the option change. Always succeeds (`Ok(())`); a real engine
+    /// would parse `params.name`/`params.value` and update its configuration.
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
         log::debug!("setoption: name={:?} value={:?}", params.name, params.value);
         Ok(())
     }
 
+    /// Logs; a real engine should clear its hash table and reset search state.
     fn ucinewgame(&mut self) {
         log::debug!("ucinewgame");
     }
 
+    /// Logs the registration details. No copy-protection in Lingine.
     fn register(&self, params: RegisterParameters) {
         match params {
             RegisterParameters::Later => log::debug!("register later"),
@@ -63,11 +79,24 @@ impl Engine for PrintBot {
         }
     }
 
+    /// Logs the FEN and move list. Always succeeds; a real engine would apply
+    /// the moves to its internal board representation.
     fn position(&mut self, position: UciPosition) -> Result<()> {
         log::debug!("position fen={:?} moves={:?}", position.fen, position.moves);
         Ok(())
     }
 
+    /// Sends one `info string` message and immediately returns the null move.
+    ///
+    /// A real implementation would run a search loop here, checking the stop
+    /// flag periodically:
+    /// ```rust,ignore
+    /// while !params.stop.load(Ordering::Relaxed) {
+    ///     // search deeper…
+    ///     tx.send(UciInfo { depth: Some(current_depth), … }).ok();
+    /// }
+    /// Ok(best_move_found)
+    /// ```
     fn go(&mut self, _params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove> {
         // No real search — send a single info string so the protocol layer
         // has something to print, then return a null move.
@@ -84,16 +113,22 @@ impl Engine for PrintBot {
         })
     }
 
+    /// Logs the stop signal. The shared `stop_flag` was already set by
+    /// Thread A before this method is called; no extra action is needed in
+    /// the stub.
     fn stop(&mut self) {
         // The stop flag in GoParameters is already set by the handler before
         // this method is called. Nothing extra to do for a synchronous stub.
         log::debug!("stop");
     }
 
+    /// Logs. No pondering implemented yet; see [`EngineCommand::PonderHit`]
+    /// for the current limitation.
     fn ponderhit(&mut self) {
         log::debug!("ponderhit");
     }
 
+    /// Logs. A real engine should flush any buffers and free resources.
     fn quit(&self) {
         log::debug!("quit");
     }

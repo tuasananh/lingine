@@ -13,7 +13,7 @@ use crate::uci::{
 /// responsible for all output to stdout (printing `uciok`, `readyok`,
 /// `bestmove`, `info`, etc.). Engine implementations only produce typed values
 /// and must **never** write to stdout directly.
-pub trait Engine {
+pub trait Engine: Send {
     /// Return the engine's identity and its supported options.
     ///
     /// The handler will print:
@@ -73,14 +73,26 @@ pub trait Engine {
     /// background thread in Phase 4 without changing this trait signature.
     fn go(&mut self, params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove>;
 
-    /// Stop the current search as soon as possible.
+    /// Called when the GUI sends a `stop` command.
     ///
-    /// The engine must send a `bestmove` response even when stopped mid-search.
-    /// Because `go` is currently synchronous this is only useful once threaded
-    /// search is implemented.
+    /// By the time this method is called, the shared `stop_flag` inside
+    /// [`GoParameters::stop`] has **already been set to `true`** by Thread A
+    /// (the stdin reader). The engine's search loop should have observed the
+    /// flag and returned a `BestMove` before this is called.
+    ///
+    /// Use this method for any engine-side cleanup after a search is
+    /// interrupted — e.g. clearing search state, joining internal threads.
     fn stop(&mut self);
 
-    /// The user played the ponder move; switch from pondering to normal search.
+    /// Called when the GUI sends `ponderhit` — the opponent played the move the
+    /// engine was pondering on; switch from ponder mode to normal search.
+    ///
+    /// # Current limitation
+    /// Thread B (the engine actor) is blocked inside `engine.go()` while
+    /// searching, so a `ponderhit` command queues in the command channel but
+    /// is **not processed until the current search returns**. This means
+    /// pondering cannot be properly supported until `go` is made non-blocking
+    /// (e.g. by managing an internal search thread inside the engine).
     fn ponderhit(&mut self);
 
     /// Quit the engine as soon as possible.
