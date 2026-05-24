@@ -81,16 +81,14 @@ impl EngineCommand {
                 _ => Ok(None),
             },
             Some("isready") => Ok(Some(Self::IsReady)),
-            Some("setoption") => {
-                Ok(Some(Self::SetOption(SetOptionParameters::try_from(&mut iter)?)))
-            }
-            Some("register") => {
-                Ok(Some(Self::Register(RegisterParameters::try_from(&mut iter)?)))
-            }
+            Some("setoption") => Ok(Some(Self::SetOption(SetOptionParameters::try_from(
+                &mut iter,
+            )?))),
+            Some("register") => Ok(Some(Self::Register(RegisterParameters::try_from(
+                &mut iter,
+            )?))),
             Some("ucinewgame") => Ok(Some(Self::NewGame)),
-            Some("position") => {
-                Ok(Some(Self::Position(UciPosition::try_from(&mut iter)?)))
-            }
+            Some("position") => Ok(Some(Self::Position(UciPosition::try_from(&mut iter)?))),
             Some("go") => Ok(Some(Self::Go(GoParameters::try_from(&mut iter)?))),
             Some("stop") => Ok(Some(Self::Stop)),
             Some("ponderhit") => Ok(Some(Self::PonderHit)),

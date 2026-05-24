@@ -88,9 +88,8 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                         match value.as_slice().first().copied() {
                             // Stop before any known go-parameter keyword.
                             Some(
-                                "ponder" | "wtime" | "btime" | "winc" | "binc"
-                                | "movestogo" | "depth" | "nodes" | "mate"
-                                | "movetime" | "infinite",
+                                "ponder" | "wtime" | "btime" | "winc" | "binc" | "movestogo"
+                                | "depth" | "nodes" | "mate" | "movetime" | "infinite",
                             )
                             | None => break,
                             // Anything else is a move string; consume and parse.
