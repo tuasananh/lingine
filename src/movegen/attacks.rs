@@ -39,13 +39,15 @@ pub fn rook_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     // 2. File attacks: Gather the 10 bits of the current file
     let file_occ = gather_file_bits(occupied.0, f);
     let file_attack_mask = FILE_TABLE[r].rook[file_occ];
-    let mut file_mask_bb = 0u128;
-    let mut temp = file_attack_mask;
-    while temp != 0 {
-        let r_to = temp.trailing_zeros() as usize;
-        temp &= temp - 1;
-        file_mask_bb |= 1 << (r_to * 9 + f);
-    }
+
+    let low_mask = (file_attack_mask & 0x1F) as u64;
+    let high_mask = ((file_attack_mask >> 5) & 0x1F) as u64;
+
+    let low_scatter = (low_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
+    let high_scatter = (high_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
+
+    let file_mask_bb = (low_scatter | (high_scatter << 45)) << f;
+
     attack_bb.0 |= file_mask_bb;
     attack_bb
 }
@@ -65,13 +67,15 @@ pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     // 2. File attacks: Gather the 10 bits of the file
     let file_occ = gather_file_bits(occupied.0, f);
     let file_attack_mask = FILE_TABLE[r].cannon[file_occ];
-    let mut file_mask_bb = 0u128;
-    let mut temp = file_attack_mask;
-    while temp != 0 {
-        let r_to = temp.trailing_zeros() as usize;
-        temp &= temp - 1;
-        file_mask_bb |= 1 << (r_to * 9 + f);
-    }
+
+    let low_mask = (file_attack_mask & 0x1F) as u64;
+    let high_mask = ((file_attack_mask >> 5) & 0x1F) as u64;
+
+    let low_scatter = (low_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
+    let high_scatter = (high_mask.wrapping_mul(0x101010101) & 0x10_0804_0201) as u128;
+
+    let file_mask_bb = (low_scatter | (high_scatter << 45)) << f;
+
     attack_bb.0 |= file_mask_bb;
     attack_bb
 }
