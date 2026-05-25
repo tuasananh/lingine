@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::sync::OnceLock;
 use strum::EnumCount;
 use thiserror::Error;
@@ -230,6 +229,7 @@ impl Position {
         self.bitboard_by_type = [Bitboard::new(); PieceType::COUNT];
         self.bitboard_by_color = [Bitboard::new(); Color::COUNT];
         self.piece_count = [0; 16];
+        self.king_squares = [Square::E0, Square::E9];
         self.history.clear();
         self.game_ply = 0;
         self.zobrist_hash = 0;
