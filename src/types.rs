@@ -251,27 +251,100 @@ impl Move {
     }
 }
 
-impl From<&str> for Move {
-    /// Parses a standard UCI string move (e.g. "b0c2" -> "b0 to c2") into a `Move`.
-    fn from(value: &str) -> Self {
-        let bytes = value.as_bytes();
-        if bytes.len() != 4 {
-            panic!("Invalid move string: {}", value);
-        }
-        let from_file = File::from_repr(bytes[0] - b'a').unwrap();
-        let from_rank = Rank::from_repr(bytes[1] - b'0').unwrap();
-        let to_file = File::from_repr(bytes[2] - b'a').unwrap();
-        let to_rank = Rank::from_repr(bytes[3] - b'0').unwrap();
-
-        let from_square = Square::from_file_rank(from_file, from_rank);
-        let to_square = Square::from_file_rank(to_file, to_rank);
-
-        Move::new(from_square, to_square)
-    }
-}
-
 /// The maximum number of pseudo-legal moves in any given Xiangqi position (typically <= 120).
 pub const MAX_MOVES: usize = 128;
 
 /// A stack-allocated array vector that holds up to `MAX_MOVES` without heap allocation.
 pub type MoveList = ArrayVec<Move, MAX_MOVES>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_color_opposite() {
+        assert_eq!(Color::White.opposite(), Color::Black);
+        assert_eq!(Color::Black.opposite(), Color::White);
+    }
+
+    #[test]
+    fn test_square_conversions() {
+        // Test from_file_rank
+        let sq_a0 = Square::from_file_rank(File::FA, Rank::R0);
+        assert_eq!(sq_a0, Square::A0);
+        assert_eq!(sq_a0.file(), File::FA);
+        assert_eq!(sq_a0.rank(), Rank::R0);
+
+        let sq_i9 = Square::from_file_rank(File::FI, Rank::R9);
+        assert_eq!(sq_i9, Square::I9);
+        assert_eq!(sq_i9.file(), File::FI);
+        assert_eq!(sq_i9.rank(), Rank::R9);
+
+        let sq_e4 = Square::from_file_rank(File::FE, Rank::R4);
+        assert_eq!(sq_e4, Square::E4);
+        assert_eq!(sq_e4.file(), File::FE);
+        assert_eq!(sq_e4.rank(), Rank::R4);
+    }
+
+    #[test]
+    fn test_piece_properties() {
+        assert_eq!(Piece::None.color(), None);
+        assert_eq!(Piece::None.piece_type(), PieceType::None);
+
+        assert_eq!(Piece::WhiteRook.color(), Some(Color::White));
+        assert_eq!(Piece::WhiteRook.piece_type(), PieceType::Rook);
+
+        assert_eq!(Piece::BlackKing.color(), Some(Color::Black));
+        assert_eq!(Piece::BlackKing.piece_type(), PieceType::King);
+
+        assert_eq!(Piece::WhiteAdvisor.color(), Some(Color::White));
+        assert_eq!(Piece::WhiteAdvisor.piece_type(), PieceType::Advisor);
+
+        assert_eq!(Piece::BlackCannon.color(), Some(Color::Black));
+        assert_eq!(Piece::BlackCannon.piece_type(), PieceType::Cannon);
+
+        assert_eq!(Piece::WhitePawn.color(), Some(Color::White));
+        assert_eq!(Piece::WhitePawn.piece_type(), PieceType::Pawn);
+
+        assert_eq!(Piece::BlackKnight.color(), Some(Color::Black));
+        assert_eq!(Piece::BlackKnight.piece_type(), PieceType::Knight);
+
+        assert_eq!(Piece::WhiteBishop.color(), Some(Color::White));
+        assert_eq!(Piece::WhiteBishop.piece_type(), PieceType::Bishop);
+    }
+
+    #[test]
+    fn test_bloom_filter() {
+        let mut filter = BloomFilter::new();
+        // By default, should be all 0s
+        assert_eq!(filter[0], 0);
+        assert_eq!(filter[12345], 0);
+
+        filter[12345] = 42;
+        assert_eq!(filter[12345], 42);
+
+        // Test implementation of Default trait
+        let filter_default = BloomFilter::default();
+        assert_eq!(filter_default[12345], 0);
+    }
+
+    #[test]
+    fn test_move_encoding() {
+        let m_quiet = Move::new(Square::A0, Square::I9);
+        assert_eq!(m_quiet.square_from(), Square::A0);
+        assert_eq!(m_quiet.square_to(), Square::I9);
+        assert_eq!(m_quiet.flags(), 0);
+        assert!(!m_quiet.is_none());
+
+        let m_flags = Move::new_with_flags(Square::E4, Square::E5, 3);
+        assert_eq!(m_flags.square_from(), Square::E4);
+        assert_eq!(m_flags.square_to(), Square::E5);
+        assert_eq!(m_flags.flags(), 3);
+        assert!(!m_flags.is_none());
+
+        let m_none = Move::none();
+        assert!(m_none.is_none());
+
+        assert_eq!(format!("{}", m_quiet), "A0 to I9");
+    }
+}

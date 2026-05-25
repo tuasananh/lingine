@@ -210,3 +210,70 @@ fn run_actor<T: Engine>(
     }
     // Dropping out_tx here signals Thread C's for-loop to exit.
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bot::PrintBot;
+    use std::io::Cursor;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn test_run_reader() {
+        let input = "uci\nisready\nstop\nquit\n";
+        let reader = Cursor::new(input);
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+
+        run_reader(reader, cmd_tx, stop_flag.clone());
+
+        // Verify commands sent to actor
+        let mut cmds = Vec::new();
+        while let Ok(cmd) = cmd_rx.try_recv() {
+            cmds.push(cmd);
+        }
+
+        assert_eq!(cmds.len(), 5);
+        assert!(matches!(cmds[0], EngineCommand::Uci));
+        assert!(matches!(cmds[1], EngineCommand::IsReady));
+        assert!(matches!(cmds[2], EngineCommand::Stop));
+        assert!(matches!(cmds[3], EngineCommand::Quit));
+        assert!(matches!(cmds[4], EngineCommand::Quit));
+
+        // Stop flag should be set to true due to Stop/Quit commands
+        assert!(stop_flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_run_actor() {
+        let engine = PrintBot::default();
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let (out_tx, out_rx) = mpsc::channel();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+
+        // Queue some commands
+        cmd_tx.send(EngineCommand::Uci).unwrap();
+        cmd_tx.send(EngineCommand::IsReady).unwrap();
+        cmd_tx.send(EngineCommand::Quit).unwrap();
+
+        // Dropping cmd_tx so the receiver channel closes when drained
+        drop(cmd_tx);
+
+        run_actor(engine, cmd_rx, out_tx, stop_flag);
+
+        // Gather outputs
+        let mut outputs = Vec::new();
+        while let Ok(out) = out_rx.try_recv() {
+            outputs.push(out);
+        }
+
+        // Expected output from PrintBot for Uci is Identity, 2 Opts, UciOk
+        // For IsReady is ReadyOk
+        assert_eq!(outputs.len(), 5);
+        assert!(matches!(outputs[0], EngineOutput::Identity(_)));
+        assert!(matches!(outputs[1], EngineOutput::Opt(_)));
+        assert!(matches!(outputs[2], EngineOutput::Opt(_)));
+        assert!(matches!(outputs[3], EngineOutput::UciOk));
+        assert!(matches!(outputs[4], EngineOutput::ReadyOk));
+    }
+}

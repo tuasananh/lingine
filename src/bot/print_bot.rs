@@ -133,3 +133,55 @@ impl Engine for PrintBot {
         log::debug!("quit");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::uci::GoParameters;
+    use std::sync::mpsc;
+
+    #[test]
+    fn test_print_bot_interface() {
+        let mut bot = PrintBot::default();
+        let (id, options) = bot.uci();
+        assert_eq!(id.name, "Lingine");
+        assert_eq!(id.author, "tuasananh");
+        assert_eq!(options.len(), 2);
+
+        // Call other methods to ensure no panics and expected behavior
+        bot.debug(true);
+        bot.isready();
+
+        let set_opt = SetOptionParameters {
+            name: "Hash".into(),
+            value: Some("64".into()),
+        };
+        assert!(bot.setoption(set_opt).is_ok());
+
+        bot.ucinewgame();
+        bot.register(RegisterParameters::Later);
+
+        let pos = UciPosition {
+            fen: "startpos".into(),
+            moves: vec![],
+        };
+        assert!(bot.position(pos).is_ok());
+
+        let (tx, rx) = mpsc::channel();
+        let best_move = bot.go(GoParameters::default(), tx).unwrap();
+
+        bot.stop();
+        bot.ponderhit();
+        bot.quit();
+
+        assert_eq!(best_move.mv, "0000");
+        assert_eq!(best_move.ponder, None);
+
+        // Verify the stream received the expected info message
+        let info = rx.recv().unwrap();
+        assert_eq!(
+            info.string,
+            Some("PrintBot has no search implemented".into())
+        );
+    }
+}

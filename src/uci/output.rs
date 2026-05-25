@@ -41,3 +41,48 @@ impl fmt::Display for EngineOutput {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::uci::{BestMove, UciId, UciInfo, UciOption};
+
+    #[test]
+    fn test_engine_output_formatting() {
+        assert_eq!(format!("{}", EngineOutput::UciOk), "uciok");
+        assert_eq!(format!("{}", EngineOutput::ReadyOk), "readyok");
+
+        let id = UciId {
+            name: "Lingine".into(),
+            author: "tuasananh".into(),
+        };
+        assert_eq!(
+            format!("{}", EngineOutput::Identity(id)),
+            "id name Lingine\nid author tuasananh"
+        );
+
+        let opt = UciOption::Check {
+            name: "Ponder".into(),
+            default: false,
+        };
+        assert_eq!(
+            format!("{}", EngineOutput::Opt(opt)),
+            "option name Ponder type check default false"
+        );
+
+        let info = UciInfo {
+            string: Some("Testing output".into()),
+            ..UciInfo::new()
+        };
+        assert_eq!(
+            format!("{}", EngineOutput::Info(info)),
+            "info string Testing output"
+        );
+
+        let bm = BestMove {
+            mv: "a0a1".into(),
+            ponder: None,
+        };
+        assert_eq!(format!("{}", EngineOutput::BestMove(bm)), "bestmove a0a1");
+    }
+}
