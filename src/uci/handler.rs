@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_run_actor() {
-        let engine = PrintBot::default();
+        let engine = PrintBot;
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let (out_tx, out_rx) = mpsc::channel();
         let stop_flag = Arc::new(AtomicBool::new(false));

@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_print_bot_interface() {
-        let mut bot = PrintBot::default();
+        let mut bot = PrintBot;
         let (id, options) = bot.uci();
         assert_eq!(id.name, "Lingine");
         assert_eq!(id.author, "tuasananh");
