@@ -27,10 +27,19 @@ pub struct UciPosition {
     pub moves: Vec<UciMove>,
 }
 
+impl Default for UciPosition {
+    fn default() -> Self {
+        Self {
+            fen: START_FEN.to_string(),
+            moves: Vec::new(),
+        }
+    }
+}
+
 /// The starting FEN for a standard Xiangqi game.
 ///
 /// Used when the GUI sends `position startpos`.
-const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
+pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
 impl TryFrom<&mut Iter<'_, &str>> for UciPosition {
     type Error = Error;

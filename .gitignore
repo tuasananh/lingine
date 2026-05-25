@@ -1,2 +1,6 @@
 /target
 .vscode
+.agents
+skills-lock.json
+profile.json.gz
+Pikafish

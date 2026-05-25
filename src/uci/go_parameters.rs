@@ -52,6 +52,8 @@ pub struct GoParameters {
     /// Search until a `stop` command arrives. The engine must still honour
     /// [`stop`][Self::stop] when set.
     pub infinite: bool,
+    /// Do perft from current position up to depth
+    pub perft: Option<u32>,
     /// Shared stop signal injected by the engine actor just before `engine.go()`
     /// is called.
     ///
@@ -89,7 +91,7 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                             // Stop before any known go-parameter keyword.
                             Some(
                                 "ponder" | "wtime" | "btime" | "winc" | "binc" | "movestogo"
-                                | "depth" | "nodes" | "mate" | "movetime" | "infinite",
+                                | "depth" | "nodes" | "mate" | "movetime" | "infinite" | "perft",
                             )
                             | None => break,
                             // Anything else is a move string; consume and parse.
@@ -189,6 +191,15 @@ impl TryFrom<&mut Iter<'_, &str>> for GoParameters {
                 }
                 "infinite" => {
                     res.infinite = true;
+                }
+                "perft" => {
+                    let val = value
+                        .next()
+                        .ok_or_else(|| anyhow!("missing value for 'perft'"))?;
+                    res.perft = Some(
+                        val.parse::<u32>()
+                            .map_err(|_| anyhow!("invalid 'perft' value: {val}"))?,
+                    );
                 }
                 _ => {
                     // Unknown go tokens are ignored per UCI convention.

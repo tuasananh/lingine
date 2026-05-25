@@ -98,3 +98,100 @@ impl EngineCommand {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_simple_commands() {
+        assert!(matches!(EngineCommand::parse(""), Ok(None)));
+        assert!(matches!(EngineCommand::parse("   "), Ok(None)));
+        assert!(matches!(EngineCommand::parse("unknown_command"), Ok(None)));
+
+        assert!(matches!(
+            EngineCommand::parse("uci"),
+            Ok(Some(EngineCommand::Uci))
+        ));
+        assert!(matches!(
+            EngineCommand::parse("isready"),
+            Ok(Some(EngineCommand::IsReady))
+        ));
+        assert!(matches!(
+            EngineCommand::parse("ucinewgame"),
+            Ok(Some(EngineCommand::NewGame))
+        ));
+        assert!(matches!(
+            EngineCommand::parse("stop"),
+            Ok(Some(EngineCommand::Stop))
+        ));
+        assert!(matches!(
+            EngineCommand::parse("ponderhit"),
+            Ok(Some(EngineCommand::PonderHit))
+        ));
+        assert!(matches!(
+            EngineCommand::parse("quit"),
+            Ok(Some(EngineCommand::Quit))
+        ));
+    }
+
+    #[test]
+    fn test_parse_debug() {
+        assert!(matches!(
+            EngineCommand::parse("debug on"),
+            Ok(Some(EngineCommand::Debug(true)))
+        ));
+        assert!(matches!(
+            EngineCommand::parse("debug off"),
+            Ok(Some(EngineCommand::Debug(false)))
+        ));
+        assert!(matches!(EngineCommand::parse("debug"), Ok(None)));
+        assert!(matches!(EngineCommand::parse("debug foo"), Ok(None)));
+    }
+
+    #[test]
+    fn test_parse_setoption() {
+        let cmd = EngineCommand::parse("setoption name Hash value 16")
+            .unwrap()
+            .unwrap();
+        if let EngineCommand::SetOption(params) = cmd {
+            assert_eq!(params.name, "hash");
+            assert_eq!(params.value, Some("16".to_string()));
+        } else {
+            panic!("Expected SetOption");
+        }
+
+        // Invalid setoption format should fail
+        assert!(EngineCommand::parse("setoption").is_err());
+    }
+
+    #[test]
+    fn test_parse_register() {
+        let cmd = EngineCommand::parse("register later").unwrap().unwrap();
+        assert!(matches!(
+            cmd,
+            EngineCommand::Register(RegisterParameters::Later)
+        ));
+    }
+
+    #[test]
+    fn test_parse_position() {
+        let cmd = EngineCommand::parse("position startpos").unwrap().unwrap();
+        if let EngineCommand::Position(pos) = cmd {
+            assert_eq!(pos.fen, crate::uci::position::START_FEN);
+            assert!(pos.moves.is_empty());
+        } else {
+            panic!("Expected Position");
+        }
+    }
+
+    #[test]
+    fn test_parse_go() {
+        let cmd = EngineCommand::parse("go depth 5").unwrap().unwrap();
+        if let EngineCommand::Go(params) = cmd {
+            assert_eq!(params.depth, Some(5));
+        } else {
+            panic!("Expected Go");
+        }
+    }
+}

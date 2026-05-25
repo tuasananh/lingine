@@ -1,10 +1,9 @@
+#![allow(dead_code)]
+
 use anyhow::Result;
 use simple_logger::SimpleLogger;
 
-use crate::{bot::PrintBot, uci::UCIHandler};
-
-mod bot;
-mod uci;
+use lingine::{bot::PrintBot, uci::UCIHandler};
 
 fn main() -> Result<()> {
     SimpleLogger::new().init()?;
