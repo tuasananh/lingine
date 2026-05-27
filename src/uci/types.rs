@@ -717,6 +717,8 @@ mod tests {
     #[test]
     fn test_valid_move_parsing() {
         let m = UciMove::try_from("a0b1").expect("Should parse valid move");
+        // from: file 'a' = 0, rank '0' = 0
+        // to:   file 'b' = 1, rank '1' = 1
         assert_eq!(m.src_file(), 0);
         assert_eq!(m.src_rank(), 0);
         assert_eq!(m.dst_file(), 1);
@@ -726,8 +728,8 @@ mod tests {
     #[test]
     fn test_boundary_moves() {
         let m = UciMove::try_from("i9i9").expect("Should parse boundary move");
-        assert_eq!(m.src_file(), 8);
-        assert_eq!(m.src_rank(), 9);
+        assert_eq!(m.src_file(), 8); // 'i' - 'a' = 8
+        assert_eq!(m.src_rank(), 9); // '9' - '0' = 9
         assert_eq!(m.dst_file(), 8);
         assert_eq!(m.dst_rank(), 9);
     }
@@ -740,8 +742,25 @@ mod tests {
 
     #[test]
     fn test_invalid_length() {
-        assert!(UciMove::try_from("a0b").is_err());
-        assert!(UciMove::try_from("a0b1c").is_err());
+        assert!(UciMove::try_from("a0b").is_err()); // Too short
+        assert!(UciMove::try_from("a0b1c").is_err()); // Too long
+    }
+
+    #[test]
+    fn test_invalid_characters() {
+        assert!(UciMove::try_from("j0b1").is_err()); // Source file out of range
+        assert!(UciMove::try_from("a:b1").is_err()); // Source rank out of range
+        assert!(UciMove::try_from("????").is_err()); // Completely wrong
+    }
+
+    #[test]
+    fn test_equality() {
+        let m1 = UciMove::try_from("a1c3").unwrap();
+        let m2 = UciMove::try_from("a1c3").unwrap();
+        let m3 = UciMove::try_from("c3a1").unwrap();
+
+        assert_eq!(m1, m2);
+        assert_ne!(m1, m3);
     }
 
     #[test]
@@ -755,10 +774,65 @@ mod tests {
 
         assert!(parsed.searchmoves.is_some());
         assert_eq!(parsed.searchmoves.unwrap().len(), 2);
+        // wtime must be parsed even though searchmoves appeared before it.
         assert_eq!(parsed.wtime, Some(Duration::from_millis(1000)));
         assert!(parsed.ponder);
         assert_eq!(parsed.movetime, None);
         assert!(!parsed.infinite);
+    }
+
+    #[test]
+    fn parses_time_related_parameters() {
+        let tokens = "wtime 1200 btime 3400 winc 100 binc 200 movestogo 30 depth 4 nodes 1000 mate 2 movetime 1500 infinite"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = GoParameters::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.wtime, Some(Duration::from_millis(1200)));
+        assert_eq!(parsed.btime, Some(Duration::from_millis(3400)));
+        assert_eq!(parsed.winc, Some(Duration::from_millis(100)));
+        assert_eq!(parsed.binc, Some(Duration::from_millis(200)));
+        assert_eq!(parsed.movestogo.map(|v| v.get()), Some(30));
+        assert_eq!(parsed.depth, Some(4));
+        assert_eq!(parsed.nodes, Some(1000));
+        assert_eq!(parsed.mate, Some(2));
+        assert_eq!(parsed.movetime, Some(Duration::from_millis(1500)));
+        assert!(parsed.infinite);
+    }
+
+    #[test]
+    fn ignores_unknown_tokens_and_parses_known_ones() {
+        let tokens = "unknown_token depth 3"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = GoParameters::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.depth, Some(3));
+    }
+
+    #[test]
+    fn returns_error_on_missing_wtime_value() {
+        let tokens = "wtime".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+        assert!(GoParameters::try_from(&mut iter).is_err());
+    }
+
+    #[test]
+    fn returns_error_on_invalid_depth_value() {
+        let tokens = "depth abc".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+        assert!(GoParameters::try_from(&mut iter).is_err());
+    }
+
+    #[test]
+    fn returns_error_on_zero_movestogo() {
+        let tokens = "movestogo 0".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+        assert!(GoParameters::try_from(&mut iter).is_err());
     }
 
     #[test]
@@ -775,6 +849,30 @@ mod tests {
     }
 
     #[test]
+    fn parses_multi_word_name_and_value() {
+        let tokens = "name UCI Engine About value LiNgine test build"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = SetOptionParameters::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.name, "uci engine about");
+        assert_eq!(parsed.value.as_deref(), Some("LiNgine test build"));
+    }
+
+    #[test]
+    fn parses_option_without_value() {
+        let tokens = "name Clear Hash".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = SetOptionParameters::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.name, "clear hash");
+        assert_eq!(parsed.value, None);
+    }
+
+    #[test]
     fn parses_later() {
         let tokens = "later".split_whitespace().collect::<Vec<&str>>();
         let mut iter = tokens.iter();
@@ -782,6 +880,154 @@ mod tests {
         let parsed = RegisterParameters::try_from(&mut iter).unwrap();
 
         assert!(matches!(parsed, RegisterParameters::Later));
+    }
+
+    #[test]
+    fn parses_later_and_leaves_remaining_tokens() {
+        let tokens = "later name John".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        assert!(matches!(parsed, RegisterParameters::Later));
+        assert_eq!(iter.next(), Some(&"name"));
+        assert_eq!(iter.next(), Some(&"John"));
+    }
+
+    #[test]
+    fn parses_empty_input() {
+        let tokens = "".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name, None);
+                assert_eq!(code, None);
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn parses_name_only_single_word() {
+        let tokens = "name Alice".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name.as_deref(), Some("Alice"));
+                assert_eq!(code, None);
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn parses_name_only_multiple_words() {
+        let tokens = "name Alice Bob Smith"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name.as_deref(), Some("Alice Bob Smith"));
+                assert_eq!(code, None);
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn parses_code_only() {
+        let tokens = "code XYZ-123".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name, None);
+                assert_eq!(code.as_deref(), Some("XYZ-123"));
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn parses_name_and_code() {
+        let tokens = "name Alice code XYZ-123"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name.as_deref(), Some("Alice"));
+                assert_eq!(code.as_deref(), Some("XYZ-123"));
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn parses_code_then_name() {
+        let tokens = "code XYZ-123 name Bob Smith"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name.as_deref(), Some("Bob Smith"));
+                assert_eq!(code.as_deref(), Some("XYZ-123"));
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn parses_code_without_value() {
+        let tokens = "code".split_whitespace().collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name, None);
+                assert_eq!(code, None);
+            }
+            _ => panic!("Expected Identity variant"),
+        }
+    }
+
+    #[test]
+    fn ignores_untracked_tokens_before_name() {
+        let tokens = "hello world name Alice"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = RegisterParameters::try_from(&mut iter).unwrap();
+
+        match parsed {
+            RegisterParameters::Identity { name, code } => {
+                assert_eq!(name.as_deref(), Some("Alice"));
+                assert_eq!(code, None);
+            }
+            _ => panic!("Expected Identity variant"),
+        }
     }
 
     #[test]
@@ -793,6 +1039,56 @@ mod tests {
 
         assert_eq!(parsed.fen, START_FEN);
         assert!(parsed.moves.is_empty());
+    }
+
+    #[test]
+    fn parses_startpos_with_moves() {
+        let tokens = "startpos moves a0a1 b0b1"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.fen, START_FEN);
+        assert_eq!(parsed.moves.len(), 2);
+    }
+
+    #[test]
+    fn parses_fen_without_moves() {
+        let tokens = "fen 9/9/9/9/9/9/9/9/9/9 w"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 w");
+        assert!(parsed.moves.is_empty());
+    }
+
+    #[test]
+    fn parses_fen_with_moves() {
+        let tokens = "fen 9/9/9/9/9/9/9/9/9/9 b moves a0a1"
+            .split_whitespace()
+            .collect::<Vec<&str>>();
+        let mut iter = tokens.iter();
+
+        let parsed = UciPosition::try_from(&mut iter).unwrap();
+
+        assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 b");
+        assert_eq!(parsed.moves, &[UciMove::try_from("a0a1").unwrap()]);
+    }
+
+    #[test]
+    fn encodes_move_bytes_consistently() {
+        let mv = UciMove::try_from("b2c3").unwrap();
+        // from: file 'b' = 1, rank '2' = 2
+        // to:   file 'c' = 2, rank '3' = 3
+        assert_eq!(mv.src_file(), 1);
+        assert_eq!(mv.src_rank(), 2);
+        assert_eq!(mv.dst_file(), 2);
+        assert_eq!(mv.dst_rank(), 3);
     }
 
     #[test]
@@ -814,5 +1110,151 @@ mod tests {
             opt.to_string(),
             "option name Ponder type check default false"
         );
+    }
+
+    #[test]
+    fn option_spin_format() {
+        let opt = UciOption::Spin {
+            name: "Hash".into(),
+            default: 16,
+            min: 1,
+            max: 1024,
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name Hash type spin default 16 min 1 max 1024"
+        );
+    }
+
+    #[test]
+    fn option_combo_format() {
+        let opt = UciOption::Combo {
+            name: "Style".into(),
+            default: "Normal".into(),
+            vars: vec!["Solid".into(), "Normal".into(), "Risky".into()],
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name Style type combo default Normal var Solid var Normal var Risky"
+        );
+    }
+
+    #[test]
+    fn option_button_format() {
+        let opt = UciOption::Button {
+            name: "Clear Hash".into(),
+        };
+        assert_eq!(opt.to_string(), "option name Clear Hash type button");
+    }
+
+    #[test]
+    fn option_str_format_empty() {
+        let opt = UciOption::Str {
+            name: "NalimovPath".into(),
+            default: String::new(),
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name NalimovPath type string default <empty>"
+        );
+    }
+
+    #[test]
+    fn option_str_format_nonempty() {
+        let opt = UciOption::Str {
+            name: "NalimovPath".into(),
+            default: "c:\\tb".into(),
+        };
+        assert_eq!(
+            opt.to_string(),
+            "option name NalimovPath type string default c:\\tb"
+        );
+    }
+
+    #[test]
+    fn score_cp_format() {
+        let s = UciScoreBound {
+            score: UciScore::Centipawns(214),
+            bound: None,
+        };
+        assert_eq!(s.to_string(), "score cp 214");
+    }
+
+    #[test]
+    fn score_mate_lowerbound_format() {
+        let s = UciScoreBound {
+            score: UciScore::Mate(3),
+            bound: Some(Bound::Lower),
+        };
+        assert_eq!(s.to_string(), "score mate 3 lowerbound");
+    }
+
+    #[test]
+    fn score_mated_format() {
+        let s = UciScoreBound {
+            score: UciScore::Mate(-2),
+            bound: None,
+        };
+        assert_eq!(s.to_string(), "score mate -2");
+    }
+
+    #[test]
+    fn uci_info_full_format() {
+        let info = UciInfo {
+            depth: Some(12),
+            seldepth: Some(14),
+            time: Some(Duration::from_millis(1242)),
+            nodes: Some(123456),
+            nps: Some(100000),
+            score: Some(UciScoreBound {
+                score: UciScore::Centipawns(214),
+                bound: None,
+            }),
+            pv: Some(vec!["e2e4".into(), "e7e5".into(), "g1f3".into()]),
+            ..UciInfo::new()
+        };
+        assert_eq!(
+            info.to_string(),
+            "info depth 12 seldepth 14 time 1242 nodes 123456 score cp 214 pv e2e4 e7e5 g1f3 nps 100000"
+        );
+    }
+
+    #[test]
+    fn uci_info_string_field_last() {
+        let info = UciInfo {
+            depth: Some(1),
+            string: Some("hello world".into()),
+            ..UciInfo::new()
+        };
+        let s = info.to_string();
+        // string must appear last per spec
+        assert!(s.ends_with("string hello world"));
+    }
+
+    #[test]
+    fn bestmove_without_ponder() {
+        let bm = BestMove {
+            mv: "g1f3".into(),
+            ponder: None,
+        };
+        assert_eq!(bm.to_string(), "bestmove g1f3");
+    }
+
+    #[test]
+    fn bestmove_with_ponder() {
+        let bm = BestMove {
+            mv: "g1f3".into(),
+            ponder: Some("d8f6".into()),
+        };
+        assert_eq!(bm.to_string(), "bestmove g1f3 ponder d8f6");
+    }
+
+    #[test]
+    fn bestmove_null_move() {
+        let bm = BestMove {
+            mv: "0000".into(),
+            ponder: None,
+        };
+        assert_eq!(bm.to_string(), "bestmove 0000");
     }
 }

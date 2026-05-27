@@ -117,11 +117,11 @@ To improve readability and navigate the codebase easily, we will group core Xian
 | `src/bitboard.rs`       | `src/core/bitboard.rs`     | **Core**   | `u128` bitboard definitions           |
 | `src/position.rs`       | `src/core/position.rs`     | **Core**   | Board state & do_move/undo_move       |
 | `src/movegen/`          | `src/core/movegen/`        | **Core**   | Move generation (attacks & tables)    |
-| `src/search.rs` _(new)_ | `src/search/mod.rs`        | **Search** | Alpha-Beta search control             |
+| _(planned)_             | `src/search/mod.rs`        | **Search** | Alpha-Beta search control (planned)   |
 | _(planned)_             | `src/search/tt.rs`         | **Search** | Transposition Table (TT)              |
 | _(planned)_             | `src/search/ordering.rs`   | **Search** | MVV-LVA, killers, history sorting     |
 | _(planned)_             | `src/search/repetition.rs` | **Search** | Perpetual check/chase detector        |
-| `src/eval.rs` _(new)_   | `src/eval/mod.rs`          | **Eval**   | Evaluation entrypoint & driver        |
+| _(planned)_             | `src/eval/mod.rs`          | **Eval**   | Evaluation entrypoint & driver (planned) |
 | _(planned)_             | `src/eval/material.rs`     | **Eval**   | Hard values & scaling adjustments     |
 | _(planned)_             | `src/eval/pst.rs`          | **Eval**   | Positional tables per phase           |
 | _(planned)_             | `src/eval/mobility.rs`     | **Eval**   | Safe squares and mobility metrics     |

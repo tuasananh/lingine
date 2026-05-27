@@ -12,7 +12,7 @@
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Move generation dispatch | Separate fns: `generate_legal`, `generate_captures`, `generate_quiets`, `generate_evasions`                                                         |
 | Sliding piece generation | On-the-fly ray scanning first; precomputed Rank/File Occupancy Lookup later after profiling (no magic bitboards needed for orthogonal-only sliding) |
-| Enum const generics      | Use `#![feature(min_adt_const_params)]` for now; refactor to stable when it lands                                                                   |
+| Enum const generics      | Refactored to stable using standard `bool` const generics (`<const IS_WHITE: bool>`)                                                                |
 | Search                   | Alpha-Beta + Iterative Deepening + Perpetual Check/Chase detection                                                                                  |
 | Evaluation               | Material + PST (Eleeye values to start) + Mobility (updated incrementally as Pikafish-style accumulators inside `StateInfo` history stack)          |
 | Search enhancements      | Transposition Table + move ordering (TT/MVV-LVA/killers/history via Move flags) + null move pruning                                                 |
@@ -20,7 +20,7 @@
 | UCCI                     | Thin wrapper later if Chinese GUI support is needed (≈1 day effort)                                                                                 |
 | Threading                | Single-threaded first; Lazy SMP after search is stable                                                                                              |
 | Evaluation tuning        | Bootstrap from Eleeye values → SPSA/Texel tuning to reach 2400+                                                                                     |
-| Testing framework        | Perft tests per piece type + unit tests; cutechess-cli gauntlet vs Fairy-Stockfish for ELO                                                          |
+| Testing framework        | Perft tests per piece type + unit tests; sylvan-cli gauntlet vs Fairy-Stockfish for ELO                                                             |
 | Move encoding            | `u16` encoding: 7 bits from, 7 bits to, 2 bits for flags (Capture, Quiet, Check) for cache-friendly sorting; query captures via board               |
 | Board undo state         | Track backtracking using `StateInfo` struct (captured piece, previous hash, rule50, check status, evaluation accumulators)                          |
 | FEN parsing              | Robust parsing dynamically detecting token counts (4 vs 6 tokens) for correct halfmove/fullmove indices                                             |
@@ -30,11 +30,11 @@
 
 ## Roadmap & Iterations
 
-### Phase 1 — Fix compiler errors & declare modules ✅ (mostly done)
+### Phase 1 — Fix compiler errors & declare modules ✅
 
-- [x] Remove `ConstParamTy` (use `min_adt_const_params` feature)
-- [x] Declare `mod bitboard` in `main.rs`
-- [x] Declare `mod types`, `mod movegen`, `mod position` in `main.rs`
+- [x] Remove unstable generic dispatch (refactor to stable `bool` const generics)
+- [x] Declare `mod bitboard` in `src/lib.rs` (then refactored to `src/core/`)
+- [x] Declare `mod types`, `mod movegen`, `mod position` in `src/lib.rs` (then refactored to `src/core/`)
 - [x] Ensure `cargo check` passes cleanly
 
 ### Phase 1.5 — Idiomatic Module Refactoring
@@ -54,10 +54,10 @@
   - [x] Keep `src/uci/engine.rs` as UCI Engine trait interface
   - [x] Clean up `src/uci/mod.rs` to only export `Engine`, `UCIHandler`, and necessary types from `types.rs`
   - [x] Delete consolidated files: `go_parameters.rs`, `register_parameters.rs`, `set_option_parameters.rs`, `responses.rs`, `move.rs`, `position.rs`
-- [ ] Introduce core engine modules
-  - [ ] Create `src/search/` module
-  - [ ] Create `src/eval/` module
-- [ ] Update `src/main.rs` and `src/lib.rs` module declarations for search/eval
+- [ ] Introduce core engine modules (Planned for Iteration 1)
+  - [ ] Create `src/search/` module stubs [PLANNED]
+  - [ ] Create `src/eval/` module stubs [PLANNED]
+- [ ] Update `src/lib.rs` module declarations for search/eval [PLANNED]
 
 ### Phase 2 — Complete `Position` (board state)
 
@@ -107,7 +107,7 @@ _Goal: Deeper search depth, solid positional alignment._
 - [ ] **Piece-Square Tables (PST)**: Add positional piece-square tables for developmental guidance
 - [ ] **Incremental Eval**: Keep evaluation updated incrementally during `do_move`/`undo_move`
 - [ ] **Time Management**: Handle standard UCI time parameters (`wtime`, `btime`, `winc`, `binc`, `movetime`) and stop command
-- [ ] **Verification**: Run first `cutechess-cli` games against random/weak bots
+- [ ] **Verification**: Run first `./tools/sylvan-cli` games against random/weak bots
 
 #### Iteration 3: The Runner (Target: ~2000 ELO)
 
@@ -125,7 +125,7 @@ _Goal: Super-Grandmaster strength with parallel search and tuned parameters._
 
 - [ ] **Lazy SMP**: Implement multi-threaded search sharing a single Transposition Table
 - [ ] **Texel/SPSA Tuning**: Run automated parameter tuning on game databases to optimize PST/material values
-- [ ] **Verification**: Gauntlet runs vs Fairy-Stockfish using `cutechess-cli` to benchmark absolute ELO strength
+- [ ] **Verification**: Gauntlet runs vs Fairy-Stockfish using `./tools/sylvan-cli` to benchmark absolute ELO strength
 
 ---
 
@@ -165,9 +165,9 @@ To calibrate testing, configure Fairy-Stockfish to a specific ELO using `option.
 # Compile latest release
 cargo build --release
 
-# Execute gauntlet under cutechess-cli
+# Execute gauntlet under sylvan-cli
 # Set Fairy-Stockfish ELO to 1200 to test Iteration 1
-cutechess-cli \
+./tools/sylvan-cli \
   -engine cmd=./target/release/lingine name=Lingine \
   -engine cmd=./tools/fairy-stockfish_x86-64 name=Fairy-Stockfish option.UCI_LimitStrength=true option.UCI_Elo=1200 \
   -each proto=uci tc=10/10+0.1 option.Hash=16 \
@@ -185,21 +185,24 @@ Alternatively, use `option.Skill\ Level=<0-20>` to limit search depth/time direc
 
 ```
 src/
-├── main.rs                    Entry point; declares all root modules
+├── main.rs                    Entry point
+├── lib.rs                     Declares library modules
 ├── benchmark/                 Benchmark positions (cfg(test))
-├── bitboard.rs                Bitboard (u128, 90 squares); masks for palace, files, ranks, sides
-├── types.rs                   All domain types (Color, File, Rank, Square, Piece, PieceType, Move, Key)
-├── position.rs                Board state, FEN parser, do_move/undo_move, Zobrist, perpetual check/chase
-├── movegen.rs                 Move generation per piece type (orthogonal occupancy lookup)
-├── search.rs                  [NEW] Search logic (Alpha-Beta, Aspiration, LMR, TT, quiescence)
-├── eval.rs                    [NEW] Evaluation (Material, PST, mobility, safety)
+├── core/                      Core board and rules subsystem
+│   ├── mod.rs                 Exposes core module structure
+│   ├── bitboard.rs            Bitboard (u128, 90 squares); masks for palace, files, ranks, sides
+│   ├── types.rs               All domain types (Color, File, Rank, Square, Piece, PieceType, Move, Key)
+│   ├── position.rs            Board state, FEN parser, do_move/undo_move, Zobrist, perpetual check/chase
+│   └── movegen/               Move generation per piece type (orthogonal occupancy lookup)
+├── search/                    [PLANNED] Search logic (Alpha-Beta, Aspiration, LMR, TT, quiescence)
+├── eval/                      [PLANNED] Evaluation (Material, PST, mobility, safety)
 ├── bot/
 │   ├── mod.rs
 │   ├── print_bot.rs           Current stub engine (PrintBot)
 │   └── engine_bot.rs          Real engine wrapping search
 └── uci/
     ├── mod.rs                 Public exports (Engine, UCIHandler, etc.)
-    ├── types.rs               [NEW] Consolidated parameters/responses types (GoParameters, BestMove, etc.)
+    ├── types.rs               Consolidated parameters/responses types (GoParameters, BestMove, etc.)
     ├── engine.rs              Engine trait
     └── handler.rs             UCIHandler (synchronous loop)
 ```
@@ -256,6 +259,5 @@ src/
 | `BestMove::null()` removed      | `responses.rs`    | Will need re-adding when `EngineBot` returns null moves on error                   |
 | Handler reverted to synchronous | `handler.rs`      | Actor model was built and discarded; sync is simpler while `go` is instant         |
 | `ponderhit` mid-search          | `handler.rs`      | Cannot interrupt go() while it runs; acceptable for Phase 4                        |
-| `UciMove` has no `Display`      | `uci/move.rs`     | Needed for `pv` field in `UciInfo`; add in Phase 4                                 |
-| FEN not validated at UCI layer  | `uci/position.rs` | Validation happens in `Position::from_fen()` in Phase 2                            |
-| `min_adt_const_params` nightly  | `main.rs`         | Used for enum const generic movegen dispatch; stabilisation tracked in rust#154042 |
+| `UciMove` has no `Display`      | `uci/types.rs`    | Needed for `pv` field in `UciInfo`; add in Phase 4                                 |
+| FEN not validated at UCI layer  | `uci/types.rs`    | Validation happens in Position::from_fen() in Phase 2                            |
