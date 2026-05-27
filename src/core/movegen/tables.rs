@@ -1,4 +1,4 @@
-use crate::{bitboard::Bitboard, types::Square};
+use crate::core::{bitboard::Bitboard, types::Square};
 
 /// Represents precomputed diagonal attack targets for a Bishop (Elephant).
 /// In Xiangqi, Bishops move exactly 2 steps diagonally, and their jump is blocked
