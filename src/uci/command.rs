@@ -178,7 +178,7 @@ mod tests {
     fn test_parse_position() {
         let cmd = EngineCommand::parse("position startpos").unwrap().unwrap();
         if let EngineCommand::Position(pos) = cmd {
-            assert_eq!(pos.fen, crate::uci::position::START_FEN);
+            assert_eq!(pos.fen, crate::uci::START_FEN);
             assert!(pos.moves.is_empty());
         } else {
             panic!("Expected Position");

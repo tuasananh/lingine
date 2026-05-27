@@ -1,30 +1,12 @@
 mod command;
-
 mod engine;
-pub use engine::Engine;
-
-mod go_parameters;
-pub use go_parameters::GoParameters;
-
 mod handler;
-pub use handler::UCIHandler;
-
 mod output;
+pub mod types;
 
-mod r#move;
-pub use r#move::UciMove;
-
-mod set_option_parameters;
-pub use set_option_parameters::SetOptionParameters;
-
-mod register_parameters;
-pub use register_parameters::RegisterParameters;
-
-mod position;
-pub use position::UciPosition;
-
-mod responses;
-// Re-export the full responses API. Some types (UciScore, Bound, UciScoreBound)
-// are unused until the search layer is wired in.
-#[allow(unused_imports)]
-pub use responses::{BestMove, Bound, UciId, UciInfo, UciOption, UciScore, UciScoreBound};
+pub use engine::Engine;
+pub use handler::UCIHandler;
+pub use types::{
+    BestMove, Bound, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
+    UciMove, UciOption, UciPosition, UciScore, UciScoreBound, START_FEN,
+};

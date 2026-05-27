@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 use strum::EnumCount;
 use thiserror::Error;
 
-use crate::{
+use crate::core::{
     bitboard::Bitboard,
     movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
     types::{BloomFilter, Color, File, Move, Piece, PieceType, Rank, Square},
@@ -660,7 +660,7 @@ impl Position {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Move, Square};
+    use crate::core::types::{Move, Square};
 
     #[test]
     fn test_knight_leg_pin() {

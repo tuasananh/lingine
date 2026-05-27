@@ -3,7 +3,7 @@ use std::fmt::Display;
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use strum::EnumCount;
 
-use crate::types::{Color, File, Rank, Square};
+use crate::core::types::{Color, File, Rank, Square};
 
 /// Represents the occupancy or attack targets on the 90-square Xiangqi board.
 /// Packaged inside a `u128` wrapper where bits 0 to 89 correspond to the squares A0 (0) to I9 (89).
@@ -219,7 +219,7 @@ impl Display for Bitboard {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::core::{
         bitboard::Bitboard,
         types::{Color, File, Rank},
     };

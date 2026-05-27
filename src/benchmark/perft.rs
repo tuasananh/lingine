@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::{
+use crate::core::{
     movegen::generate_moves,
     position::Position,
     types::{MAX_MOVES, Move, MoveGenType},

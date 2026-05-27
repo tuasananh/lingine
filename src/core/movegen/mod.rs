@@ -10,7 +10,7 @@ pub use tables::{
     RANK_TABLE, RankEntry,
 };
 
-use crate::{
+use crate::core::{
     bitboard::Bitboard,
     position::Position,
     types::{Color, MAX_MOVES, Move, MoveGenType, PieceType, Square},
@@ -300,8 +300,8 @@ pub fn generate_moves(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::position::Position;
-    use crate::types::{MAX_MOVES, Move, MoveGenType, Square};
+    use crate::core::position::Position;
+    use crate::core::types::{MAX_MOVES, Move, MoveGenType, Square};
 
     fn count_moves(pos: &Position, gen_type: MoveGenType) -> usize {
         let mut moves = [Move::none(); MAX_MOVES];

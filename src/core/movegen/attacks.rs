@@ -1,4 +1,4 @@
-use crate::{bitboard::Bitboard, types::Square};
+use crate::core::{bitboard::Bitboard, types::Square};
 
 use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};
 
@@ -71,7 +71,7 @@ pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::movegen::tables::*;
+    use crate::core::movegen::tables::*;
 
     #[test]
     fn test_gather_file_bits() {
