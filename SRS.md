@@ -4,7 +4,7 @@
 
 > **Target**: ~2500 ELO Xiangqi Engine  
 > **Language**: Rust (edition 2024)  
-> **Protocol**: UCI (with UCCI wrapper support)  
+> **Protocol**: UCI only  
 > **Inspiration**: Pikafish / Stockfish architecture adapted for the $9 \times 10$ board
 
 ---
@@ -20,7 +20,7 @@
    - 4.3 [Evaluation Subsystem (`eval/`)](#43-evaluation-subsystem-eval)
    - 4.4 [UCI Subsystem (`uci/`)](#44-uci-subsystem-uci)
 5. [Non-Functional Requirements & Performance Targets](#5-non-functional-requirements--performance-targets)
-6. [Design Decisions & Open Questions for User Approval](#6-design-decisions--open-questions-for-user-approval)
+6. [Resolved Design Decisions](#6-resolved-design-decisions)
 
 ---
 
