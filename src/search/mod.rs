@@ -74,7 +74,7 @@ fn sort_moves(pos: &Position, moves: &mut [Move], count: usize) {
 /// Implements Quiescence Search to evaluate tactical capture sequences.
 ///
 /// Prevents the horizon effect by searching captures only until a quiet position is reached.
-pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, ctx: &mut SearchContext) -> i32 {
+pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, qdepth: i32, ctx: &mut SearchContext) -> i32 {
     *ctx.nodes += 1;
 
     // Check stop signals periodically
@@ -88,6 +88,12 @@ pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, ctx: &mut Searc
             ctx.stop.store(true, Ordering::Relaxed);
             return 0;
         }
+    }
+
+    // Base case: to avoid infinite recursion and stack overflow from perpetual checks
+    if qdepth >= 12 {
+        let stand_pat = evaluate(pos);
+        return if pos.side_to_move() == Color::White { stand_pat } else { -stand_pat };
     }
 
     let in_check = pos.is_in_check(pos.side_to_move());
@@ -123,7 +129,7 @@ pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, ctx: &mut Searc
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
-        let score = -quiescence(pos, -beta, -alpha, ctx);
+        let score = -quiescence(pos, -beta, -alpha, qdepth + 1, ctx);
         pos.undo_move(m);
 
         if score >= beta {
@@ -168,7 +174,7 @@ pub fn negamax(
 
     // Base case: fall back to quiescence search
     if depth <= 0 {
-        return quiescence(pos, alpha, beta, ctx);
+        return quiescence(pos, alpha, beta, 0, ctx);
     }
 
     let mut moves = [Move::none(); MAX_MOVES];

@@ -49,9 +49,34 @@ Hệ thống sử dụng một script Python hợp nhất duy nhất để tự 
 3. **Thực thi giải đấu:** Gọi `sylvan-cli` chạy song song 4 ván đấu cùng lúc đối đầu với 5 mốc ELO của Fairy-Stockfish.
 4. **Phân tích & Tính toán ELO:** Đọc tệp tin kết quả `gauntlet.pgn` và tự động hiển thị bảng phân tích ELO cực kỳ trực quan.
 
-Bạn chỉ cần thực hiện lệnh sau:
+Bạn có thể chạy kiểm thử mặc định bằng lệnh:
 ```bash
 ./scripts/run_gauntlet.py
+```
+
+### Chỉnh sửa cấu hình linh hoạt thông qua tham số (Arguments)
+Script hỗ trợ các tham số dòng lệnh sau để bạn tự do thay đổi cấu hình mà không cần sửa code:
+
+| Tham số ngắn | Tham số đầy đủ | Ý nghĩa | Mặc định |
+| :--- | :--- | :--- | :--- |
+| `-c` | `--cores`, `--concurrency` | Số ván đấu chạy song song đồng thời (số nhân CPU sử dụng) | Tự động tối ưu (`cores - 2`) |
+| `-g` | `--games` | Số ván đấu đấu với mỗi đối thủ | `20` |
+| `-t` | `--tc` | Thiết lập kiểm soát thời gian (Time Control) | `10/10+0.1` |
+| `-d` | `--depth` | Độ sâu khai cuộc bắt buộc (plies) | `12` |
+| `-e` | `--elos` | Danh sách ELO đối thủ (cách nhau bằng dấu phẩy) | `1000,1200,1400,1600,1800` |
+| `-o` | `--pgnout` | Đường dẫn lưu tệp PGN kết quả | `gauntlet.pgn` |
+| `-s` | `--skip-build` | Bỏ qua bước tự động chạy `cargo build --release` | Tự động build |
+
+**Ví dụ một số lệnh cấu hình nâng cao:**
+```bash
+# 1. Chỉ chạy giải đấu nhanh gồm 4 ván mỗi mốc ELO để thử nghiệm nhanh
+./scripts/run_gauntlet.py -g 4
+
+# 2. Chỉ đấu với mốc ELO cao là 1600 và 1800, sử dụng đúng 20 cores CPU
+./scripts/run_gauntlet.py -e 1600,1800 --cores 20
+
+# 3. Đấu với mốc ELO 1200 và 1400, bỏ qua bước build lại code Rust
+./scripts/run_gauntlet.py -e 1200,1400 -s
 ```
 
 ---
