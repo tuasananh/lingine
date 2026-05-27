@@ -1,13 +1,6 @@
-use std::{
-    fmt,
-    num::NonZeroU32,
-    slice::Iter,
-    sync::atomic::AtomicBool,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt, num::NonZeroU32, slice::Iter, sync::Arc, sync::atomic::AtomicBool, time::Duration};
 
-use anyhow::{anyhow, ensure, Error, Result};
+use anyhow::{Error, Result, anyhow, ensure};
 
 // ===========================================================================
 // UciMove
@@ -304,9 +297,7 @@ pub struct SetOptionParameters {
 impl TryFrom<&mut Iter<'_, &str>> for SetOptionParameters {
     type Error = Error;
     fn try_from(value: &mut Iter<'_, &str>) -> Result<Self> {
-        let name_token = value
-            .next()
-            .ok_or(anyhow!("Expect 'name', got nothing"))?;
+        let name_token = value.next().ok_or(anyhow!("Expect 'name', got nothing"))?;
         ensure!(name_token == &"name", "Expect 'name', got {}", name_token);
         let mut name_tokens = Vec::new();
         let mut last_token_is_value = false;
