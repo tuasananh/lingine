@@ -75,6 +75,9 @@ fn sort_moves(pos: &Position, moves: &mut [Move], count: usize) {
 ///
 /// Prevents the horizon effect by searching captures only until a quiet position is reached.
 pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, qdepth: i32, ctx: &mut SearchContext) -> i32 {
+    if ctx.stop.load(Ordering::Relaxed) {
+        return 0;
+    }
     *ctx.nodes += 1;
 
     // Check stop signals periodically
@@ -132,6 +135,10 @@ pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, qdepth: i32, ct
         let score = -quiescence(pos, -beta, -alpha, qdepth + 1, ctx);
         pos.undo_move(m);
 
+        if ctx.stop.load(Ordering::Relaxed) {
+            return 0;
+        }
+
         if score >= beta {
             return score;
         }
@@ -152,6 +159,9 @@ pub fn negamax(
     beta: i32,
     ctx: &mut SearchContext,
 ) -> i32 {
+    if ctx.stop.load(Ordering::Relaxed) {
+        return 0;
+    }
     *ctx.nodes += 1;
 
     // Check stop signals periodically
@@ -198,6 +208,10 @@ pub fn negamax(
         pos.do_move(m);
         let score = -negamax(pos, depth - 1, ply + 1, -beta, -alpha, ctx);
         pos.undo_move(m);
+
+        if ctx.stop.load(Ordering::Relaxed) {
+            return 0;
+        }
 
         if score > best_score {
             best_score = score;

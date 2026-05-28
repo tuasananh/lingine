@@ -45,7 +45,7 @@ impl EngineBot {
     /// Determines the time limit budget for a given search color/increments.
     fn calculate_search_time(&self, params: &GoParameters, side: Color) -> Option<Duration> {
         if let Some(movetime) = params.movetime {
-            return Some(movetime.saturating_sub(Duration::from_millis(50)));
+            return Some(movetime.saturating_sub(Duration::from_millis(10)));
         }
 
         let (time_left, inc) = match side {
@@ -55,11 +55,26 @@ impl EngineBot {
 
         if let Some(time) = time_left {
             let inc_val = inc.unwrap_or(Duration::ZERO);
-            // spend 5% of time left + 50% of increment
-            let allocated = time / 20 + inc_val / 2;
-            // safety margin
-            let limit = time.saturating_sub(Duration::from_millis(100));
-            Some(allocated.min(limit).max(Duration::from_millis(50)))
+            
+            // Determine divisor based on movestogo, default to 20
+            let divisor = if let Some(movestogo) = params.movestogo {
+                movestogo.get() as u64
+            } else {
+                20
+            };
+
+            // Basic allocation: time_left / divisor + inc / 2
+            let allocated = time / divisor as u32 + inc_val / 2;
+
+            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is smaller,
+            // to account for process/communication latency.
+            let buffer = Duration::from_millis(50).min(time / 10);
+            let limit = time.saturating_sub(buffer);
+
+            // Ensure we allocate at least 10ms (or the remaining limit if it's even smaller)
+            let min_time = Duration::from_millis(10).min(limit);
+
+            Some(allocated.min(limit).max(min_time))
         } else {
             None
         }
@@ -225,9 +240,16 @@ impl Engine for EngineBot {
             };
 
             for m in moves.iter().copied().take(count) {
+                if params.stop.load(Ordering::Relaxed) {
+                    break;
+                }
                 pos.do_move(m);
                 let score = -negamax(&mut pos, depth - 1, 1, -beta, -alpha, &mut ctx);
                 pos.undo_move(m);
+
+                if params.stop.load(Ordering::Relaxed) {
+                    break;
+                }
 
                 if score > best_score {
                     best_score = score;
@@ -244,7 +266,11 @@ impl Engine for EngineBot {
                     best_move = depth_best_move;
                 }
 
-                let pv_vec = vec![format_move(best_move)];
+                let pv_vec = if best_move.is_none() {
+                    None
+                } else {
+                    Some(vec![format_move(best_move)])
+                };
                 let time_elapsed = start_time.elapsed();
                 let nps = if time_elapsed.as_secs_f64() > 0.001 {
                     Some((nodes as f64 / time_elapsed.as_secs_f64()) as u64)
@@ -273,7 +299,7 @@ impl Engine for EngineBot {
                     time: Some(time_elapsed),
                     nps,
                     score: Some(uci_score),
-                    pv: Some(pv_vec),
+                    pv: pv_vec,
                     ..UciInfo::new()
                 };
 
