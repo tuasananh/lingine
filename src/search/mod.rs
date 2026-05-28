@@ -74,7 +74,13 @@ fn sort_moves(pos: &Position, moves: &mut [Move], count: usize) {
 /// Implements Quiescence Search to evaluate tactical capture sequences.
 ///
 /// Prevents the horizon effect by searching captures only until a quiet position is reached.
-pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, qdepth: i32, ctx: &mut SearchContext) -> i32 {
+pub fn quiescence(
+    pos: &mut Position,
+    mut alpha: i32,
+    beta: i32,
+    qdepth: i32,
+    ctx: &mut SearchContext,
+) -> i32 {
     if ctx.stop.load(Ordering::Relaxed) {
         return 0;
     }
@@ -96,7 +102,11 @@ pub fn quiescence(pos: &mut Position, mut alpha: i32, beta: i32, qdepth: i32, ct
     // Base case: to avoid infinite recursion and stack overflow from perpetual checks
     if qdepth >= 12 {
         let stand_pat = evaluate(pos);
-        return if pos.side_to_move() == Color::White { stand_pat } else { -stand_pat };
+        return if pos.side_to_move() == Color::White {
+            stand_pat
+        } else {
+            -stand_pat
+        };
     }
 
     let in_check = pos.is_in_check(pos.side_to_move());

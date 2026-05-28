@@ -55,7 +55,7 @@ impl EngineBot {
 
         if let Some(time) = time_left {
             let inc_val = inc.unwrap_or(Duration::ZERO);
-            
+
             // Determine divisor based on movestogo, default to 20
             let divisor = if let Some(movestogo) = params.movestogo {
                 movestogo.get() as u64
