@@ -655,6 +655,31 @@ impl Position {
             .0
             != 0
     }
+
+    /// Scans back in the history list to check if the current position hash has
+    /// occurred before (a repeated position).
+    pub fn is_repetition(&self) -> bool {
+        let current_hash = self.zobrist_hash;
+        let n = self.history.len();
+        if n < 4 {
+            return false;
+        }
+
+        // Halfmove clock / 50-rule counter tracks plies since last capture or pawn move.
+        // We cannot search back further than the rule50 count or the history length.
+        let rule50 = self.history.last().map(|s| s.rule50).unwrap_or(0) as usize;
+        let max_back = rule50.min(n - 1);
+
+        // Repetitions must occur on the same side's turn, so we scan back in steps of 2 plies.
+        let mut i = 2;
+        while i <= max_back {
+            if self.history[n - i].old_zobrist == current_hash {
+                return true;
+            }
+            i += 2;
+        }
+        false
+    }
 }
 
 #[cfg(test)]

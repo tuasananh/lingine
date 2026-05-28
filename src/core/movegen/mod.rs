@@ -566,4 +566,68 @@ mod tests {
             assert_eq!(m.square_to() as u8 % 9, 4); // must stay on file E (index 4)
         }
     }
+
+    fn assert_positions_equal(a: &Position, b: &Position) {
+        use crate::core::types::{Color, Piece, PieceType};
+        use strum::IntoEnumIterator;
+        assert_eq!(a.side_to_move(), b.side_to_move());
+        assert_eq!(a.zobrist_hash, b.zobrist_hash);
+        for sq_val in 0..90 {
+            let sq = Square::from_repr(sq_val).unwrap();
+            assert_eq!(a.piece_at(sq), b.piece_at(sq));
+            assert_eq!(a.is_empty(sq), b.is_empty(sq));
+        }
+        for color in [Color::White, Color::Black] {
+            assert_eq!(a.king_square(color), b.king_square(color));
+            assert_eq!(a.is_in_check(color), b.is_in_check(color));
+            assert_eq!(a.bitboard_by_color(color).0, b.bitboard_by_color(color).0);
+        }
+        for pt in PieceType::iter() {
+            assert_eq!(a.bitboard_by_type(pt).0, b.bitboard_by_type(pt).0);
+        }
+        for piece in Piece::iter() {
+            assert_eq!(a.piece_count(piece), b.piece_count(piece));
+        }
+        assert_eq!(a.is_repetition(), b.is_repetition());
+    }
+
+    #[test]
+    fn test_position_restored_after_move_generation() {
+        use crate::core::types::MoveGenType;
+
+        // Test with a few different FEN configurations:
+        let fens = [
+            // 1. Initial starting position
+            "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1",
+            // 2. Middle game position with complex checks, pins, and attacks
+            "3akab2/9/2n1b4/2p1p1p1C/2R3r2/6P2/P1P1P3P/1C2c1N11/9/RN2KAB1r b - - 0 12",
+            // 3. Simple position with facing kings and threat of check
+            "4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1",
+            // 4. Position with multiple legal and illegal moves
+            "4k4/9/9/9/9/9/9/5h3/5A3/4K4 w - - 0 1",
+        ];
+
+        let gen_types = [
+            MoveGenType::Legal,
+            MoveGenType::PseudoLegal,
+            MoveGenType::Quiets,
+            MoveGenType::Captures,
+            MoveGenType::Evasions,
+        ];
+
+        for fen in fens {
+            let mut pos = Position::new();
+            pos.set(fen).unwrap();
+
+            for gen_type in gen_types {
+                let pos_before = pos.clone();
+
+                let mut moves = [Move::none(); MAX_MOVES];
+                let _count = generate_moves(&pos, gen_type, &mut moves);
+
+                // Ensure calling generate_moves did not modify/corrupt the position in any way
+                assert_positions_equal(&pos, &pos_before);
+            }
+        }
+    }
 }
