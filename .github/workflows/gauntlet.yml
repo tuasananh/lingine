@@ -1,0 +1,60 @@
+name: ELO Gauntlet Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: 'Number of games to play against each opponent'
+        required: true
+        default: '4'
+        type: string
+      cores:
+        description: 'Number of CPU cores/threads to use (0 for auto)'
+        required: true
+        default: '2'
+        type: string
+
+jobs:
+  run-gauntlet:
+    name: Run Gauntlet ELO Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install python dependencies (if any)
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Download chess tournament tools
+        run: |
+          chmod +x ./scripts/setup_tools.sh
+          ./scripts/setup_tools.sh
+
+      - name: Build Engine (Release Mode)
+        run: cargo build --release
+
+      - name: Run ELO Gauntlet
+        run: |
+          python ./scripts/run_gauntlet.py -g ${{ inputs.games }} -c ${{ inputs.cores }} -o ci-gauntlet.pgn
+
+      - name: Upload Gauntlet PGN and Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gauntlet-results
+          path: |
+            ci-gauntlet.pgn
+            lingine_err.log
