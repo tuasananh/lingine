@@ -11,8 +11,9 @@ mkdir -p tools
 
 # 2. Cài đặt Sylvan-CLI
 echo -e "\n[2/4] Đang tải Sylvan-CLI (Công cụ tổ chức giải đấu)..."
-curl -L -o tools/sylvan-cli https://github.com/tuasananh/lingine/releases/download/v0.1.0-alpha/sylvan-cli
-chmod +x tools/sylvan-cli
+curl -L -o tools/sylvan.tar.gz https://github.com/tuasananh/Sylvan/releases/download/v1.1.0/sylvan.tar.gz
+tar -xf tools/sylvan.tar.gz -C tools/
+rm tools/sylvan.tar.gz
 
 # 3. Cài đặt Fairy-Stockfish
 echo -e "\n[3/4] Đang tải Fairy-Stockfish (Engine đối thủ tiêu chuẩn)..."
