@@ -167,9 +167,13 @@ pub fn negamax(
         }
     }
 
-    // Repetition check (returns 0 for draw)
+    // Repetition check (Xiangqi rules: perpetual check is a loss for the checking side)
     if pos.is_repetition() {
-        return 0;
+        return if pos.is_in_check(pos.side_to_move()) {
+            MATE_VALUE - ply
+        } else {
+            0
+        };
     }
 
     // Base case: fall back to quiescence search
@@ -207,4 +211,102 @@ pub fn negamax(
     }
 
     best_score
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::position::Position;
+    use crate::core::types::{Color, Move, Square};
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::time::Instant;
+
+    #[test]
+    fn test_repetition_draw_repetition() {
+        let mut pos = Position::new();
+        // Setup a simple position with files D and E blocked by pawns to avoid King-facing checks
+        pos.set("4k4/9/9/9/3PP4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        // Setup moves to repeat: King moves back and forth
+        let w_move1 = Move::new(Square::E0, Square::D0);
+        let w_move2 = Move::new(Square::D0, Square::E0);
+        let b_move1 = Move::new(Square::E9, Square::D9);
+        let b_move2 = Move::new(Square::D9, Square::E9);
+
+        // White moves to D0
+        pos.do_move(w_move1);
+        // Black moves to D9
+        pos.do_move(b_move1);
+        // White moves back to E0
+        pos.do_move(w_move2);
+        // Black moves back to E9
+        pos.do_move(b_move2);
+
+        // Now White moves to D0 again (first repetition check at ply 5)
+        pos.do_move(w_move1);
+
+        // Black moves to D9 again (repeating the state at ply 1)
+        pos.do_move(b_move1);
+        // This completed a repetition, neither side is in check.
+        assert!(pos.is_repetition());
+
+        // Call negamax with depth=1, we should get 0 (draw)
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut nodes = 0;
+        let mut ctx = SearchContext {
+            stop: &stop,
+            nodes: &mut nodes,
+            start_time: Instant::now(),
+            time_limit: None,
+        };
+        let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, &mut ctx);
+        assert_eq!(score, 0);
+    }
+
+    #[test]
+    fn test_repetition_perpetual_check_repetition() {
+        let mut pos = Position::new();
+        // White King at E0, White Rook at A1, Black King at D9, White Pawn at E4 (to block E-file)
+        pos.set("3k5/9/9/9/4P4/9/9/9/R8/4K4 w - - 0 1").unwrap();
+
+        // White Rook checks: A1 to D1 (giving check)
+        let r_check1 = Move::new(Square::A1, Square::D1);
+        let r_evade1 = Move::new(Square::D1, Square::A1);
+        // Black King evades: D9 to E9 (not checking)
+        let k_move1 = Move::new(Square::D9, Square::E9);
+        let k_move2 = Move::new(Square::E9, Square::D9);
+
+        // 1. White checks
+        pos.do_move(r_check1);
+        assert!(pos.is_in_check(Color::Black));
+
+        // 2. Black evades
+        pos.do_move(k_move1);
+
+        // 3. White moves Rook back to A1 (no check)
+        pos.do_move(r_evade1);
+
+        // 4. Black moves King back to D9
+        pos.do_move(k_move2);
+
+        // 5. White checks again with Rook to D1 (repetition + check!)
+        pos.do_move(r_check1);
+
+        // Now Black turn to move. White just gave the repeating check.
+        assert!(pos.is_repetition());
+        assert!(pos.is_in_check(Color::Black));
+
+        // Black should win because White is perpetually checking!
+        // negamax should return a win score (MATE_VALUE - ply)
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut nodes = 0;
+        let mut ctx = SearchContext {
+            stop: &stop,
+            nodes: &mut nodes,
+            start_time: Instant::now(),
+            time_limit: None,
+        };
+        let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, &mut ctx);
+        assert_eq!(score, MATE_VALUE - 5);
+    }
 }
