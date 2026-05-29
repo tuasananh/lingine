@@ -64,6 +64,8 @@ impl ZobristTable {
 /// allowing incremental undo_move restorations.
 #[derive(Clone, Copy, Debug)]
 pub struct StateInfo {
+    /// The exact move executed to reach this state.
+    pub last_move: Move,
     /// The piece captured during this move, or `Piece::None` if it was quiet.
     pub captured_piece: Piece,
     /// The prior Zobrist position hash value before the move occurred.
@@ -135,6 +137,7 @@ impl Position {
         };
         // Setup initial empty history state
         pos.history.push(StateInfo {
+            last_move: Move::none(),
             captured_piece: Piece::None,
             old_zobrist: 0,
             rule60: 0,
@@ -325,6 +328,7 @@ impl Position {
             self.is_in_check(Color::Black),
         ];
         self.history.push(StateInfo {
+            last_move: Move::none(),
             captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
             rule60,
@@ -347,6 +351,7 @@ impl Position {
 
         // Push current state onto history stack
         self.history.push(StateInfo {
+            last_move: m,
             captured_piece: captured,
             old_zobrist,
             rule60,
@@ -670,8 +675,253 @@ impl Position {
             != 0
     }
 
+    /// Calculates the chase information for a given color, returning a 16-bit mask of chased pieces.
+    pub fn chased(&mut self, mover: Color) -> u16 {
+        use crate::core::movegen::{KNIGHT_TABLE, PAWN_ATTACKS};
+
+        let mut chase = 0u16;
+        let opponent = mover.opposite();
+        let occupied = self.bitboard_by_color[Color::White as usize]
+            | self.bitboard_by_color[Color::Black as usize];
+
+        // 1. Target pieces that can be chased (excluding King):
+        // Rooks, Cannons, Knights, Advisors, Bishops of the opponent,
+        // and crossed-river Pawns of the opponent.
+        let mut targets_mask = self.bitboard_by_type[PieceType::Rook as usize].0
+            | self.bitboard_by_type[PieceType::Cannon as usize].0
+            | self.bitboard_by_type[PieceType::Knight as usize].0
+            | self.bitboard_by_type[PieceType::Advisor as usize].0
+            | self.bitboard_by_type[PieceType::Bishop as usize].0;
+
+        // Add crossed-river pawns of the opponent
+        let opp_pawns = self.bitboard_by_type[PieceType::Pawn as usize].0
+            & self.bitboard_by_color[opponent as usize].0;
+        let opp_side_mask = Bitboard::side(mover).0; // The river-crossed zone is mover's side!
+        targets_mask |= opp_pawns & opp_side_mask;
+
+        // Filter targets to only include the opponent's pieces
+        let targets = Bitboard(targets_mask & self.bitboard_by_color[opponent as usize].0);
+
+        // 2. Chasing attackers:
+        // Rooks, Cannons, Knights, and crossed-river Pawns of the mover.
+        let mut attackers_mask = self.bitboard_by_type[PieceType::Rook as usize].0
+            | self.bitboard_by_type[PieceType::Cannon as usize].0
+            | self.bitboard_by_type[PieceType::Knight as usize].0;
+
+        let my_pawns = self.bitboard_by_type[PieceType::Pawn as usize].0
+            & self.bitboard_by_color[mover as usize].0;
+        let my_side_mask = Bitboard::side(opponent).0; // river-crossed zone is opponent's side!
+        attackers_mask |= my_pawns & my_side_mask;
+
+        // Filter attackers to only include mover's pieces
+        let mut attackers = Bitboard(attackers_mask & self.bitboard_by_color[mover as usize].0);
+
+        // 3. Scan all attackers to see if they attack any target
+        while let Some(from) = attackers.pop_lsb() {
+            let piece = self.board[from as usize];
+            let ptype = piece.piece_type();
+
+            // Generate attacks from `from`
+            let mut attacks = match ptype {
+                PieceType::Rook => rook_attacks(from, occupied),
+                PieceType::Cannon => cannon_attacks(from, occupied),
+                PieceType::Knight => {
+                    let entry = &KNIGHT_TABLE[from as usize];
+                    let mut occ_idx = 0;
+                    for i in 0..4 {
+                        if let Some(eye_sq) = entry.eyes[i]
+                            && occupied.is_occupied(eye_sq)
+                        {
+                            occ_idx |= 1 << i;
+                        }
+                    }
+                    entry.attacks[occ_idx]
+                }
+                PieceType::Pawn => {
+                    let color_idx = if mover == Color::White { 0 } else { 1 };
+                    PAWN_ATTACKS[color_idx][from as usize]
+                }
+                _ => Bitboard::new(),
+            };
+
+            // Restrict attacks to only target the opponent's pieces that are valid targets
+            attacks &= targets;
+
+            while let Some(to) = attacks.pop_lsb() {
+                let m = Move::new(from, to);
+
+                // Verify if the move is legal (meaning the king of mover is not in check after the move)
+                if self.legal(m) {
+                    let target_piece = self.board[to as usize];
+                    let target_ptype = target_piece.piece_type();
+
+                    // Relative value rules:
+
+                    // Rule A: Attacks against stronger pieces
+                    // Knight or Cannon attacking Rook -> chase
+                    if (ptype == PieceType::Knight || ptype == PieceType::Cannon)
+                        && target_ptype == PieceType::Rook
+                    {
+                        chase |= 1 << self.id_board[to as usize];
+                        continue;
+                    }
+
+                    // Rule B: Attacks against potentially unprotected pieces
+                    let mut true_chase = true;
+                    let saved_side = self.side_to_move;
+
+                    let old_type_from = self.board[from as usize];
+                    let old_type_to = self.board[to as usize];
+
+                    // Play move:
+                    self.board[from as usize] = Piece::None;
+                    self.board[to as usize] = old_type_from;
+
+                    // Update bitboards
+                    self.bitboard_by_color[mover as usize].clear_bit(from);
+                    self.bitboard_by_color[mover as usize].set_bit(to);
+                    self.bitboard_by_color[opponent as usize].clear_bit(to);
+
+                    self.bitboard_by_type[ptype as usize].clear_bit(from);
+                    self.bitboard_by_type[ptype as usize].set_bit(to);
+                    self.bitboard_by_type[target_ptype as usize].clear_bit(to);
+
+                    // We temporarily toggle side_to_move to opponent
+                    self.side_to_move = opponent;
+
+                    // Now see if any of the opponent's pieces can legally recapture at `to`
+                    let recaptured_occupied = self.bitboard_by_color[Color::White as usize]
+                        | self.bitboard_by_color[Color::Black as usize];
+
+                    let mut recapturers = self.checkers_to(to, recaptured_occupied, opponent);
+                    while let Some(s) = recapturers.pop_lsb() {
+                        if self.legal(Move::new(s, to)) {
+                            true_chase = false;
+                            break;
+                        }
+                    }
+
+                    // Restore board and bitboards:
+                    self.board[from as usize] = old_type_from;
+                    self.board[to as usize] = old_type_to;
+
+                    self.bitboard_by_color[mover as usize].set_bit(from);
+                    self.bitboard_by_color[mover as usize].clear_bit(to);
+                    if old_type_to != Piece::None {
+                        self.bitboard_by_color[opponent as usize].set_bit(to);
+                    }
+
+                    self.bitboard_by_type[ptype as usize].set_bit(from);
+                    self.bitboard_by_type[ptype as usize].clear_bit(to);
+                    if old_type_to != Piece::None {
+                        self.bitboard_by_type[target_ptype as usize].set_bit(to);
+                    }
+
+                    self.side_to_move = saved_side;
+
+                    if true_chase {
+                        // Exclude mutual/symmetric attacks except pins
+                        if ptype == target_ptype {
+                            // If same type (e.g. Rook attacking Rook):
+                            // Check if the opponent's piece cannot legally capture back.
+                            self.side_to_move = opponent;
+                            let can_opp_capture_back = self.legal(Move::new(to, from));
+                            self.side_to_move = saved_side;
+
+                            if !can_opp_capture_back {
+                                chase |= 1 << self.id_board[to as usize];
+                            }
+                        } else {
+                            chase |= 1 << self.id_board[to as usize];
+                        }
+                    }
+                }
+            }
+        }
+
+        chase
+    }
+
+    /// Detects chases from state st - d to state st on a rollback clone of self.
+    pub fn detect_chases(&mut self, d: usize, ply: i32) -> i32 {
+        let n = self.history.len();
+        if n < d {
+            return 0; // Draw
+        }
+
+        // Grant each piece on board a unique ID for each side
+        let mut white_id = 0;
+        let mut black_id = 0;
+        self.id_board = [0; Square::COUNT];
+        for sq_idx in 0..Square::COUNT {
+            let sq = Square::from_repr(sq_idx as u8).unwrap();
+            let piece = self.board[sq as usize];
+            if piece != Piece::None {
+                if piece.color() == Some(Color::White) {
+                    self.id_board[sq as usize] = white_id;
+                    white_id += 1;
+                } else {
+                    self.id_board[sq as usize] = black_id;
+                    black_id += 1;
+                }
+            }
+        }
+
+        let us = self.side_to_move;
+        let opponent = us.opposite();
+
+        // Rollback until we reached st - d
+        let mut chase = [0xFFFFu16, 0xFFFFu16];
+
+        // Save the moves in the loop so we can undo them one by one
+        let mut moves_in_loop = Vec::with_capacity(d);
+        for i in 0..d {
+            moves_in_loop.push(self.history[n - 1 - i].last_move);
+        }
+
+        for m in moves_in_loop {
+            let state = self.history.last().unwrap();
+
+            // Under Xiangqi rules, if the current side to move is in check, it overrides chase or is a draw.
+            let side_to_move_idx = self.side_to_move as usize;
+            if state.in_check[side_to_move_idx] {
+                return 0; // Draw
+            }
+
+            let opposing_chase_mask = chase[self.side_to_move.opposite() as usize];
+            if opposing_chase_mask == 0 {
+                let our_chase_mask = chase[self.side_to_move as usize];
+                if our_chase_mask == 0 {
+                    break;
+                }
+
+                // Just undo move without computing chase diff
+                self.undo_move(m);
+            } else {
+                let after = self.chased(self.side_to_move.opposite());
+                self.undo_move(m);
+                let before = self.chased(self.side_to_move);
+
+                chase[self.side_to_move as usize] &= after & !before;
+            }
+        }
+
+        let us_chasing = chase[us as usize] != 0;
+        let them_chasing = chase[opponent as usize] != 0;
+
+        if us_chasing && them_chasing {
+            0 // Mutual chase -> draw
+        } else if us_chasing {
+            -100_000 + ply // We perpetually chase -> we lose
+        } else if them_chasing {
+            100_000 - ply // Opponent perpetually chases -> we win
+        } else {
+            0 // Normal draw
+        }
+    }
+
     /// Evaluates if the game has ended due to 60-move rule, insufficient material,
-    /// or loops (normal draws or perpetual checking).
+    /// or loops (normal draws, perpetual checking, or perpetual chasing).
     ///
     /// Returns:
     /// - `Some(0)` for a draw.
@@ -718,13 +968,13 @@ impl Position {
             }
         }
 
-        // 3. Repetition & Perpetual Check Loops
+        // 3. Repetition & Perpetual Check/Chase Loops
         let current_hash = self.zobrist_hash;
         let rule60_val = rule60 as usize;
         let max_back = rule60_val.min(n - 1);
 
         // Repetitions must occur on the same side's turn, so we scan back in steps of 2 plies.
-        let mut i = 2;
+        let mut i = 4;
         while i <= max_back {
             if self.history[n - i].old_zobrist == current_hash {
                 // Repetition loop detected!
@@ -732,44 +982,42 @@ impl Position {
                 let mut them_perpetual_check = true;
 
                 let us = self.side_to_move;
+                let opponent = us.opposite();
 
                 // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
                 for j in (n - i)..n {
                     let state = &self.history[j];
-                    // Identify which player's turn it was at history index j.
-                    // If j % 2 == 1: White just moved (so White was active checking Black).
-                    // If j % 2 == 0: Black just moved (so Black was active checking White).
-                    if j % 2 == 1 {
-                        if us == Color::White {
-                            if !state.in_check[Color::Black as usize] {
-                                us_perpetual_check = false;
-                            }
+                    let player_who_moved =
+                        if (self.game_ply - (n as u16) + (j as u16)).is_multiple_of(2) {
+                            Color::White
                         } else {
-                            if !state.in_check[Color::Black as usize] {
-                                them_perpetual_check = false;
-                            }
+                            Color::Black
+                        };
+
+                    if player_who_moved == us {
+                        if !state.in_check[opponent as usize] {
+                            us_perpetual_check = false;
                         }
                     } else {
-                        if us == Color::Black {
-                            if !state.in_check[Color::White as usize] {
-                                us_perpetual_check = false;
-                            }
-                        } else {
-                            if !state.in_check[Color::White as usize] {
-                                them_perpetual_check = false;
-                            }
+                        if !state.in_check[us as usize] {
+                            them_perpetual_check = false;
                         }
                     }
                 }
 
-                if us_perpetual_check && them_perpetual_check {
-                    return Some(0); // Both check perpetually -> draw
-                } else if us_perpetual_check {
-                    return Some(-100_000 + ply); // Perpetual checking side loses
-                } else if them_perpetual_check {
-                    return Some(100_000 - ply); // Opponent perpetually checking loses
+                if us_perpetual_check || them_perpetual_check {
+                    if us_perpetual_check && them_perpetual_check {
+                        return Some(0); // Both check perpetually -> draw
+                    } else if us_perpetual_check {
+                        return Some(-100_000 + ply); // We check perpetually -> we lose
+                    } else {
+                        return Some(100_000 - ply); // Opponent checks perpetually -> they lose
+                    }
                 } else {
-                    return Some(0); // Normal repetition -> draw
+                    // No perpetual check, check perpetual chase
+                    let mut rollback = self.clone();
+                    let result = rollback.detect_chases(i, ply);
+                    return Some(result);
                 }
             }
             i += 2;
