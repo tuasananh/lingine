@@ -292,7 +292,7 @@ def main():
         "--games",
         type=int,
         default=10,
-        help="Số ván đấu chơi với mỗi mốc đối thủ ELO (mặc định: 20)",
+        help="Số ván đấu chơi với mỗi mốc đối thủ ELO (mặc định: 10)",
     )
     parser.add_argument(
         "-t",
