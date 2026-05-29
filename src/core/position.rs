@@ -320,7 +320,10 @@ impl Position {
         }
         self.game_ply = (fullmove.saturating_sub(1) * 2) + (self.side_to_move as u16);
 
-        let in_check = [self.is_in_check(Color::White), self.is_in_check(Color::Black)];
+        let in_check = [
+            self.is_in_check(Color::White),
+            self.is_in_check(Color::Black),
+        ];
         self.history.push(StateInfo {
             captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
@@ -362,7 +365,10 @@ impl Position {
         } else {
             rule60 + 1
         };
-        let in_check = [self.is_in_check(Color::White), self.is_in_check(Color::Black)];
+        let in_check = [
+            self.is_in_check(Color::White),
+            self.is_in_check(Color::Black),
+        ];
         if let Some(last) = self.history.last_mut() {
             last.rule60 = new_rule60;
             last.in_check = in_check;
@@ -700,8 +706,10 @@ impl Position {
             }
 
             // Exactly one Cannon left on the entire board, and no Advisors left
-            let total_cannons = self.piece_count(Piece::WhiteCannon) + self.piece_count(Piece::BlackCannon);
-            let total_advisors = self.piece_count(Piece::WhiteAdvisor) + self.piece_count(Piece::BlackAdvisor);
+            let total_cannons =
+                self.piece_count(Piece::WhiteCannon) + self.piece_count(Piece::BlackCannon);
+            let total_advisors =
+                self.piece_count(Piece::WhiteAdvisor) + self.piece_count(Piece::BlackAdvisor);
             if white_majors + black_majors == total_cannons as u32
                 && total_cannons == 1
                 && total_advisors == 0
@@ -796,7 +804,8 @@ mod tests {
         assert_eq!(pos.rule_judge(0), Some(0));
 
         // 2. Kings + Bishops & Advisors (no attacking pieces)
-        pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1").unwrap();
+        pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1")
+            .unwrap();
         assert_eq!(pos.rule_judge(0), Some(0));
 
         // 3. Kings + 1 Cannon, no Advisors/Bishops
