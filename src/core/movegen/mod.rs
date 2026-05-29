@@ -6,8 +6,9 @@ mod tables;
 pub use attacks::{cannon_attacks, gather_file_bits, rook_attacks};
 #[allow(unused_imports)]
 pub use tables::{
-    FILE_TABLE, FileEntry, KNIGHT_TO_TABLE, KnightToEntry, PAWN_ATTACKS, PAWN_ATTACKS_TO,
-    RANK_TABLE, RankEntry,
+    ADVISOR_ATTACKS, BISHOP_TABLE, BishopEntry, FILE_TABLE, FileEntry, KING_ATTACKS, KNIGHT_TABLE,
+    KNIGHT_TO_TABLE, KnightEntry, KnightToEntry, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
+    RankEntry,
 };
 
 use crate::core::{
@@ -15,8 +16,6 @@ use crate::core::{
     position::Position,
     types::{Color, MAX_MOVES, Move, MoveGenType, PieceType, Square},
 };
-
-use tables::{ADVISOR_ATTACKS, BISHOP_TABLE, KING_ATTACKS, KNIGHT_TABLE};
 
 /// Generates valid orthogonal moves for the General (King) inside the Palace.
 fn generate_king_moves<const IS_WHITE: bool>(
@@ -588,7 +587,7 @@ mod tests {
         for piece in Piece::iter() {
             assert_eq!(a.piece_count(piece), b.piece_count(piece));
         }
-        assert_eq!(a.is_repetition(), b.is_repetition());
+        assert_eq!(a.rule_judge(0), b.rule_judge(0));
     }
 
     #[test]

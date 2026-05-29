@@ -187,13 +187,9 @@ pub fn negamax(
         }
     }
 
-    // Repetition check (Xiangqi rules: perpetual check is a loss for the checking side)
-    if pos.is_repetition() {
-        return if pos.is_in_check(pos.side_to_move()) {
-            MATE_VALUE - ply
-        } else {
-            0
-        };
+    // Game over / rule evaluations (60-move rule, insufficient material, repetitions, perpetual checks)
+    if let Some(rule_score) = pos.rule_judge(ply) {
+        return rule_score;
     }
 
     // Base case: fall back to quiescence search
@@ -272,7 +268,7 @@ mod tests {
         // Black moves to D9 again (repeating the state at ply 1)
         pos.do_move(b_move1);
         // This completed a repetition, neither side is in check.
-        assert!(pos.is_repetition());
+        assert_eq!(pos.rule_judge(6), Some(0));
 
         // Call negamax with depth=1, we should get 0 (draw)
         let stop = Arc::new(AtomicBool::new(false));
@@ -290,15 +286,19 @@ mod tests {
     #[test]
     fn test_repetition_perpetual_check_repetition() {
         let mut pos = Position::new();
-        // White King at E0, White Rook at A1, Black King at D9, White Pawn at E4 (to block E-file)
-        pos.set("3k5/9/9/9/4P4/9/9/9/R8/4K4 w - - 0 1").unwrap();
+        // White King at E0, White Rook at D1, Black King at D9
+        pos.set("3k5/9/9/9/9/9/9/9/3R5/4K4 w - - 0 1").unwrap();
 
-        // White Rook checks: A1 to D1 (giving check)
-        let r_check1 = Move::new(Square::A1, Square::D1);
-        let r_evade1 = Move::new(Square::D1, Square::A1);
+        // White Rook checks: D1 to D8 (giving check)
+        let r_check1 = Move::new(Square::D1, Square::D8);
         // Black King evades: D9 to E9 (not checking)
         let k_move1 = Move::new(Square::D9, Square::E9);
+        // White Rook checks again: D8 to E8 (giving check)
+        let r_check2 = Move::new(Square::D8, Square::E8);
+        // Black King evades: E9 to D9
         let k_move2 = Move::new(Square::E9, Square::D9);
+        // White Rook checks again: E8 to D8 (giving check)
+        let r_check3 = Move::new(Square::E8, Square::D8);
 
         // 1. White checks
         pos.do_move(r_check1);
@@ -307,17 +307,18 @@ mod tests {
         // 2. Black evades
         pos.do_move(k_move1);
 
-        // 3. White moves Rook back to A1 (no check)
-        pos.do_move(r_evade1);
+        // 3. White checks again
+        pos.do_move(r_check2);
+        assert!(pos.is_in_check(Color::Black));
 
         // 4. Black moves King back to D9
         pos.do_move(k_move2);
 
-        // 5. White checks again with Rook to D1 (repetition + check!)
-        pos.do_move(r_check1);
+        // 5. White checks again with Rook to D8 (repetition + check!)
+        pos.do_move(r_check3);
 
-        // Now Black turn to move. White just gave the repeating check.
-        assert!(pos.is_repetition());
+        // Now Black turn to move. White just gave the repeating check on all turns in the loop.
+        assert_eq!(pos.rule_judge(5), Some(100_000 - 5));
         assert!(pos.is_in_check(Color::Black));
 
         // Black should win because White is perpetually checking!

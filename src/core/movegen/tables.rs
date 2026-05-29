@@ -4,22 +4,22 @@ use crate::core::{bitboard::Bitboard, types::Square};
 /// In Xiangqi, Bishops move exactly 2 steps diagonally, and their jump is blocked
 /// if the middle square (the "Elephant Eye") is occupied by ANY piece.
 #[derive(Clone, Copy)]
-pub(super) struct BishopEntry {
+pub struct BishopEntry {
     /// The 4 possible diagonal intermediate blocking squares (Elephant Eyes) around this square.
-    pub(super) eyes: [Option<Square>; 4],
+    pub eyes: [Option<Square>; 4],
     /// Precomputed valid target attack bitboards indexed by a 4-bit gathered blocker occupancy mask.
-    pub(super) attacks: [Bitboard; 16],
+    pub attacks: [Bitboard; 16],
 }
 
 /// Represents precomputed attack targets for a quiet Knight (Horse) move.
 /// Knights move 1 step orthogonally then 1 step diagonally. The move is blocked
 /// if the intermediate orthogonal square (the "Horse Leg") is occupied.
 #[derive(Clone, Copy)]
-pub(super) struct KnightEntry {
+pub struct KnightEntry {
     /// The 4 intermediate orthogonal blocking squares (Horse Legs) around this square.
-    pub(super) eyes: [Option<Square>; 4],
+    pub eyes: [Option<Square>; 4],
     /// Precomputed valid target attack bitboards indexed by a 4-bit gathered blocker occupancy mask.
-    pub(super) attacks: [Bitboard; 16],
+    pub attacks: [Bitboard; 16],
 }
 
 /// Represents precomputed attack targets for Knight checking paths.
@@ -662,12 +662,12 @@ const fn init_knight_to_table() -> [KnightToEntry; 90] {
 
 // Precomputed static lookup tables dissolved at compile-time to eliminate thread checks, lock contention,
 // and atomic operations during perft search loops.
-pub(super) static KING_ATTACKS: [Bitboard; 90] = init_king_attacks();
-pub(super) static ADVISOR_ATTACKS: [Bitboard; 90] = init_advisor_attacks();
+pub static KING_ATTACKS: [Bitboard; 90] = init_king_attacks();
+pub static ADVISOR_ATTACKS: [Bitboard; 90] = init_advisor_attacks();
 pub static PAWN_ATTACKS: [[Bitboard; 90]; 2] = init_pawn_attacks();
 pub static PAWN_ATTACKS_TO: [[Bitboard; 90]; 2] = init_pawn_attacks_to();
-pub(super) static BISHOP_TABLE: [BishopEntry; 90] = init_bishop_table();
-pub(super) static KNIGHT_TABLE: [KnightEntry; 90] = init_knight_table();
+pub static BISHOP_TABLE: [BishopEntry; 90] = init_bishop_table();
+pub static KNIGHT_TABLE: [KnightEntry; 90] = init_knight_table();
 pub static RANK_TABLE: [RankEntry; 9] = init_rank_table();
 pub static FILE_TABLE: [FileEntry; 10] = init_file_table();
 pub static KNIGHT_TO_TABLE: [KnightToEntry; 90] = init_knight_to_table();
