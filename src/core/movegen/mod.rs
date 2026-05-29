@@ -588,7 +588,7 @@ mod tests {
         for piece in Piece::iter() {
             assert_eq!(a.piece_count(piece), b.piece_count(piece));
         }
-        assert_eq!(a.is_repetition(), b.is_repetition());
+        assert_eq!(a.rule_judge(0), b.rule_judge(0));
     }
 
     #[test]

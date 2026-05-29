@@ -68,8 +68,10 @@ pub struct StateInfo {
     pub captured_piece: Piece,
     /// The prior Zobrist position hash value before the move occurred.
     pub old_zobrist: u64,
-    /// Halfmove clock / 50-rule counter (increments on quiet moves, resets to 0 on captures/pawn moves).
-    pub rule50: u16,
+    /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0 on captures/pawn moves).
+    pub rule60: u16,
+    /// Whether each color [White, Black] was in check in this position state.
+    pub in_check: [bool; 2],
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn tracking, ply count,
@@ -135,7 +137,8 @@ impl Position {
         pos.history.push(StateInfo {
             captured_piece: Piece::None,
             old_zobrist: 0,
-            rule50: 0,
+            rule60: 0,
+            in_check: [false, false],
         });
         pos
     }
@@ -302,11 +305,11 @@ impl Position {
             self.side_to_move = Color::White;
         }
 
-        let mut rule50 = 0;
+        let mut rule60 = 0;
         if tokens.len() > 4
-            && let Ok(r50) = tokens[4].parse::<u16>()
+            && let Ok(r60) = tokens[4].parse::<u16>()
         {
-            rule50 = r50;
+            rule60 = r60;
         }
 
         let mut fullmove = 1;
@@ -317,10 +320,12 @@ impl Position {
         }
         self.game_ply = (fullmove.saturating_sub(1) * 2) + (self.side_to_move as u16);
 
+        let in_check = [self.is_in_check(Color::White), self.is_in_check(Color::Black)];
         self.history.push(StateInfo {
             captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
-            rule50,
+            rule60,
+            in_check,
         });
 
         Ok(())
@@ -334,14 +339,15 @@ impl Position {
         let piece = self.board[from as usize];
         let captured = self.board[to as usize];
 
-        let rule50 = self.history.last().map(|s| s.rule50).unwrap_or(0);
+        let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
         let old_zobrist = self.zobrist_hash;
 
         // Push current state onto history stack
         self.history.push(StateInfo {
             captured_piece: captured,
             old_zobrist,
-            rule50,
+            rule60,
+            in_check: [false, false],
         });
 
         self.remove_piece(from);
@@ -350,14 +356,16 @@ impl Position {
         }
         self.put_piece(piece, to);
 
-        // Update rule50 halfmove clock
-        let new_rule50 = if piece.piece_type() == PieceType::Pawn || captured != Piece::None {
+        // Update rule60 halfmove clock
+        let new_rule60 = if piece.piece_type() == PieceType::Pawn || captured != Piece::None {
             0
         } else {
-            rule50 + 1
+            rule60 + 1
         };
+        let in_check = [self.is_in_check(Color::White), self.is_in_check(Color::Black)];
         if let Some(last) = self.history.last_mut() {
-            last.rule50 = new_rule50;
+            last.rule60 = new_rule60;
+            last.in_check = in_check;
         }
 
         // Toggle side to move
@@ -656,29 +664,110 @@ impl Position {
             != 0
     }
 
-    /// Scans back in the history list to check if the current position hash has
-    /// occurred before (a repeated position).
-    pub fn is_repetition(&self) -> bool {
-        let current_hash = self.zobrist_hash;
+    /// Evaluates if the game has ended due to 60-move rule, insufficient material,
+    /// or loops (normal draws or perpetual checking).
+    ///
+    /// Returns:
+    /// - `Some(0)` for a draw.
+    /// - `Some(-100_000 + ply)` if the side to move is penalized (loses).
+    /// - `Some(100_000 - ply)` if the opposing side is penalized (loses).
+    /// - `None` if the game continues.
+    pub fn rule_judge(&self, ply: i32) -> Option<i32> {
         let n = self.history.len();
-        if n < 4 {
-            return false;
+        if n == 0 {
+            return None;
         }
 
-        // Halfmove clock / 50-rule counter tracks plies since last capture or pawn move.
-        // We cannot search back further than the rule50 count or the history length.
-        let rule50 = self.history.last().map(|s| s.rule50).unwrap_or(0) as usize;
-        let max_back = rule50.min(n - 1);
+        // 1. 60-Move Rule (120 Plies since last pawn advance or capture)
+        let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
+        if rule60 >= 120 {
+            return Some(0);
+        }
+
+        // 2. Insufficient Material Draw
+        // If all Pawns are gone, check if remaining major pieces are capable of checkmating
+        if self.piece_count(Piece::WhitePawn) == 0 && self.piece_count(Piece::BlackPawn) == 0 {
+            let white_majors = self.piece_count(Piece::WhiteRook) as u32
+                + self.piece_count(Piece::WhiteCannon) as u32
+                + self.piece_count(Piece::WhiteKnight) as u32;
+            let black_majors = self.piece_count(Piece::BlackRook) as u32
+                + self.piece_count(Piece::BlackCannon) as u32
+                + self.piece_count(Piece::BlackKnight) as u32;
+
+            if white_majors == 0 && black_majors == 0 {
+                // No Rooks, Cannons, or Knights remain on either side -> direct draw
+                return Some(0);
+            }
+
+            // Exactly one Cannon left on the entire board, and no Advisors left
+            let total_cannons = self.piece_count(Piece::WhiteCannon) + self.piece_count(Piece::BlackCannon);
+            let total_advisors = self.piece_count(Piece::WhiteAdvisor) + self.piece_count(Piece::BlackAdvisor);
+            if white_majors + black_majors == total_cannons as u32
+                && total_cannons == 1
+                && total_advisors == 0
+            {
+                return Some(0);
+            }
+        }
+
+        // 3. Repetition & Perpetual Check Loops
+        let current_hash = self.zobrist_hash;
+        let rule60_val = rule60 as usize;
+        let max_back = rule60_val.min(n - 1);
 
         // Repetitions must occur on the same side's turn, so we scan back in steps of 2 plies.
         let mut i = 2;
         while i <= max_back {
             if self.history[n - i].old_zobrist == current_hash {
-                return true;
+                // Repetition loop detected!
+                let mut us_perpetual_check = true;
+                let mut them_perpetual_check = true;
+
+                let us = self.side_to_move;
+
+                // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
+                for j in (n - i)..n {
+                    let state = &self.history[j];
+                    // Identify which player's turn it was at history index j.
+                    // If j % 2 == 1: White just moved (so White was active checking Black).
+                    // If j % 2 == 0: Black just moved (so Black was active checking White).
+                    if j % 2 == 1 {
+                        if us == Color::White {
+                            if !state.in_check[Color::Black as usize] {
+                                us_perpetual_check = false;
+                            }
+                        } else {
+                            if !state.in_check[Color::Black as usize] {
+                                them_perpetual_check = false;
+                            }
+                        }
+                    } else {
+                        if us == Color::Black {
+                            if !state.in_check[Color::White as usize] {
+                                us_perpetual_check = false;
+                            }
+                        } else {
+                            if !state.in_check[Color::White as usize] {
+                                them_perpetual_check = false;
+                            }
+                        }
+                    }
+                }
+
+                if us_perpetual_check && them_perpetual_check {
+                    return Some(0); // Both check perpetually -> draw
+                } else if us_perpetual_check {
+                    return Some(-100_000 + ply); // Perpetual checking side loses
+                } else if them_perpetual_check {
+                    return Some(100_000 - ply); // Opponent perpetually checking loses
+                } else {
+                    return Some(0); // Normal repetition -> draw
+                }
             }
             i += 2;
         }
-        false
+
+        None
     }
 }
 
@@ -697,5 +786,44 @@ mod tests {
         assert!(!pos.legal(Move::new(Square::F1, Square::G2)));
         assert!(!pos.legal(Move::new(Square::F1, Square::E0)));
         assert!(!pos.legal(Move::new(Square::F1, Square::G0)));
+    }
+
+    #[test]
+    fn test_rule_judge_insufficient_material() {
+        let mut pos = Position::new();
+        // 1. Bare Kings
+        pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        assert_eq!(pos.rule_judge(0), Some(0));
+
+        // 2. Kings + Bishops & Advisors (no attacking pieces)
+        pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1").unwrap();
+        assert_eq!(pos.rule_judge(0), Some(0));
+
+        // 3. Kings + 1 Cannon, no Advisors/Bishops
+        pos.set("4k4/9/9/9/9/9/9/9/3C5/4K4 w - - 0 1").unwrap();
+        assert_eq!(pos.rule_judge(0), Some(0));
+    }
+
+    #[test]
+    fn test_rule_judge_60_move_rule() {
+        let mut pos = Position::new();
+        pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+
+        // Play 120 plies of quiet King moves back and forth (60 full moves)
+        let w_move1 = Move::new(Square::E0, Square::D0);
+        let w_move2 = Move::new(Square::D0, Square::E0);
+        let b_move1 = Move::new(Square::E9, Square::D9);
+        let b_move2 = Move::new(Square::D9, Square::E9);
+
+        for _ in 0..30 {
+            pos.do_move(w_move1);
+            pos.do_move(b_move1);
+            pos.do_move(w_move2);
+            pos.do_move(b_move2);
+        }
+
+        // rule60 counter should be exactly 120
+        assert_eq!(pos.history.last().unwrap().rule60, 120);
+        assert_eq!(pos.rule_judge(0), Some(0));
     }
 }
