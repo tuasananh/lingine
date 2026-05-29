@@ -291,8 +291,8 @@ def main():
         "-g",
         "--games",
         type=int,
-        default=20,
-        help="Số ván đấu chơi với mỗi mốc đối thủ ELO (mặc định: 20)",
+        default=10,
+        help="Số ván đấu chơi với mỗi mốc đối thủ ELO (mặc định: 10)",
     )
     parser.add_argument(
         "-t",
@@ -326,8 +326,8 @@ def main():
         "-e",
         "--elos",
         type=str,
-        default="1000,1200,1400,1600,1800",
-        help="Danh sách ELO đối thủ, phân tách bằng dấu phẩy (mặc định: 1000,1200,1400,1600,1800)",
+        default="1200,1400,1600,1800,2000,2200",
+        help="Danh sách ELO đối thủ, phân tách bằng dấu phẩy (mặc định: 1200,1400,1600,1800,2000,2200)",
     )
     parser.add_argument(
         "-s",
