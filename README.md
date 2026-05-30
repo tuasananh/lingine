@@ -10,31 +10,6 @@ Engine Cờ Tướng hiệu năng cao bằng Rust. Giao tiếp chuẩn UCI.
 2. **Lê Thành Trung** - MSSV: `202400076`
 3. **Bùi Tiến Dũng** - MSSV: `202416167`
 
----
-
-## Kết quả Gauntlet Tournament (v1.0.0)
-
-- **Đối thủ**: Fairy-Stockfish (FS-1000 đến FS-1800).
-- **Quy mô**: 20 ván mỗi đối thủ (tổng 100 ván). Xoay tua Đỏ/Đen.
-- **Thời gian kiểm soát (Time Control)**: `10/10+0.1`.
-- **Độ sâu khai cuộc**: 12 plies ( Masters book).
-- **Hiệu năng**: 16 luồng song song.
-
-### Kết quả ELO (Đo lường từ `outputv30.txt`)
-
-| Đối thủ  | Số trận | Thắng  |  Hòa   |  Thua  | Tỉ lệ điểm |  Điểm ELO ước lượng   |
-| :------- | :-----: | :----: | :----: | :----: | :--------: | :-------------------: |
-| FS-1000  |   20    |   11   |   4    |   5    |   65.0%    |         1108          |
-| FS-1200  |   20    |   10   |   5    |   5    |   62.5%    |         1289          |
-| FS-1400  |   20    |   10   |   6    |   4    |   65.0%    |         1508          |
-| FS-1600  |   20    |   8    |   2    |   10   |   45.0%    |         1565          |
-| FS-1800  |   20    |   2    |   4    |   14   |   20.0%    |         1559          |
-| **Tổng** | **100** | **41** | **21** | **38** | **51.5%**  | **1406 (Trung bình)** |
-
-Lingine v1.0.0 đạt ELO trung bình **1406**.
-
----
-
 ## Kiến trúc hệ thống
 
 ```mermaid

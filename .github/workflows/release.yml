@@ -17,17 +17,29 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: lingine-linux-x86_64
+            suffix: linux-x86_64
+            extension: ''
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: lingine-windows-x86_64.exe
+            suffix: windows-x86_64
+            extension: '.exe'
           - os: macos-latest
             target: universal2-apple-darwin
-            artifact_name: lingine-macos-universal
+            suffix: macos-universal
+            extension: ''
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Set artifact name
+        id: artifact
+        shell: bash
+        run: echo "NAME=lingine-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}${{ matrix.extension }}" >> $GITHUB_OUTPUT
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -58,18 +70,18 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ matrix.target }}" = "universal2-apple-darwin" ]; then
-            cp target/release/lingine-universal dist/${{ matrix.artifact_name }}
+            cp target/release/lingine-universal dist/${{ steps.artifact.outputs.NAME }}
           elif [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp target/${{ matrix.target }}/release/lingine.exe dist/${{ matrix.artifact_name }}
+            cp target/${{ matrix.target }}/release/lingine.exe dist/${{ steps.artifact.outputs.NAME }}
           else
-            cp target/${{ matrix.target }}/release/lingine dist/${{ matrix.artifact_name }}
+            cp target/${{ matrix.target }}/release/lingine dist/${{ steps.artifact.outputs.NAME }}
           fi
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.artifact_name }}
+          name: ${{ steps.artifact.outputs.NAME }}
+          path: dist/${{ steps.artifact.outputs.NAME }}
 
   create-draft-release:
     name: Create Draft GitHub Release
@@ -87,10 +99,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/lingine-linux-x86_64/lingine-linux-x86_64
-            artifacts/lingine-windows-x86_64.exe/lingine-windows-x86_64.exe
-            artifacts/lingine-macos-universal/lingine-macos-universal
+          files: artifacts/*/*
           draft: true
           prerelease: false
           generate_release_notes: true
