@@ -93,6 +93,7 @@ pub fn quiescence(
     pos: &mut Position,
     mut alpha: i32,
     beta: i32,
+    ply: i32,
     qdepth: i32,
     ctx: &mut SearchContext,
 ) -> i32 {
@@ -152,12 +153,17 @@ pub fn quiescence(
         generate_moves(pos, MoveGenType::Captures, &mut moves)
     };
 
+    // Checkmate detection: in check with no legal moves = checkmate
+    if in_check && count == 0 {
+        return -MATE_VALUE + ply;
+    }
+
     // Sort captures using MVV-LVA
     sort_moves(pos, &mut moves, count, Move::none());
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
-        let score = -quiescence(pos, -beta, -alpha, qdepth + 1, ctx);
+        let score = -quiescence(pos, -beta, -alpha, ply + 1, qdepth + 1, ctx);
         pos.undo_move(m);
 
         if ctx.stop.load(Ordering::Relaxed) {
@@ -233,7 +239,7 @@ pub fn negamax(
 
     // Base case: fall back to quiescence search
     if depth <= 0 {
-        return quiescence(pos, alpha, beta, 0, ctx);
+        return quiescence(pos, alpha, beta, ply, 0, ctx);
     }
 
     let mut moves = [Move::none(); MAX_MOVES];
