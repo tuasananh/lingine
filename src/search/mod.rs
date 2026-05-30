@@ -9,6 +9,11 @@ use crate::core::{
 };
 use crate::eval::evaluate;
 
+pub mod transposition_table;
+pub use transposition_table::{
+    TranspositionTable, TranspositionTableEntry, TranspositionTableFlag,
+};
+
 pub const INFINITY: i32 = 1_000_000;
 pub const MATE_VALUE: i32 = 100_000;
 
@@ -22,6 +27,10 @@ pub struct SearchContext<'a> {
     pub start_time: Instant,
     /// Absolute time budget allowed for this search ply.
     pub time_limit: Option<std::time::Duration>,
+    /// Reference to the transposition table.
+    pub transposition_table: &'a mut TranspositionTable,
+    /// Current search sequence age.
+    pub age: u8,
 }
 
 /// Simple helper to rank piece types for MVV-LVA move ordering.
@@ -40,7 +49,13 @@ fn get_piece_value_rank(p: Piece) -> i32 {
 
 /// Returns a heuristic move-ordering score. Captures are scored highly based
 /// on MVV-LVA. Quiet moves get score 0.
-fn get_move_score(pos: &Position, m: Move) -> i32 {
+/// Returns a heuristic move-ordering score. Captures are scored highly based
+/// on MVV-LVA. Quiet moves get score 0. The transposition table best move is
+/// prioritized at the very top.
+fn get_move_score(pos: &Position, m: Move, tt_move: Move) -> i32 {
+    if m == tt_move && !m.is_none() {
+        return 20000; // Prioritize TT best move above all else
+    }
     let to_piece = pos.piece_at(m.square_to());
     if to_piece != Piece::None {
         // Capture: 10000 + victim_rank * 100 - attacker_rank
@@ -53,13 +68,13 @@ fn get_move_score(pos: &Position, m: Move) -> i32 {
 }
 
 /// Sorts the first `count` moves in `moves` using a simple selection sort
-/// based on their heuristic scores.
-fn sort_moves(pos: &Position, moves: &mut [Move], count: usize) {
+/// based on their heuristic scores, prioritizing the transposition table best move.
+fn sort_moves(pos: &Position, moves: &mut [Move], count: usize, tt_move: Move) {
     for i in 0..count {
         let mut best_idx = i;
-        let mut best_val = get_move_score(pos, moves[i]);
+        let mut best_val = get_move_score(pos, moves[i], tt_move);
         for (j, mv) in moves.iter().enumerate().take(count).skip(i + 1) {
-            let val = get_move_score(pos, *mv);
+            let val = get_move_score(pos, *mv, tt_move);
             if val > best_val {
                 best_val = val;
                 best_idx = j;
@@ -138,7 +153,7 @@ pub fn quiescence(
     };
 
     // Sort captures using MVV-LVA
-    sort_moves(pos, &mut moves, count);
+    sort_moves(pos, &mut moves, count, Move::none());
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
@@ -192,6 +207,30 @@ pub fn negamax(
         return rule_score;
     }
 
+    let alpha_orig = alpha;
+
+    // Transposition Table Probing
+    let mut tt_move = Move::none();
+    if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash) {
+        tt_move = entry.best_move;
+        if entry.depth >= depth as i16 {
+            let tt_score = TranspositionTable::score_from_transposition(entry.score, ply);
+            match entry.flag {
+                TranspositionTableFlag::Exact => return tt_score,
+                TranspositionTableFlag::Alpha => {
+                    if tt_score <= alpha {
+                        return tt_score;
+                    }
+                }
+                TranspositionTableFlag::Beta => {
+                    if tt_score >= beta {
+                        return tt_score;
+                    }
+                }
+            }
+        }
+    }
+
     // Base case: fall back to quiescence search
     if depth <= 0 {
         return quiescence(pos, alpha, beta, 0, ctx);
@@ -205,10 +244,11 @@ pub fn negamax(
         return -MATE_VALUE + ply;
     }
 
-    // Sort moves: prioritize captures via MVV-LVA Heuristic
-    sort_moves(pos, &mut moves, count);
+    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move prioritized first
+    sort_moves(pos, &mut moves, count, tt_move);
 
     let mut best_score = -INFINITY;
+    let mut best_move = Move::none();
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
@@ -221,6 +261,7 @@ pub fn negamax(
 
         if score > best_score {
             best_score = score;
+            best_move = m;
         }
         if best_score > alpha {
             alpha = best_score;
@@ -228,6 +269,25 @@ pub fn negamax(
         if alpha >= beta {
             break; // Beta cutoff
         }
+    }
+
+    // Cache search results to Transposition Table
+    if !ctx.stop.load(Ordering::Relaxed) {
+        let flag = if best_score >= beta {
+            TranspositionTableFlag::Beta
+        } else if best_score <= alpha_orig {
+            TranspositionTableFlag::Alpha
+        } else {
+            TranspositionTableFlag::Exact
+        };
+        ctx.transposition_table.store(
+            pos.zobrist_hash,
+            depth as i16,
+            TranspositionTable::score_to_transposition(best_score, ply),
+            flag,
+            best_move,
+            ctx.age,
+        );
     }
 
     best_score
@@ -273,11 +333,14 @@ mod tests {
         // Call negamax with depth=1, we should get 0 (draw)
         let stop = Arc::new(AtomicBool::new(false));
         let mut nodes = 0;
+        let mut transposition_table = TranspositionTable::new(1);
         let mut ctx = SearchContext {
             stop: &stop,
             nodes: &mut nodes,
             start_time: Instant::now(),
             time_limit: None,
+            transposition_table: &mut transposition_table,
+            age: 1,
         };
         let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, &mut ctx);
         assert_eq!(score, 0);
@@ -325,11 +388,14 @@ mod tests {
         // negamax should return a win score (MATE_VALUE - ply)
         let stop = Arc::new(AtomicBool::new(false));
         let mut nodes = 0;
+        let mut transposition_table = TranspositionTable::new(1);
         let mut ctx = SearchContext {
             stop: &stop,
             nodes: &mut nodes,
             start_time: Instant::now(),
             time_limit: None,
+            transposition_table: &mut transposition_table,
+            age: 1,
         };
         let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, &mut ctx);
         assert_eq!(score, MATE_VALUE - 5);
