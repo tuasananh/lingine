@@ -14,7 +14,7 @@ pub enum TranspositionTableFlag {
 }
 
 /// Represents an entry inside the Transposition Table.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct TranspositionTableEntry {
     /// Zobrist board hash key.
     pub key: Key,
@@ -46,7 +46,7 @@ impl Default for TranspositionTableEntry {
 /// A cache structure storing previously evaluated search nodes to speed up alpha-beta pruning.
 pub struct TranspositionTable {
     /// A vector of entries matching the table size.
-    table: Box<[TranspositionTableEntry]>,
+    table: Vec<TranspositionTableEntry>,
     /// Size mask to perform O(1) fast bitwise modulo logic.
     size_mask: usize,
 }
@@ -61,7 +61,7 @@ impl TranspositionTable {
     /// Creates a new Transposition Table instance allocated with a target MB capacity.
     pub fn new(mb_size: usize) -> Self {
         let mut tt = Self {
-            table: Box::new([]),
+            table: Vec::new(),
             size_mask: 0,
         };
         tt.resize(mb_size);
@@ -76,7 +76,7 @@ impl TranspositionTable {
         let count = target_bytes / entry_size;
 
         if count == 0 {
-            self.table = Box::new([]);
+            self.table = Vec::new();
             self.size_mask = 0;
             return;
         }
@@ -87,7 +87,7 @@ impl TranspositionTable {
             power *= 2;
         }
 
-        self.table = vec![TranspositionTableEntry::default(); power].into_boxed_slice();
+        self.table = vec![TranspositionTableEntry::default(); power];
         self.size_mask = power - 1;
     }
 
@@ -100,12 +100,12 @@ impl TranspositionTable {
 
     /// Probes the table for an entry matching the given Zobrist key.
     /// Returns `Some` if a valid entry exists, `None` otherwise.
-    pub fn probe(&self, key: Key) -> Option<TranspositionTableEntry> {
+    pub fn probe(&self, key: Key) -> Option<&TranspositionTableEntry> {
         if self.table.is_empty() {
             return None;
         }
         let index = (key as usize) & self.size_mask;
-        let entry = self.table[index];
+        let entry = &self.table[index];
         if entry.key == key && entry.depth >= 0 {
             Some(entry)
         } else {
