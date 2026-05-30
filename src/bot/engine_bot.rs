@@ -9,7 +9,7 @@ use crate::core::{
     Position,
     types::{Color, File, MAX_MOVES, Move, MoveGenType, Rank, Square},
 };
-use crate::search::{INFINITY, MATE_VALUE, SearchContext, negamax};
+use crate::search::{INFINITY, MATE_VALUE, SearchContext, TranspositionTable, negamax};
 use crate::uci::{
     BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
     UciOption, UciPosition, UciScore, UciScoreBound,
@@ -30,10 +30,23 @@ fn format_move(m: Move) -> String {
 }
 
 /// A real, functional [`Engine`] implementation mapping to our search and evaluation.
-#[derive(Default)]
 pub struct EngineBot {
     /// Internal board state tracker.
     position: Position,
+    /// Transposition table to cache evaluated search nodes.
+    transposition_table: TranspositionTable,
+    /// Generational sequence age to track outdated transposition table entries.
+    age: u8,
+}
+
+impl Default for EngineBot {
+    fn default() -> Self {
+        Self {
+            position: Position::default(),
+            transposition_table: TranspositionTable::new(16), // Default to 16 MB
+            age: 0,
+        }
+    }
 }
 
 impl EngineBot {
@@ -87,18 +100,12 @@ impl Engine for EngineBot {
             name: "Lingine".into(),
             author: "tuasananh".into(),
         };
-        let options = vec![
-            UciOption::Spin {
-                name: "Hash".into(),
-                default: 16,
-                min: 1,
-                max: 1024,
-            },
-            UciOption::Check {
-                name: "Ponder".into(),
-                default: false,
-            },
-        ];
+        let options = vec![UciOption::Spin {
+            name: "Hash".into(),
+            default: 16,
+            min: 1,
+            max: 1024,
+        }];
         (id, options)
     }
 
@@ -112,6 +119,13 @@ impl Engine for EngineBot {
 
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
         log::debug!("setoption: name={:?} value={:?}", params.name, params.value);
+        if params.name.to_lowercase() == "hash"
+            && let Some(val) = params.value
+            && let Ok(mb_size) = val.parse::<usize>()
+        {
+            self.transposition_table.resize(mb_size);
+            log::info!("Resized transposition table to {} MB", mb_size);
+        }
         Ok(())
     }
 
@@ -184,6 +198,9 @@ impl Engine for EngineBot {
         let max_depth = params.depth.unwrap_or(100) as i32;
         let time_limit = self.calculate_search_time(&params, pos.side_to_move());
 
+        // Increment the age generation at the start of a search session
+        self.age = self.age.wrapping_add(1);
+
         let mut best_move = Move::none();
 
         for depth in 1..=max_depth {
@@ -237,6 +254,8 @@ impl Engine for EngineBot {
                 nodes: &mut nodes,
                 start_time,
                 time_limit,
+                transposition_table: &mut self.transposition_table,
+                age: self.age,
             };
 
             for m in moves.iter().copied().take(count) {
