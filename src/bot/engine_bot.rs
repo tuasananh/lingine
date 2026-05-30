@@ -9,9 +9,7 @@ use crate::core::{
     Position,
     types::{Color, File, MAX_MOVES, Move, MoveGenType, Rank, Square},
 };
-use crate::search::{
-    INFINITY, MATE_VALUE, SearchContext, TranspositionTable, negamax,
-};
+use crate::search::{INFINITY, MATE_VALUE, SearchContext, TranspositionTable, negamax};
 use crate::uci::{
     BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
     UciOption, UciPosition, UciScore, UciScoreBound,
@@ -102,18 +100,12 @@ impl Engine for EngineBot {
             name: "Lingine".into(),
             author: "tuasananh".into(),
         };
-        let options = vec![
-            UciOption::Spin {
-                name: "Hash".into(),
-                default: 16,
-                min: 1,
-                max: 1024,
-            },
-            UciOption::Check {
-                name: "Ponder".into(),
-                default: false,
-            },
-        ];
+        let options = vec![UciOption::Spin {
+            name: "Hash".into(),
+            default: 16,
+            min: 1,
+            max: 1024,
+        }];
         (id, options)
     }
 
@@ -127,13 +119,12 @@ impl Engine for EngineBot {
 
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
         log::debug!("setoption: name={:?} value={:?}", params.name, params.value);
-        if params.name.to_lowercase() == "hash" {
-            if let Some(val) = params.value {
-                if let Ok(mb_size) = val.parse::<usize>() {
-                    self.transposition_table.resize(mb_size);
-                    log::info!("Resized transposition table to {} MB", mb_size);
-                }
-            }
+        if params.name.to_lowercase() == "hash"
+            && let Some(val) = params.value
+            && let Ok(mb_size) = val.parse::<usize>()
+        {
+            self.transposition_table.resize(mb_size);
+            log::info!("Resized transposition table to {} MB", mb_size);
         }
         Ok(())
     }
