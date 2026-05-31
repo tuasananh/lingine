@@ -109,7 +109,8 @@ Here are the results:
 
 ### Position 2
 
-**FEN:** `r1ea1a3/4kh3/2h1e4/pHp1p1p1p/4c4/6P2/P1P2R2P/1CcC5/9/2EAKAE2 w - - 0 1`
+**FEN:**
+`r1ea1a3/4kh3/2h1e4/pHp1p1p1p/4c4/6P2/P1P2R2P/1CcC5/9/2EAKAE2 w - - 0 1`
 
 | Depth | Nodes                 | Checks             | Captures            | Checkmates     |
 | ----- | --------------------- | ------------------ | ------------------- | -------------- |

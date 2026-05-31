@@ -32,9 +32,11 @@
 
 ### Phase 1 — Fix compiler errors & declare modules ✅
 
-- [x] Remove unstable generic dispatch (refactor to stable `bool` const generics)
+- [x] Remove unstable generic dispatch (refactor to stable `bool` const
+      generics)
 - [x] Declare `mod bitboard` in `src/lib.rs` (then refactored to `src/core/`)
-- [x] Declare `mod types`, `mod movegen`, `mod position` in `src/lib.rs` (then refactored to `src/core/`)
+- [x] Declare `mod types`, `mod movegen`, `mod position` in `src/lib.rs` (then
+      refactored to `src/core/`)
 - [x] Ensure `cargo check` passes cleanly
 
 ### Phase 1.5 — Idiomatic Module Refactoring
@@ -47,13 +49,16 @@
     - [x] `GoParameters` (from `go_parameters.rs`)
     - [x] `SetOptionParameters` (from `set_option_parameters.rs`)
     - [x] `RegisterParameters` (from `register_parameters.rs`)
-    - [x] `BestMove`, `Bound`, `UciId`, `UciInfo`, `UciOption`, `UciScore`, `UciScoreBound` (from `responses.rs`)
+    - [x] `BestMove`, `Bound`, `UciId`, `UciInfo`, `UciOption`, `UciScore`,
+          `UciScoreBound` (from `responses.rs`)
     - [x] `UciMove` (from `move.rs`)
     - [x] `UciPosition` (from `position.rs`)
   - [x] Keep `src/uci/handler.rs` as command processor loop
   - [x] Keep `src/uci/engine.rs` as UCI Engine trait interface
-  - [x] Clean up `src/uci/mod.rs` to only export `Engine`, `UCIHandler`, and necessary types from `types.rs`
-  - [x] Delete consolidated files: `go_parameters.rs`, `register_parameters.rs`, `set_option_parameters.rs`, `responses.rs`, `move.rs`, `position.rs`
+  - [x] Clean up `src/uci/mod.rs` to only export `Engine`, `UCIHandler`, and
+        necessary types from `types.rs`
+  - [x] Delete consolidated files: `go_parameters.rs`, `register_parameters.rs`,
+        `set_option_parameters.rs`, `responses.rs`, `move.rs`, `position.rs`
 - [x] Introduce core engine modules (Planned for Iteration 1) ✅
   - [x] Create `src/search/` module stubs & initial logic ✅
   - [x] Create `src/eval/` module stubs & initial logic ✅
@@ -63,18 +68,23 @@
 
 - [x] FEN parsing: read/write board state from a Xiangqi FEN string
 - [x] Internal board representation: piece-square array + per-piece bitboards
-- [x] `UndoInfo` struct design to hold captured piece, old Zobrist hash, and rule50 counter (using `StateInfo`)
-- [x] `do_move(mv: Move)` — apply a move to the position, update Zobrist and PST incrementally
+- [x] `UndoInfo` struct design to hold captured piece, old Zobrist hash, and
+      rule50 counter (using `StateInfo`)
+- [x] `do_move(mv: Move)` — apply a move to the position, update Zobrist and PST
+      incrementally
 - [x] `undo_move(mv: Move)` — revert a move using stored undo state
 - [x] Zobrist hashing — incrementally updated hash key for transposition table
-- [x] Xiangqi perpetual check and perpetual chase detection rules (asymmetric repeat scoring via `rule_judge`)
+- [x] Xiangqi perpetual check and perpetual chase detection rules (asymmetric
+      repeat scoring via `rule_judge`)
 
 ### Phase 3 — Move generation ✅
 
 All 7 Xiangqi piece types, verified with perft tests:
 
-- [x] **Rook (車)** — orthogonal, blocked by first piece (ray scanning -> Rank/File Occupancy Lookup)
-- [x] **Cannon (炮)** — orthogonal, must jump exactly one piece to capture (ray scanning -> Rank/File Occupancy Lookup)
+- [x] **Rook (車)** — orthogonal, blocked by first piece (ray scanning ->
+      Rank/File Occupancy Lookup)
+- [x] **Cannon (炮)** — orthogonal, must jump exactly one piece to capture (ray
+      scanning -> Rank/File Occupancy Lookup)
 - [x] **Horse (馬)** — L-shape, blocked at the leg square
 - [x] **Elephant (象)** — 2-diagonal, blocked at midpoint, cannot cross river
 - [x] **Advisor (士)** — diagonal 1 step, palace only
@@ -84,7 +94,8 @@ All 7 Xiangqi piece types, verified with perft tests:
 
 ### Phase 4 — Iterative Engine Milestones
 
-Instead of implementing search and evaluation fully separate, we iteratively build and benchmark playable bot versions.
+Instead of implementing search and evaluation fully separate, we iteratively
+build and benchmark playable bot versions.
 
 #### Iteration 1: The Crawler (Target: ~1000 ELO, Achieved: 1406 ELO in v1.0.0) ✅
 
@@ -94,58 +105,82 @@ _Goal: Play valid Xiangqi, capture hanging pieces, avoid basic blunders._
 - [x] **Quiescence**: Basic captures-only search to avoid horizon effect
 - [x] **Pure Material Eval**: Static material values (Eleeye-derived)
 - [x] **Check / Repetition Penalty**: Hard penalty for mate/perpetual in search
-- [x] **Wired Engine**: Replace `PrintBot` with `EngineBot`, hook `go` loop to respond with real moves
+- [x] **Wired Engine**: Replace `PrintBot` with `EngineBot`, hook `go` loop to
+      respond with real moves
 - [x] **Verification**: Ensure UCI engine responds correctly without crashes
 
 #### Iteration 1.5: The Judge (Target: ~1500 ELO, Achieved: 1597 ELO in v1.1.0) ✅
 
-_Goal: Full rule compliance, robust perpetual check/chase detection, automated version-vs-version benchmarking._
+_Goal: Full rule compliance, robust perpetual check/chase detection, automated
+version-vs-version benchmarking._
 
-- [x] **Comprehensive Rule Judge**: Complete Xiangqi rules implementation (`rule_judge` in `src/core/position.rs`):
+- [x] **Comprehensive Rule Judge**: Complete Xiangqi rules implementation
+      (`rule_judge` in `src/core/position.rs`):
   - [x] 60-move rule (120 plies of quiet moves)
   - [x] Insufficient material draw rules
   - [x] Repetition loop checks
-  - [x] Perpetual checking penalty (asymmetric repeat scoring, perpetual checker loses)
-  - [x] Perpetual chasing penalty (detect chases using recursive rollback clone and piece IDs, perpetual chaser loses)
-- [x] **2-Player Match Runner (`scripts/run_match.sh`)**: Fast evaluation comparing two engine versions using `sylvan-cli`
-- [x] **Gauntlet Automation (`scripts/run_gauntlet.py`)**: Script running tournaments against different levels of Fairy-Stockfish to calibrate and estimate ELO
-- [x] **Time Management & Safety Buffer**: Refined time allocation and process delay handling to avoid GUI timeouts
-- [x] **Verification**: Played head-to-head match vs v1.0.0 (40 games: +34.9 ELO difference, 55.0% score) and gauntlet (120 games: average estimated ELO of 1597)
+  - [x] Perpetual checking penalty (asymmetric repeat scoring, perpetual checker
+        loses)
+  - [x] Perpetual chasing penalty (detect chases using recursive rollback clone
+        and piece IDs, perpetual chaser loses)
+- [x] **2-Player Match Runner (`scripts/run_match.sh`)**: Fast evaluation
+      comparing two engine versions using `sylvan-cli`
+- [x] **Gauntlet Automation (`scripts/run_gauntlet.py`)**: Script running
+      tournaments against different levels of Fairy-Stockfish to calibrate and
+      estimate ELO
+- [x] **Time Management & Safety Buffer**: Refined time allocation and process
+      delay handling to avoid GUI timeouts
+- [x] **Verification**: Played head-to-head match vs v1.0.0 (40 games: +34.9 ELO
+      difference, 55.0% score) and gauntlet (120 games: average estimated ELO
+      of 1597)
 
 #### Iteration 2: The Walker (Target: ~1800 ELO) ⎔
 
-_Goal: Deeper search depth, selective searching heuristics, solid positional alignment._
+_Goal: Deeper search depth, selective searching heuristics, solid positional
+alignment._
 
-- [ ] **Transposition Table (TT)**: Store/retrieve search results with Zobrist keys
+- [x] **Transposition Table (TT)**: Store/retrieve search results with Zobrist
+      keys
 - [ ] **Aspiration Windows**: Reduce search windows for speed
-- [ ] **Move Ordering**: Order TT moves > MVV-LVA captures > Killers/History to maximize beta-cutoffs
-- [ ] **Piece-Square Tables (PST)**: Add positional piece-square tables for developmental guidance and king safety
-- [ ] **Incremental Eval**: Keep evaluation updated incrementally during `do_move`/`undo_move` to avoid full board scan overhead
-- [ ] **Verification**: Run `./scripts/run_match.sh` vs v1.1.0 and run `./scripts/run_gauntlet.py` to confirm ELO gains
+- [ ] **Move Ordering**: Order TT moves > MVV-LVA captures > Killers/History to
+      maximize beta-cutoffs
+- [ ] **Piece-Square Tables (PST)**: Add positional piece-square tables for
+      developmental guidance and king safety
+- [ ] **Incremental Eval**: Keep evaluation updated incrementally during
+      `do_move`/`undo_move` to avoid full board scan overhead
+- [ ] **Verification**: Run `./scripts/run_match.sh` vs v1.1.0 and run
+      `./scripts/run_gauntlet.py` to confirm ELO gains
 
 #### Iteration 3: The Runner (Target: ~2000 ELO)
 
 _Goal: Fast, selective tactical search and positional maturity._
 
 - [ ] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
-- [ ] **Move Ordering Heuristics**: Add History heuristic for sorting quiet moves
-- [ ] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace safety scoring
+- [ ] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
+      moves
+- [ ] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace
+      safety scoring
 - [ ] **Pawn Structure**: Dynamic scoring for passed/crossed-river pawns
-- [ ] **Verification**: Custom bench suite in `src/benchmark/` to track search speeds (NPS) and node reductions
+- [ ] **Verification**: Custom bench suite in `src/benchmark/` to track search
+      speeds (NPS) and node reductions
 
 #### Iteration 4: The Master (Target: ~2400+ ELO)
 
 _Goal: Super-Grandmaster strength with parallel search and tuned parameters._
 
-- [ ] **Lazy SMP**: Implement multi-threaded search sharing a single Transposition Table
-- [ ] **Texel/SPSA Tuning**: Run automated parameter tuning on game databases to optimize PST/material values
-- [ ] **Verification**: Gauntlet runs vs Fairy-Stockfish using `./tools/sylvan-cli` to benchmark absolute ELO strength
+- [ ] **Lazy SMP**: Implement multi-threaded search sharing a single
+      Transposition Table
+- [ ] **Texel/SPSA Tuning**: Run automated parameter tuning on game databases to
+      optimize PST/material values
+- [ ] **Verification**: Gauntlet runs vs Fairy-Stockfish using
+      `./tools/sylvan-cli` to benchmark absolute ELO strength
 
 ---
 
 ## Validation & Gauntlet Setup
 
-To validate engine strength, we run automated matches using `sylvan-cli` against a reference engine, **Fairy-Stockfish**.
+To validate engine strength, we run automated matches using `sylvan-cli` against
+a reference engine, **Fairy-Stockfish**.
 
 ### 1. Install `sylvan-cli`
 
@@ -159,7 +194,8 @@ cp ./projects/cli/sylvan-cli ../sylvan-cli
 
 ### 2. Build Reference Engine: Fairy-Stockfish
 
-We use Fairy-Stockfish as our sparring partner because it supports Xiangqi natively via UCI.
+We use Fairy-Stockfish as our sparring partner because it supports Xiangqi
+natively via UCI.
 
 ```bash
 cd tools
@@ -170,9 +206,11 @@ This downloads into the tools folder
 
 ### 3. Run ELO Gauntlet
 
-Create a test script `scripts/run_gauntlet.sh` to compile Lingine and play 100 fast games (e.g. 10s + 0.1s increment) against Fairy-Stockfish.
+Create a test script `scripts/run_gauntlet.sh` to compile Lingine and play 100
+fast games (e.g. 10s + 0.1s increment) against Fairy-Stockfish.
 
-To calibrate testing, configure Fairy-Stockfish to a specific ELO using `option.UCI_LimitStrength=true` and `option.UCI_Elo=<target>`:
+To calibrate testing, configure Fairy-Stockfish to a specific ELO using
+`option.UCI_LimitStrength=true` and `option.UCI_Elo=<target>`:
 
 ```bash
 #!/bin/bash
@@ -189,9 +227,11 @@ cargo build --release
   -pgnout gauntlet.pgn -variant xiangqi
 ```
 
-We can analyze `gauntlet.pgn` with Ordo or other tools to calculate relative ELO.
+We can analyze `gauntlet.pgn` with Ordo or other tools to calculate relative
+ELO.
 
-Alternatively, use `option.Skill\ Level=<0-20>` to limit search depth/time directly (e.g., 0 is weakest, 20 is max).
+Alternatively, use `option.Skill\ Level=<0-20>` to limit search depth/time
+directly (e.g., 0 is weakest, 20 is max).
 
 ---
 
@@ -238,8 +278,11 @@ src/
 
 ### UCI ↔ engine bridge
 
-- `UciMove` (in `uci/move.rs`) is the parsing layer type; convert to `types::Move` via `src_file/src_rank/dst_file/dst_rank` accessors when applying to the engine position.
-- `GoParameters::stop` (`Arc<AtomicBool>`) is the interruption signal; check with `Ordering::Relaxed` in tight search loops.
+- `UciMove` (in `uci/move.rs`) is the parsing layer type; convert to
+  `types::Move` via `src_file/src_rank/dst_file/dst_rank` accessors when
+  applying to the engine position.
+- `GoParameters::stop` (`Arc<AtomicBool>`) is the interruption signal; check
+  with `Ordering::Relaxed` in tight search loops.
 
 ### Evaluation bootstrap values (Eleeye-derived)
 
@@ -268,10 +311,10 @@ src/
 
 ## Known Technical Debt
 
-| Item                            | Location          | Notes                                                                              |
-| ------------------------------- | ----------------- | ---------------------------------------------------------------------------------- |
-| `BestMove::null()` removed      | `responses.rs`    | Will need re-adding when `EngineBot` returns null moves on error                   |
-| Handler reverted to synchronous | `handler.rs`      | Actor model was built and discarded; sync is simpler while `go` is instant         |
-| `ponderhit` mid-search          | `handler.rs`      | Cannot interrupt go() while it runs; acceptable for Phase 4                        |
-| `UciMove` has no `Display`      | `uci/types.rs`    | Needed for `pv` field in `UciInfo`; add in Phase 4                                 |
-| FEN not validated at UCI layer  | `uci/types.rs`    | Validation happens in Position::from_fen() in Phase 2                            |
+| Item                            | Location       | Notes                                                                      |
+| ------------------------------- | -------------- | -------------------------------------------------------------------------- |
+| `BestMove::null()` removed      | `responses.rs` | Will need re-adding when `EngineBot` returns null moves on error           |
+| Handler reverted to synchronous | `handler.rs`   | Actor model was built and discarded; sync is simpler while `go` is instant |
+| `ponderhit` mid-search          | `handler.rs`   | Cannot interrupt go() while it runs; acceptable for Phase 4                |
+| `UciMove` has no `Display`      | `uci/types.rs` | Needed for `pv` field in `UciInfo`; add in Phase 4                         |
+| FEN not validated at UCI layer  | `uci/types.rs` | Validation happens in Position::from_fen() in Phase 2                      |
