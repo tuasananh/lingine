@@ -204,6 +204,9 @@ impl Engine for EngineBot {
         let mut best_move = Move::none();
         let mut last_depth_score = -INFINITY;
 
+        let mut killers = [[Move::none(); 2]; 128];
+        let mut history_table = [[[0; 90]; 90]; 2];
+
         for depth in 1..=max_depth {
             if params.stop.load(Ordering::Relaxed) {
                 break;
@@ -267,6 +270,8 @@ impl Engine for EngineBot {
                     time_limit,
                     transposition_table: &mut self.transposition_table,
                     age: self.age,
+                    killers: &mut killers,
+                    history_table: &mut history_table,
                 };
 
                 let mut curr_alpha = search_alpha;

@@ -1,5 +1,5 @@
 use clap::Parser;
-use lingine::core::Position;
+use lingine::core::{Position, types::Move};
 use lingine::search::{INFINITY, SearchContext, TranspositionTable, negamax};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -41,6 +41,8 @@ fn main() -> anyhow::Result<()> {
     println!("Searching...\n");
 
     let start = Instant::now();
+    let mut killers = [[Move::none(); 2]; 128];
+    let mut history_table = [[[0; 90]; 90]; 2];
     let mut ctx = SearchContext {
         stop: &stop,
         nodes: &mut nodes,
@@ -48,6 +50,8 @@ fn main() -> anyhow::Result<()> {
         time_limit: None,
         transposition_table: &mut transposition_table,
         age: 1,
+        killers: &mut killers,
+        history_table: &mut history_table,
     };
 
     let score = negamax(&mut pos, args.depth, 1, -INFINITY, INFINITY, &mut ctx);

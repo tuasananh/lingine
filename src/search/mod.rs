@@ -31,6 +31,10 @@ pub struct SearchContext<'a> {
     pub transposition_table: &'a mut TranspositionTable,
     /// Current search sequence age.
     pub age: u8,
+    /// Killer moves tracked per ply to sort high-quality quiet moves.
+    pub killers: &'a mut [[Move; 2]; 128],
+    /// History heuristic table to prioritize frequently successful quiet moves.
+    pub history_table: &'a mut [[[i32; 90]; 90]; 2],
 }
 
 /// Simple helper to rank piece types for MVV-LVA move ordering.
@@ -48,11 +52,16 @@ fn get_piece_value_rank(p: Piece) -> i32 {
 }
 
 /// Returns a heuristic move-ordering score. Captures are scored highly based
-/// on MVV-LVA. Quiet moves get score 0.
-/// Returns a heuristic move-ordering score. Captures are scored highly based
 /// on MVV-LVA. Quiet moves get score 0. The transposition table best move is
 /// prioritized at the very top.
-fn get_move_score(pos: &Position, m: Move, tt_move: Move) -> i32 {
+fn get_move_score(
+    pos: &Position,
+    m: Move,
+    tt_move: Move,
+    killers: &[[Move; 2]; 128],
+    history_table: &[[[i32; 90]; 90]; 2],
+    ply: i32,
+) -> i32 {
     if m == tt_move && !m.is_none() {
         return 20000; // Prioritize TT best move above all else
     }
@@ -63,18 +72,40 @@ fn get_move_score(pos: &Position, m: Move, tt_move: Move) -> i32 {
         let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
         10000 + victim * 100 - attacker
     } else {
-        0
+        // Quiet move
+        let ply_idx = ply as usize;
+        if ply_idx < 128 {
+            if m == killers[ply_idx][0] {
+                return 9000;
+            }
+            if m == killers[ply_idx][1] {
+                return 8000;
+            }
+        }
+        let side_idx = pos.side_to_move() as usize;
+        let from_idx = m.square_from() as usize;
+        let to_idx = m.square_to() as usize;
+        // History score capped at 7000
+        history_table[side_idx][from_idx][to_idx]
     }
 }
 
 /// Sorts the first `count` moves in `moves` using a simple selection sort
-/// based on their heuristic scores, prioritizing the transposition table best move.
-fn sort_moves(pos: &Position, moves: &mut [Move], count: usize, tt_move: Move) {
+/// based on their heuristic scores, prioritizing the transposition table best move, killers, and history.
+fn sort_moves(
+    pos: &Position,
+    moves: &mut [Move],
+    count: usize,
+    tt_move: Move,
+    killers: &[[Move; 2]; 128],
+    history_table: &[[[i32; 90]; 90]; 2],
+    ply: i32,
+) {
     for i in 0..count {
         let mut best_idx = i;
-        let mut best_val = get_move_score(pos, moves[i], tt_move);
+        let mut best_val = get_move_score(pos, moves[i], tt_move, killers, history_table, ply);
         for (j, mv) in moves.iter().enumerate().take(count).skip(i + 1) {
-            let val = get_move_score(pos, *mv, tt_move);
+            let val = get_move_score(pos, *mv, tt_move, killers, history_table, ply);
             if val > best_val {
                 best_val = val;
                 best_idx = j;
@@ -159,7 +190,15 @@ pub fn quiescence(
     }
 
     // Sort captures using MVV-LVA
-    sort_moves(pos, &mut moves, count, Move::none());
+    sort_moves(
+        pos,
+        &mut moves,
+        count,
+        Move::none(),
+        ctx.killers,
+        ctx.history_table,
+        ply,
+    );
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
@@ -250,8 +289,16 @@ pub fn negamax(
         return -MATE_VALUE + ply;
     }
 
-    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move prioritized first
-    sort_moves(pos, &mut moves, count, tt_move);
+    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move prioritized first, killers, and history
+    sort_moves(
+        pos,
+        &mut moves,
+        count,
+        tt_move,
+        ctx.killers,
+        ctx.history_table,
+        ply,
+    );
 
     let mut best_score = -INFINITY;
     let mut best_move = Move::none();
@@ -273,6 +320,19 @@ pub fn negamax(
             alpha = best_score;
         }
         if alpha >= beta {
+            // Update killers and history for quiet moves
+            if pos.piece_at(m.square_to()) == Piece::None {
+                let ply_idx = ply as usize;
+                if ply_idx < 128 && ctx.killers[ply_idx][0] != m {
+                    ctx.killers[ply_idx][1] = ctx.killers[ply_idx][0];
+                    ctx.killers[ply_idx][0] = m;
+                }
+                let side_idx = pos.side_to_move() as usize;
+                let from_idx = m.square_from() as usize;
+                let to_idx = m.square_to() as usize;
+                ctx.history_table[side_idx][from_idx][to_idx] =
+                    (ctx.history_table[side_idx][from_idx][to_idx] + depth * depth).min(7000);
+            }
             break; // Beta cutoff
         }
     }
@@ -340,6 +400,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let mut nodes = 0;
         let mut transposition_table = TranspositionTable::new(1);
+        let mut killers = [[Move::none(); 2]; 128];
+        let mut history_table = [[[0; 90]; 90]; 2];
         let mut ctx = SearchContext {
             stop: &stop,
             nodes: &mut nodes,
@@ -347,6 +409,8 @@ mod tests {
             time_limit: None,
             transposition_table: &mut transposition_table,
             age: 1,
+            killers: &mut killers,
+            history_table: &mut history_table,
         };
         let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, &mut ctx);
         assert_eq!(score, 0);
@@ -395,6 +459,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let mut nodes = 0;
         let mut transposition_table = TranspositionTable::new(1);
+        let mut killers = [[Move::none(); 2]; 128];
+        let mut history_table = [[[0; 90]; 90]; 2];
         let mut ctx = SearchContext {
             stop: &stop,
             nodes: &mut nodes,
@@ -402,6 +468,8 @@ mod tests {
             time_limit: None,
             transposition_table: &mut transposition_table,
             age: 1,
+            killers: &mut killers,
+            history_table: &mut history_table,
         };
         let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, &mut ctx);
         assert_eq!(score, MATE_VALUE - 5);
