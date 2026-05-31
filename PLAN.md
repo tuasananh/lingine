@@ -97,7 +97,7 @@ All 7 Xiangqi piece types, verified with perft tests:
 Instead of implementing search and evaluation fully separate, we iteratively
 build and benchmark playable bot versions.
 
-#### Iteration 1: The Crawler (Target: ~1000 ELO, Achieved: 1406 ELO in v1.0.0) ✅
+#### Iteration 1: The Crawler (Target: ~1000 ELO, Achieved: 1406 ELO in v1.0.0)
 
 _Goal: Play valid Xiangqi, capture hanging pieces, avoid basic blunders._
 
@@ -109,7 +109,7 @@ _Goal: Play valid Xiangqi, capture hanging pieces, avoid basic blunders._
       respond with real moves
 - [x] **Verification**: Ensure UCI engine responds correctly without crashes
 
-#### Iteration 1.5: The Judge (Target: ~1500 ELO, Achieved: 1597 ELO in v1.1.0) ✅
+#### Iteration 1.5: The Judge (Target: ~1500 ELO, Achieved: 1597 ELO in v1.1.0)
 
 _Goal: Full rule compliance, robust perpetual check/chase detection, automated
 version-vs-version benchmarking._
@@ -141,8 +141,8 @@ alignment._
 
 - [x] **Transposition Table (TT)**: Store/retrieve search results with Zobrist
       keys
-- [ ] **Aspiration Windows**: Reduce search windows for speed
-- [ ] **Move Ordering**: Order TT moves > MVV-LVA captures > Killers/History to
+- [x] **Aspiration Windows**: Reduce search windows for speed
+- [x] **Move Ordering**: Order TT moves > MVV-LVA captures > Killers/History to
       maximize beta-cutoffs
 - [ ] **Piece-Square Tables (PST)**: Add positional piece-square tables for
       developmental guidance and king safety
