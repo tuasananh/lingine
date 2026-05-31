@@ -202,6 +202,7 @@ impl Engine for EngineBot {
         self.age = self.age.wrapping_add(1);
 
         let mut best_move = Move::none();
+        let mut last_depth_score = -INFINITY;
 
         for depth in 1..=max_depth {
             if params.stop.load(Ordering::Relaxed) {
@@ -215,19 +216,12 @@ impl Engine for EngineBot {
                 break;
             }
 
-            let mut depth_best_move = Move::none();
-            let mut best_score = -INFINITY;
-
             let mut moves = [Move::none(); MAX_MOVES];
             let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
 
             if count == 0 {
                 break;
             }
-
-            // Search root moves
-            let mut alpha = -INFINITY;
-            let beta = INFINITY;
 
             // Sort root moves to maximize alpha-beta pruning (captures first)
             for i in 0..count {
@@ -249,35 +243,89 @@ impl Engine for EngineBot {
                 }
             }
 
-            let mut ctx = SearchContext {
-                stop: &params.stop,
-                nodes: &mut nodes,
-                start_time,
-                time_limit,
-                transposition_table: &mut self.transposition_table,
-                age: self.age,
-            };
+            let mut best_score;
+            let mut depth_best_move;
 
-            for m in moves.iter().copied().take(count) {
+            // Aspiration Windows Setup
+            let mut alpha = -INFINITY;
+            let mut beta = INFINITY;
+            let mut delta = 25; // aspiration window size in centipawns
+
+            if depth >= 5 && last_depth_score.abs() < MATE_VALUE - 1000 {
+                alpha = last_depth_score - delta;
+                beta = last_depth_score + delta;
+            }
+
+            loop {
+                let search_alpha = alpha.max(-INFINITY);
+                let search_beta = beta.min(INFINITY);
+
+                let mut ctx = SearchContext {
+                    stop: &params.stop,
+                    nodes: &mut nodes,
+                    start_time,
+                    time_limit,
+                    transposition_table: &mut self.transposition_table,
+                    age: self.age,
+                };
+
+                let mut curr_alpha = search_alpha;
+                best_score = -INFINITY;
+                depth_best_move = Move::none();
+
+                for m in moves.iter().copied().take(count) {
+                    if params.stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    pos.do_move(m);
+                    let score =
+                        -negamax(&mut pos, depth - 1, 1, -search_beta, -curr_alpha, &mut ctx);
+                    pos.undo_move(m);
+
+                    if params.stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    if score > best_score {
+                        best_score = score;
+                        depth_best_move = m;
+                    }
+                    if score > curr_alpha {
+                        curr_alpha = score;
+                    }
+                }
+
                 if params.stop.load(Ordering::Relaxed) {
                     break;
                 }
-                pos.do_move(m);
-                let score = -negamax(&mut pos, depth - 1, 1, -beta, -alpha, &mut ctx);
-                pos.undo_move(m);
 
-                if params.stop.load(Ordering::Relaxed) {
+                // If window was already full (-INFINITY, INFINITY), we stop, no re-search.
+                if search_alpha == -INFINITY && search_beta == INFINITY {
                     break;
                 }
 
-                if score > best_score {
-                    best_score = score;
-                    depth_best_move = m;
-                }
-                if score > alpha {
-                    alpha = score;
+                // Check fail-low / fail-high
+                if best_score <= search_alpha {
+                    // Fail low: score worse or equal to alpha. Widen alpha.
+                    alpha -= delta;
+                    beta = best_score + delta;
+                    delta = delta.saturating_mul(2);
+                } else if best_score >= search_beta {
+                    // Fail high: score better or equal to beta. Widen beta.
+                    beta += delta;
+                    alpha = best_score - delta;
+                    delta = delta.saturating_mul(2);
+                } else {
+                    // Stable score inside window!
+                    break;
                 }
             }
+
+            if params.stop.load(Ordering::Relaxed) {
+                break;
+            }
+
+            last_depth_score = best_score;
 
             // If the search was not aborted, save search outcomes and print UCI progress
             if !params.stop.load(Ordering::Relaxed) {
