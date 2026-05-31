@@ -12,41 +12,49 @@ Engine Cờ Tướng hiệu năng cao bằng Rust. Giao tiếp chuẩn UCI.
 
 ## Kiến trúc hệ thống
 
-```mermaid
-graph TD
-    GUI[UCI GUI / sylvan-cli] <-->|UCI Protocol| TA(Thread A: Stdin Reader)
-    TA -->|Command Queue| TB(Thread B: Engine Actor)
-    TB -->|Output Queue| TC(Thread C: Output Printer)
-    TC -->|stdout| GUI
+Tổng quan kiến thúc hệ thống của Lingine như sơ đồ dưới đây:
 
-    subgraph "Thread B (Engine Actor)"
-        TB <--> Pos[Position - Board & Zobrist]
-        Pos -->|Legal filtering| MG[Move Gen]
-        TB <--> Search[Search Engine]
-        Search <--> MG
-        Search <--> Eval[Static Eval]
+```mermaid
+flowchart TB
+    subgraph lingine
+        direction TB
+        TA(Thread A: Stdin Reader)
+        TB(Thread B: Engine Actor)
+        TC(Thread C: Stdout Printer)
+
+        TA -->|Command Queue| TB
+        TB -->|Output Queue| TC
     end
+
+    TC -->|UCI Protocol| GUI["UCI Orchestrator (GUI/CLI)"]
+    GUI -->|UCI Protocol| TA
 ```
 
-### 1. Sinh nước đi (Move Generation Subsystem)
+### 1. Biểu diễn trạng thái
 
 #### A. Biểu diễn bàn cờ (Board Representation)
 
 - **Flat Array**: Mảng `[Piece; 90]`. Thứ tự dòng từ `A0` (0) đến `I9` (89).
 - **Bitboards**: Cấu trúc `u128` (chỉ dùng bit 0-89).
-  - `bitboard_by_type`: Mặt nạ bit từng loại quân (`Rook`, `Knight`, `Bishop`, `Advisor`, `Pawn`, `King`, `Cannon`).
+  - `bitboard_by_type`: Mặt nạ bit từng loại quân (`Rook`, `Knight`, `Bishop`,
+    `Advisor`, `Pawn`, `King`, `Cannon`).
   - `bitboard_by_color`: Mặt nạ bit hai phe (`White`, `Black`).
-- **Zobrist Hash**: Cập nhật gia tăng bằng XOR trong `do_move`/`undo_move`. Tránh tính lại từ đầu.
+- **Zobrist Hash**: Cập nhật gia tăng bằng XOR trong `do_move`/`undo_move`.
+  Tránh tính lại từ đầu.
 
 #### B. Sinh nước đi O(1)
 
 - **Quân nhảy**:
-  - **Sĩ & Tướng**: Tra bảng tĩnh (`ADVISOR_ATTACKS`, `KING_ATTACKS`). Giới hạn trong Palace.
+  - **Sĩ & Tướng**: Tra bảng tĩnh (`ADVISOR_ATTACKS`, `KING_ATTACKS`). Giới hạn
+    trong Palace.
   - **Tốt**: Tra bảng tĩnh `PAWN_ATTACKS` theo màu và trạng thái qua sông.
-  - **Tượng & Mã**: Kiểm tra cản (mắt Tượng, chân Mã) bằng chỉ số nhị phân tra bảng `BISHOP_TABLE` / `KNIGHT_TABLE`.
+  - **Tượng & Mã**: Kiểm tra cản (mắt Tượng, chân Mã) bằng chỉ số nhị phân tra
+    bảng `BISHOP_TABLE` / `KNIGHT_TABLE`.
 - **Quân trượt (Xe & Pháo)**:
-  - **Dòng**: Dịch bit lấy 9 bit dòng: `((occupied.0 >> (r * 9)) & 0x1FF) as usize`.
-  - **Cột (Magic Multiplication)**: Hàm `gather_file_bits` nhân ma thuật `0x1010101010` để dồn 10 bit dọc thành chỉ số liền kề. Tra bảng trong O(1).
+  - **Dòng**: Dịch bit lấy 9 bit dòng:
+    `((occupied.0 >> (r * 9)) & 0x1FF) as usize`.
+  - **Cột (Magic Multiplication)**: Hàm `gather_file_bits` nhân ma thuật
+    `0x1010101010` để dồn 10 bit dọc thành chỉ số liền kề. Tra bảng trong O(1).
   - Tra `RANK_TABLE`/`FILE_TABLE` lấy nước đi thường (Xe) hoặc nhảy ngòi (Pháo).
 
 #### C. Bộ quét ngược không vòng lặp (Backward Attack Scanner)
@@ -92,15 +100,20 @@ gantt
     Quiescence Search (Ăn quân / Cản chiếu) :crit, 10, 14
 ```
 
-- **Fail-Soft Alpha-Beta Negamax**: Negamax cắt tỉa Alpha-Beta phiên bản Fail-Soft.
-- **Iterative Deepening**: Tăng độ sâu từ 1 đến `max_depth` (lên đến 100). Trả về best move lập tức khi cạn thời gian.
-- **Quiescence Search**: Chỉ tìm nước ăn quân (captures). Bị chiếu → sinh thêm evasions. Độ sâu tối đa `qdepth >= 12` để chặn tràn bộ nhớ do chiếu lặp.
+- **Fail-Soft Alpha-Beta Negamax**: Negamax cắt tỉa Alpha-Beta phiên bản
+  Fail-Soft.
+- **Iterative Deepening**: Tăng độ sâu từ 1 đến `max_depth` (lên đến 100). Trả
+  về best move lập tức khi cạn thời gian.
+- **Quiescence Search**: Chỉ tìm nước ăn quân (captures). Bị chiếu → sinh thêm
+  evasions. Độ sâu tối đa `qdepth >= 12` để chặn tràn bộ nhớ do chiếu lặp.
 - **Sắp xếp nước đi (MVV-LVA)**: Ưu tiên ăn quân để tối đa cắt tỉa:
   $$\text{Score} = 10000 + (\text{Victim} \times 100) - \text{Attacker}$$
 - **Lặp lại & Chiếu dai dẳng (Perpetual Check/Chase)**:
   - Quét lịch sử trùng hash Zobrist.
-  - Chiếu dai dẳng → phạt thua bên chiếu (`MATE_VALUE - ply`). Lặp cờ thường → hòa (`0`).
-- **Quản lý thời gian**: Phân bổ theo `wtime`/`btime`, `winc`/`binc` và `movestogo`. Giữ dự phòng 50ms hoặc 10% tránh rụng kim do độ trễ GUI.
+  - Chiếu dai dẳng → phạt thua bên chiếu (`MATE_VALUE - ply`). Lặp cờ thường →
+    hòa (`0`).
+- **Quản lý thời gian**: Phân bổ theo `wtime`/`btime`, `winc`/`binc` và
+  `movestogo`. Giữ dự phòng 50ms hoặc 10% tránh rụng kim do độ trễ GUI.
 
 ### 3. Bộ đánh giá tĩnh (Static Evaluation Subsystem)
 
@@ -113,16 +126,19 @@ gantt
   - Tướng: Vô hạn (`100,000` điểm)
 - **Tốt qua sông**:
   - Chưa qua sông: `30`. Chỉ đi thẳng.
-  - Đã qua sông (White rank >= 5, Black rank <= 4): `70`. Thưởng +40 điểm cấu trúc. Kích hoạt đi ngang trong sinh nước đi.
+  - Đã qua sông (White rank >= 5, Black rank <= 4): `70`. Thưởng +40 điểm cấu
+    trúc. Kích hoạt đi ngang trong sinh nước đi.
 
 ### 4. Kiến trúc 3 luồng (3-Threaded Actor Model)
 
 - **Thread A — Stdin Reader**:
   - Đọc `stdin`, phân tích `EngineCommand`.
-  - Gặp `stop`/`quit` → đặt `stop_flag = true` (Atomic) lập tức. Ngắt đệ quy Thread B tức thì.
+  - Gặp `stop`/`quit` → đặt `stop_flag = true` (Atomic) lập tức. Ngắt đệ quy
+    Thread B tức thì.
 - **Thread B — Engine Actor**:
   - Sở hữu độc quyền trạng thái `Position` và Engine.
-  - Nhận lệnh `Go` → chạy Negamax. Spawn forwarder truyền real-time `UciInfo` sang Thread C.
+  - Nhận lệnh `Go` → chạy Negamax. Spawn forwarder truyền real-time `UciInfo`
+    sang Thread C.
 - **Thread C — Output Printer**:
   - Sở hữu độc quyền `stdout`. Ngăn chặn tranh chấp ghi đè dữ liệu.
 
