@@ -76,7 +76,7 @@ pub struct StateInfo {
     /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0 on captures/pawn moves).
     pub rule60: u16,
     /// Whether each color [White, Black] was in check in this position state.
-    pub in_check: [bool; 2],
+    pub in_check: [bool; Color::COUNT],
     /// Precalculated incremental material score (from White's perspective)
     pub material_score: i32,
     /// Precalculated incremental piece-square table positional score (from White's perspective)
