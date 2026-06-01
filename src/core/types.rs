@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    ops::{Index, IndexMut},
-};
+use std::fmt::Display;
 
 use arrayvec::ArrayVec;
 use strum::{EnumCount, EnumIter, FromRepr};
@@ -153,46 +150,6 @@ pub enum MoveGenType {
     Legal,
 }
 
-const BLOOM_FILTER_SIZE: usize = 1 << 14;
-
-/// A simple bit/value filter used in transposition structures.
-#[derive(Clone)]
-pub struct BloomFilter {
-    table: [u8; BLOOM_FILTER_SIZE],
-}
-
-impl Default for BloomFilter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BloomFilter {
-    pub fn new() -> Self {
-        Self {
-            table: [0; BLOOM_FILTER_SIZE],
-        }
-    }
-}
-
-impl Index<Key> for BloomFilter {
-    type Output = u8;
-
-    #[inline(always)]
-    fn index(&self, key: Key) -> &Self::Output {
-        let index = (key as usize) % BLOOM_FILTER_SIZE;
-        &self.table[index]
-    }
-}
-
-impl IndexMut<Key> for BloomFilter {
-    #[inline(always)]
-    fn index_mut(&mut self, key: Key) -> &mut Self::Output {
-        let index = (key as usize) % BLOOM_FILTER_SIZE;
-        &mut self.table[index]
-    }
-}
-
 /// A compact 16-bit move representation designed for performance:
 ///
 /// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since $2^7=128$).
@@ -311,21 +268,6 @@ mod tests {
 
         assert_eq!(Piece::WhiteBishop.color(), Some(Color::White));
         assert_eq!(Piece::WhiteBishop.piece_type(), PieceType::Bishop);
-    }
-
-    #[test]
-    fn test_bloom_filter() {
-        let mut filter = BloomFilter::new();
-        // By default, should be all 0s
-        assert_eq!(filter[0], 0);
-        assert_eq!(filter[12345], 0);
-
-        filter[12345] = 42;
-        assert_eq!(filter[12345], 42);
-
-        // Test implementation of Default trait
-        let filter_default = BloomFilter::default();
-        assert_eq!(filter_default[12345], 0);
     }
 
     #[test]

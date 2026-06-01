@@ -6,7 +6,7 @@ use crate::{
     core::{
         bitboard::Bitboard,
         movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
-        types::{BloomFilter, Color, File, Move, Piece, PieceType, Rank, Square},
+        types::{Color, File, Move, Piece, PieceType, Rank, Square},
     },
     eval::piece_square_table::{piece_material_value, piece_square_table_value},
 };
@@ -103,10 +103,6 @@ pub struct Position {
     /// The player active to play next.
     side_to_move: Color,
 
-    #[allow(dead_code)]
-    filter: BloomFilter,
-
-    #[allow(dead_code)]
     id_board: [u8; Square::COUNT],
     /// Current transposition hash of the board position.
     pub zobrist_hash: u64,
@@ -137,7 +133,6 @@ impl Position {
             history: Vec::new(),
             game_ply: 0,
             side_to_move: Color::White,
-            filter: BloomFilter::new(),
             id_board: [0; Square::COUNT],
             zobrist_hash: 0,
             king_squares: [Square::E0, Square::E9],

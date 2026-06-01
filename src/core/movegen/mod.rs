@@ -2,9 +2,7 @@ mod attacks;
 mod tables;
 
 // Re-export public API so external callers (position.rs, etc.) keep their existing `use crate::movegen::*` paths.
-#[allow(unused_imports)]
 pub use attacks::{cannon_attacks, gather_file_bits, rook_attacks};
-#[allow(unused_imports)]
 pub use tables::{
     ADVISOR_ATTACKS, BISHOP_TABLE, BishopEntry, FILE_TABLE, FileEntry, KING_ATTACKS, KNIGHT_TABLE,
     KNIGHT_TO_TABLE, KnightEntry, KnightToEntry, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
