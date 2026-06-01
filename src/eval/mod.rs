@@ -79,8 +79,7 @@ mod tests {
             let count =
                 crate::core::movegen::generate_moves(&pos, MoveGenType::PseudoLegal, &mut moves);
 
-            for i in 0..count {
-                let m = moves[i];
+            for m in moves.iter().copied().take(count) {
                 if pos.legal(m) {
                     let pre_material = pos.material_score();
                     let pre_pst = pos.piece_square_table_score();
