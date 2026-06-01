@@ -9,7 +9,9 @@ use crate::core::{
     Position,
     types::{Color, File, MAX_MOVES, Move, MoveGenType, Rank, Square},
 };
-use crate::search::{INFINITY, MATE_VALUE, SearchContext, TranspositionTable, negamax};
+use crate::search::{
+    INFINITY, MATE_VALUE, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
+};
 use crate::uci::{
     BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
     UciOption, UciPosition, UciScore, UciScoreBound,
@@ -285,8 +287,14 @@ impl Engine for EngineBot {
                         break;
                     }
                     pos.do_move(m);
-                    let score =
-                        -negamax(&mut pos, depth - 1, 1, -search_beta, -curr_alpha, &mut ctx);
+                    let score = -negamax(
+                        &mut pos,
+                        depth - 1,
+                        1,
+                        SearchWindow::new(-search_beta, -curr_alpha),
+                        SearchExtension::default(),
+                        &mut ctx,
+                    );
                     pos.undo_move(m);
 
                     if params.stop.load(Ordering::Relaxed) {

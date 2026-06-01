@@ -1094,15 +1094,17 @@ impl Position {
                 let us = self.side_to_move;
                 let opponent = us.opposite();
 
+                let initial_game_ply = self.game_ply - (n as u16 - 1);
+
                 // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
                 for j in (n - i)..n {
                     let state = &self.history[j];
-                    let player_who_moved =
-                        if (self.game_ply - (n as u16) + (j as u16)).is_multiple_of(2) {
-                            Color::White
-                        } else {
-                            Color::Black
-                        };
+                    let player_who_moved = if (initial_game_ply + (j as u16) - 1).is_multiple_of(2)
+                    {
+                        Color::White
+                    } else {
+                        Color::Black
+                    };
 
                     if player_who_moved == us {
                         if !state.in_check[opponent as usize] {
