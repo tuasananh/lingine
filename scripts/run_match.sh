@@ -36,7 +36,7 @@ GAMES=40
 TC="10/10+0.1"
 DEPTH=12
 OPENINGS="tools/xqdb_masters_40711_UCI_games.pgn"
-PGNOUT="match.pgn"
+OUTDIR=""
 SKIP_BUILD=false
 SPRT=""
 
@@ -63,7 +63,7 @@ show_help() {
     echo "  -c, --concurrency N     Number of games to run in parallel (Default: auto-optimized = $CONCURRENCY)"
     echo "  -d, --depth N           Opening book ply depth (Default: $DEPTH)"
     echo "  -f, --openings PATH     Path to PGN/EPD openings file (Default: $OPENINGS)"
-    echo "  -o, --pgnout FILE       Path to write results PGN (Default: $PGNOUT)"
+    echo "  -o, --outdir, --pgnout DIR   Output directory to store PGN and Markdown summary (Default: matches/NAME_A-vs-NAME_B_YYYYMMDD_HHMMSS)"
     echo "  -s, --skip-build        Skip automatic Rust cargo compilation for Lingine"
     echo "  --sprt PARAMS           Configure SPRT termination (e.g., \"elo0=0 elo1=10 alpha=0.05 beta=0.05\")"
     echo "  -h, --help              Show this help message"
@@ -120,8 +120,8 @@ while [[ $# -gt 0 ]]; do
             OPENINGS="$2"
             shift 2
             ;;
-        -o|--pgnout)
-            PGNOUT="$2"
+        -o|--pgnout|--outdir)
+            OUTDIR="$2"
             shift 2
             ;;
         -s|--skip-build)
@@ -156,6 +156,28 @@ fi
 if [ -z "$NAME_B" ]; then
     NAME_B=$(basename "$ENGINE_B")
 fi
+
+# Determine output folder
+if [ -z "$OUTDIR" ]; then
+    DEFAULT_OUTDIR="matches/${NAME_A}-vs-${NAME_B}_$(date +%Y%m%d_%H%M%S)"
+    echo -e "${YELLOW}No output folder specified.${NC}"
+    echo -n "Enter match name or folder (Press Enter for default: $DEFAULT_OUTDIR): "
+    read -r USER_OUTDIR
+    if [ -z "$USER_OUTDIR" ]; then
+        OUTDIR="$DEFAULT_OUTDIR"
+    else
+        # If they entered a name without a path separator, place it in matches/
+        if [[ "$USER_OUTDIR" != *"/"* ]]; then
+            OUTDIR="matches/$USER_OUTDIR"
+        else
+            OUTDIR="$USER_OUTDIR"
+        fi
+    fi
+fi
+
+# Create target directory
+mkdir -p "$OUTDIR"
+PGNOUT="$OUTDIR/records.pgn"
 
 print_header
 
@@ -192,7 +214,7 @@ check_dependencies() {
 
 check_dependencies
 
-# Compile Lingine automatically if specified
+# Compile Lingine automatically if specified and local engine is selected
 if [ "$SKIP_BUILD" = false ] && { [ "$ENGINE_A" = "./target/release/lingine" ] || [ "$ENGINE_B" = "./target/release/lingine" ]; }; then
     echo -e "\n${YELLOW}[1/3] Compiling the latest version of Lingine (cargo build --release)...${NC}"
     if ! cargo build --release; then
@@ -201,7 +223,7 @@ if [ "$SKIP_BUILD" = false ] && { [ "$ENGINE_A" = "./target/release/lingine" ] |
     fi
     echo -e "${GREEN}=> Compilation successful: ./target/release/lingine${NC}"
 else
-    echo -e "\n${YELLOW}[1/3] Skipping Lingine compilation as requested.${NC}"
+    echo -e "\n${YELLOW}[1/3] Skipping Lingine compilation (either requested or not using target/release/lingine).${NC}"
 fi
 
 # Setup arguments for Engine A
@@ -280,6 +302,8 @@ set -e
 echo -e "----------------------------------------------------------------------"
 if [ $SYLVAN_STATUS -eq 0 ]; then
     echo -e "${GREEN}${BOLD}Match completed successfully! Detailed results saved to $PGNOUT${NC}"
+    echo -e "${YELLOW}Running match analysis and generating summary.md...${NC}"
+    python3 scripts/analyze_match.py "$PGNOUT" -m "$OUTDIR/summary.md"
 else
     echo -e "${RED}${BOLD}An error occurred while running sylvan-cli. Exit code: $SYLVAN_STATUS${NC}"
 fi

@@ -8,11 +8,13 @@ Computes:
   - Likelihood of Superiority (LOS)
   - Per-color (Red/Black) performance breakdown
   - Game length statistics
-  - Optional HTML dashboard report
+  - Optional HTML dashboard report (-o/--html)
+  - Optional Markdown summary report (-m/--markdown)
 
 Usage:
     python scripts/analyze_match.py match.pgn
     python scripts/analyze_match.py match.pgn -o match_report.html
+    python scripts/analyze_match.py match.pgn -m match_report.md
     python scripts/analyze_match.py match.pgn --engine1 lingine-pst
 """
 
@@ -433,6 +435,106 @@ def print_console_report(stats, elo_diff, se_elo, ci_low, ci_high, los):
     print(f"| **Draw Rate** | {draw_rate:.1f}% | — |")
     print(f"{'':═<85}")
     print()
+
+# ─── Markdown Report ──────────────────────────────────────────────────────────
+
+def generate_markdown_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los):
+    """Generate a clean, beautiful Markdown report for the match."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    e1 = stats["engine1"]
+    e2 = stats["engine2"]
+    n = stats["total_games"]
+    w, d, l = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
+    pts = w + 0.5 * d
+    score_pct = (pts / n * 100) if n > 0 else 0
+    draw_rate = (d / n * 100) if n > 0 else 0
+
+    elo_sign = "+" if elo_diff >= 0 else ""
+    elo_str = f"{elo_sign}{elo_diff:.1f}"
+    ci_str = f"[{ci_low:.1f}, {ci_high:.1f}]" if ci_low is not None else "N/A"
+    se_str = f"± {se_elo:.1f}" if se_elo is not None else "N/A"
+    los_str = f"{los * 100:.1f}%" if los is not None else "N/A"
+
+    # Color performance
+    rg = stats["e1_as_red_games"]
+    rw = stats["e1_as_red_wins"]
+    rd = stats["e1_as_red_draws"]
+    rl = stats["e1_as_red_losses"]
+    r_pts = rw + 0.5 * rd
+    r_pct = (r_pts / rg * 100) if rg > 0 else 0
+
+    bg = stats["e1_as_black_games"]
+    bw = stats["e1_as_black_wins"]
+    bd = stats["e1_as_black_draws"]
+    bl = stats["e1_as_black_losses"]
+    b_pts = bw + 0.5 * bd
+    b_pct = (b_pts / bg * 100) if bg > 0 else 0
+
+    # Longest streaks
+    max_win_streak = 0
+    max_loss_streak = 0
+    cur_win = 0
+    cur_loss = 0
+    for gr in stats["game_results"]:
+        if gr["outcome"] == "win":
+            cur_win += 1
+            cur_loss = 0
+        elif gr["outcome"] == "loss":
+            cur_loss += 1
+            cur_win = 0
+        else:
+            cur_win = 0
+            cur_loss = 0
+        max_win_streak = max(max_win_streak, cur_win)
+        max_loss_streak = max(max_loss_streak, cur_loss)
+
+    # Game length
+    game_len_str = "N/A"
+    if stats["plycounts"]:
+        plies = stats["plycounts"]
+        avg_ply = statistics.mean(plies)
+        med_ply = statistics.median(plies)
+        min_ply = min(plies)
+        max_ply = max(plies)
+        game_len_str = f"Average: {avg_ply:.1f} plies (≈ {avg_ply/2:.0f} moves), Median: {med_ply:.0f}, Range: {min_ply} - {max_ply} plies"
+
+    md_content = f"""# Match Report: {e1} vs {e2}
+
+Generated on: {now_str}
+Total Games Played: **{n}**
+
+## Engine Comparison (from {e1}'s perspective)
+
+| Metric | {e1} | {e2} |
+| :--- | :---: | :---: |
+| **Wins** | {w} | {l} |
+| **Draws** | {d} | {d} |
+| **Losses** | {l} | {w} |
+| **Points** | {pts} / {n} ({score_pct:.1f}%) | {n - pts} / {n} ({100 - score_pct:.1f}%) |
+| **Elo Diff** | **{elo_str}** | **{'-' if elo_diff >= 0 else '+'}{abs(elo_diff):.1f}** |
+| **Standard Error** | {se_str} | — |
+| **95% Confidence Interval** | {ci_str} | — |
+| **LOS (Likelihood of Superiority)** | {los_str} | — |
+| **Draw Rate** | {draw_rate:.1f}% | — |
+
+## Color Performance (from {e1}'s perspective)
+
+| Color | Games | Wins | Draws | Losses | Score % |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Red (First)** | {rg} | {rw} | {rd} | {rl} | {r_pct:.1f}% |
+| **Black (Second)** | {bg} | {bw} | {bd} | {bl} | {b_pct:.1f}% |
+
+## Performance Streaks
+
+- **Longest Win Streak:** {max_win_streak} games
+- **Longest Loss Streak:** {max_loss_streak} games
+
+## Game Length Statistics
+
+- **Ply Count:** {game_len_str}
+"""
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(md_content)
 
 
 # ─── HTML Report ──────────────────────────────────────────────────────────────
@@ -1133,6 +1235,12 @@ def main():
         default=None,
         help="Output filepath for an HTML dashboard report",
     )
+    parser.add_argument(
+        "-m", "--markdown",
+        type=str,
+        default=None,
+        help="Output filepath for a clean Markdown report",
+    )
 
     args = parser.parse_args()
 
@@ -1214,6 +1322,14 @@ def main():
             print(f"=> {green('HTML Report Generated')}: {bold(args.html)}")
         except Exception as e:
             print(red(f"Error generating HTML report: {e}"))
+
+    # Generate Markdown if requested
+    if args.markdown:
+        try:
+            generate_markdown_report(args.markdown, stats, elo_diff, se_elo, ci_low, ci_high, los)
+            print(f"=> {green('Markdown Report Generated')}: {bold(args.markdown)}")
+        except Exception as e:
+            print(red(f"Error generating Markdown report: {e}"))
 
     print()
 

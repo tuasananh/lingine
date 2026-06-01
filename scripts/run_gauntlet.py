@@ -97,9 +97,9 @@ def run_tournament(args):
     cmd = [
         "./tools/sylvan-cli",
         "-engine",
-        "cmd=./target/release/lingine",
-        "name=Lingine",
-        "stderr=lingine_err.log",
+        f"cmd={args.engine}",
+        f"name={args.name}",
+        f"stderr={args.name}_err.log",
     ]
 
     # Thêm động thực thể bot Fairy-Stockfish cho mỗi mốc ELO cấu hình
@@ -192,10 +192,10 @@ def calculate_and_display_elo(args):
     stats = {}
     for game in games:
         w, b, res = game["white"], game["black"], game["result"]
-        if w == "Lingine":
+        if w == args.name:
             opponent = b
             lingine_color = "white"
-        elif b == "Lingine":
+        elif b == args.name:
             opponent = w
             lingine_color = "black"
         else:
@@ -222,7 +222,7 @@ def calculate_and_display_elo(args):
             stats[opponent]["draws"] += 1
 
     print("\n" + "=" * 70)
-    print("           BẢNG PHÂN TÍCH HIỆU SUẤT ELO - LINGINE             ")
+    print(f"           BẢNG PHÂN TÍCH HIỆU SUẤT ELO - {args.name.upper()}             ")
     print("=" * 70)
     print(
         f"{'Đối thủ':<15}{'Trận':<8}{'Thắng':<8}{'Hòa':<8}{'Thua':<8}{'Tỉ lệ điểm':<12}{'Ước lượng ELO':<15}"
@@ -267,7 +267,7 @@ def calculate_and_display_elo(args):
     if elo_estimates:
         final_elo = sum(elo_estimates) / len(elo_estimates)
         print(
-            f"\n=> ĐIỂM ELO TRUNG BÌNH ƯỚC TÍNH CỦA LINGINE: {int(round(final_elo))} ELO"
+            f"\n=> ĐIỂM ELO TRUNG BÌNH ƯỚC TÍNH CỦA {args.name.upper()}: {int(round(final_elo))} ELO"
         )
     else:
         print("\nKhông đủ dữ liệu ván đấu phù hợp để ước tính ELO.")
@@ -276,7 +276,7 @@ def calculate_and_display_elo(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Chương trình tổ chức giải đấu Gauntlet & Ước lượng ELO cho Lingine."
+        description="Chương trình tổ chức giải đấu Gauntlet & Ước lượng ELO cho các Engine Chess/Xiangqi."
     )
     parser.add_argument(
         "-c",
@@ -316,11 +316,30 @@ def main():
         help="Đường dẫn đến tệp tin PGN/EPD khai cuộc (mặc định: tools/xqdb_masters_40711_UCI_games.pgn)",
     )
     parser.add_argument(
+        "-a",
+        "--engine",
+        "--bot-path",
+        type=str,
+        default=None,
+        dest="engine",
+        help="Đường dẫn đến engine chính tham gia gauntlet (mặc định: ./target/release/lingine)",
+    )
+    parser.add_argument(
+        "--name",
+        "--bot-name",
+        type=str,
+        default=None,
+        dest="name",
+        help="Tên của engine chính tham gia gauntlet (mặc định: Lingine)",
+    )
+    parser.add_argument(
         "-o",
         "--pgnout",
+        "--outdir",
         type=str,
-        default="gauntlet.pgn",
-        help="Đường dẫn lưu tệp PGN kết quả ván đấu (mặc định: gauntlet.pgn)",
+        default=None,
+        dest="outdir",
+        help="Thư mục lưu kết quả giải đấu (chứa records.pgn và summary.md, mặc định: matches/BOT_NAME_TIMESTAMP)",
     )
     parser.add_argument(
         "-e",
@@ -338,16 +357,85 @@ def main():
 
     args = parser.parse_args()
 
+    # Interactive engine prompts if not provided
+    engine_path = args.engine
+    engine_name = args.name
+
+    if not engine_path:
+        print("\033[33mNo main engine path specified.\033[0m")
+        user_engine = input(
+            "Enter main engine path (Default: ./target/release/lingine): "
+        ).strip()
+        if not user_engine:
+            engine_path = "./target/release/lingine"
+        else:
+            engine_path = user_engine
+
+    if not engine_name:
+        default_name = os.path.basename(engine_path)
+        if default_name.lower() == "lingine":
+            default_name = "Lingine"
+        print("\033[33mNo main engine name specified.\033[0m")
+        user_name = input(f"Enter main engine name (Default: {default_name}): ").strip()
+        if not user_name:
+            engine_name = default_name
+        else:
+            engine_name = user_name
+
+    import datetime
+
+    outdir = args.outdir
+    if not outdir:
+        default_outdir = (
+            f"matches/{engine_name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
+        print("\033[33mNo output folder specified.\033[0m")
+        user_outdir = input(
+            f"Enter gauntlet name or output folder (Press Enter for default: {default_outdir}): "
+        ).strip()
+        if not user_outdir:
+            outdir = default_outdir
+        else:
+            if "/" not in user_outdir:
+                outdir = f"matches/{user_outdir}"
+            else:
+                outdir = user_outdir
+
+    os.makedirs(outdir, exist_ok=True)
+    pgnout = os.path.join(outdir, "records.pgn")
+    args.pgnout = pgnout
+    args.outdir = outdir
+    args.engine = engine_path
+    args.name = engine_name
+
     print_header("LINGINE GAUNTLET TOURNAMENT & ELO EVALUATOR")
     check_dependencies()
 
-    if not args.skip_build:
+    if not args.skip_build and args.engine == "./target/release/lingine":
         build_engine()
     else:
-        print("\n[1/3] Đã bỏ qua bước biên dịch theo yêu cầu (--skip-build).")
+        print(f"\n[1/3] Đã bỏ qua bước biên dịch (Engine chính: '{args.engine}').")
 
     run_tournament(args)
     calculate_and_display_elo(args)
+
+    print("\n=> Đang chạy phân tích chi tiết và tạo summary.md...")
+    try:
+        analyze_cmd = [
+            sys.executable,
+            "scripts/analyze_gauntlet.py",
+            args.pgnout,
+            "-b",
+            args.name,
+            "--markdown",
+            os.path.join(args.outdir, "summary.md"),
+        ]
+        subprocess.run(analyze_cmd, check=True)
+        print(
+            f"=> Phân tích hoàn tất! Kết quả được lưu tại: {os.path.join(args.outdir, 'summary.md')}"
+        )
+    except Exception as e:
+        print(f"Lỗi khi chạy phân tích gauntlet: {e}")
 
 
 if __name__ == "__main__":
