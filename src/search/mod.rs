@@ -227,6 +227,7 @@ pub fn negamax(
     ply: i32,
     mut alpha: i32,
     beta: i32,
+    extensions: i32,
     ctx: &mut SearchContext,
 ) -> i32 {
     if ctx.stop.load(Ordering::Relaxed) {
@@ -250,6 +251,13 @@ pub fn negamax(
     // Game over / rule evaluations (60-move rule, insufficient material, repetitions, perpetual checks)
     if let Some(rule_score) = pos.rule_judge(ply) {
         return rule_score;
+    }
+
+    let mut depth = depth;
+    let mut extensions = extensions;
+    if pos.is_in_check(pos.side_to_move()) && extensions < 6 {
+        depth += 1;
+        extensions += 1;
     }
 
     let alpha_orig = alpha;
@@ -311,7 +319,7 @@ pub fn negamax(
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
-        let score = -negamax(pos, depth - 1, ply + 1, -beta, -alpha, ctx);
+        let score = -negamax(pos, depth - 1, ply + 1, -beta, -alpha, extensions, ctx);
         pos.undo_move(m);
 
         if ctx.stop.load(Ordering::Relaxed) {
@@ -418,7 +426,7 @@ mod tests {
             killers: &mut killers,
             history_table: &mut history_table,
         };
-        let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, &mut ctx);
+        let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, 0, &mut ctx);
         assert_eq!(score, 0);
     }
 
@@ -477,7 +485,7 @@ mod tests {
             killers: &mut killers,
             history_table: &mut history_table,
         };
-        let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, &mut ctx);
+        let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, 0, &mut ctx);
         assert_eq!(score, MATE_VALUE - 5);
     }
 }
