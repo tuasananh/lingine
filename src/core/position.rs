@@ -106,7 +106,7 @@ pub struct Position {
     /// Current transposition hash of the board position.
     pub zobrist_hash: u64,
     /// Palace coordinates of both players' Generals (Kings) to expedite check scans.
-    king_squares: [Square; 2],
+    king_squares: [Square; Color::COUNT],
 }
 
 #[derive(Error, Debug)]
@@ -515,8 +515,8 @@ impl Position {
     }
 
     #[inline(always)]
-    pub fn king_square(&self, color: Color) -> Option<Square> {
-        Some(self.king_squares[color as usize])
+    pub fn king_square(&self, color: Color) -> Square {
+        self.king_squares[color as usize]
     }
 
     /// Identifies all opponent pieces of `attacker` color that attack the target `square`
@@ -698,7 +698,7 @@ impl Position {
         let from = m.square_from();
         let to = m.square_to();
         let moved_piece = self.board[from as usize];
-        let them_king_sq = self.king_square(them).unwrap();
+        let them_king_sq = self.king_square(them);
 
         let mut occupied = self.bitboard_by_color[Color::White as usize]
             | self.bitboard_by_color[Color::Black as usize];
@@ -713,11 +713,7 @@ impl Position {
     /// Checks if the given player's King is currently in check.
     #[inline(always)]
     pub fn is_in_check(&self, color: Color) -> bool {
-        if let Some(sq) = self.king_square(color) {
-            self.is_square_attacked(sq, color.opposite())
-        } else {
-            false
-        }
+        self.is_square_attacked(self.king_square(color), color.opposite())
     }
 
     #[inline(always)]
@@ -739,7 +735,7 @@ impl Position {
         let king_sq = if moved_piece.piece_type() == PieceType::King {
             to
         } else {
-            self.king_square(us).unwrap()
+            self.king_square(us)
         };
 
         let mut occupied = self.bitboard_by_color[Color::White as usize]

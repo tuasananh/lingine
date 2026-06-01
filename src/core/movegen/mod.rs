@@ -22,13 +22,12 @@ fn generate_king_moves<const IS_WHITE: bool>(
     count: &mut usize,
 ) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
-    if let Some(from_sq) = pos.king_square(us) {
-        let us_pieces = pos.bitboard_by_color(us);
-        let mut target_bb = Bitboard(KING_ATTACKS[from_sq as usize].0 & !us_pieces.0);
-        while let Some(to_sq) = target_bb.pop_lsb() {
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
-        }
+    let from_sq = pos.king_square(us);
+    let us_pieces = pos.bitboard_by_color(us);
+    let mut target_bb = Bitboard(KING_ATTACKS[from_sq as usize].0 & !us_pieces.0);
+    while let Some(to_sq) = target_bb.pop_lsb() {
+        moves[*count] = Move::new(from_sq, to_sq);
+        *count += 1;
     }
 }
 
