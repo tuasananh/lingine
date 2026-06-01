@@ -103,7 +103,6 @@ pub struct Position {
     /// The player active to play next.
     side_to_move: Color,
 
-    id_board: [u8; Square::COUNT],
     /// Current transposition hash of the board position.
     pub zobrist_hash: u64,
     /// Palace coordinates of both players' Generals (Kings) to expedite check scans.
@@ -133,7 +132,6 @@ impl Position {
             history: Vec::new(),
             game_ply: 0,
             side_to_move: Color::White,
-            id_board: [0; Square::COUNT],
             zobrist_hash: 0,
             king_squares: [Square::E0, Square::E9],
         };
@@ -781,7 +779,7 @@ impl Position {
     }
 
     /// Calculates the chase information for a given color, returning a 16-bit mask of chased pieces.
-    pub fn chased(&mut self, mover: Color) -> u16 {
+    pub fn chased(&mut self, mover: Color, id_board: &[u8; Square::COUNT]) -> u16 {
         use crate::core::movegen::{KNIGHT_TABLE, PAWN_ATTACKS};
 
         let mut chase = 0u16;
@@ -867,7 +865,7 @@ impl Position {
                     if (ptype == PieceType::Knight || ptype == PieceType::Cannon)
                         && target_ptype == PieceType::Rook
                     {
-                        chase |= 1 << self.id_board[to as usize];
+                        chase |= 1 << id_board[to as usize];
                         continue;
                     }
 
@@ -934,10 +932,10 @@ impl Position {
                             self.side_to_move = saved_side;
 
                             if !can_opp_capture_back {
-                                chase |= 1 << self.id_board[to as usize];
+                                chase |= 1 << id_board[to as usize];
                             }
                         } else {
-                            chase |= 1 << self.id_board[to as usize];
+                            chase |= 1 << id_board[to as usize];
                         }
                     }
                 }
@@ -957,16 +955,16 @@ impl Position {
         // Grant each piece on board a unique ID for each side
         let mut white_id = 0;
         let mut black_id = 0;
-        self.id_board = [0; Square::COUNT];
+        let mut id_board = [0u8; Square::COUNT];
         for sq_idx in 0..Square::COUNT {
             let sq = Square::from_repr(sq_idx as u8).unwrap();
             let piece = self.board[sq as usize];
             if piece != Piece::None {
                 if piece.color() == Some(Color::White) {
-                    self.id_board[sq as usize] = white_id;
+                    id_board[sq as usize] = white_id;
                     white_id += 1;
                 } else {
-                    self.id_board[sq as usize] = black_id;
+                    id_board[sq as usize] = black_id;
                     black_id += 1;
                 }
             }
@@ -1003,9 +1001,9 @@ impl Position {
                 // Just undo move without computing chase diff
                 self.undo_move(m);
             } else {
-                let after = self.chased(self.side_to_move.opposite());
+                let after = self.chased(self.side_to_move.opposite(), &id_board);
                 self.undo_move(m);
-                let before = self.chased(self.side_to_move);
+                let before = self.chased(self.side_to_move, &id_board);
 
                 chase[self.side_to_move as usize] &= after & !before;
             }
