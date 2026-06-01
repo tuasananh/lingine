@@ -320,7 +320,7 @@ pub fn negamax(
     let mut tt_flag = TranspositionTableFlag::Alpha;
     let mut tt_entry_exists = false;
 
-    if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash) {
+    if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash()) {
         tt_move = entry.best_move;
         tt_depth = entry.depth as i32;
         tt_flag = entry.flag;
@@ -469,7 +469,7 @@ pub fn negamax(
             TranspositionTableFlag::Exact
         };
         ctx.transposition_table.store(
-            pos.zobrist_hash,
+            pos.zobrist_hash(),
             depth as i16,
             TranspositionTable::score_to_transposition(best_score, ply),
             flag,

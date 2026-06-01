@@ -567,7 +567,7 @@ mod tests {
         use crate::core::types::{Color, Piece, PieceType};
         use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
-        assert_eq!(a.zobrist_hash, b.zobrist_hash);
+        assert_eq!(a.zobrist_hash(), b.zobrist_hash());
         for sq_val in 0..90 {
             let sq = Square::from_repr(sq_val).unwrap();
             assert_eq!(a.piece_at(sq), b.piece_at(sq));

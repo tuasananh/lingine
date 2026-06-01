@@ -104,8 +104,8 @@ pub struct Position {
     side_to_move: Color,
 
     /// Current transposition hash of the board position.
-    pub zobrist_hash: u64,
-    /// Palace coordinates of both players' Generals (Kings) to expedite check scans.
+    zobrist_hash: u64,
+    /// Palace coordinates of both players' Generals (Kings) for faster check detection.
     king_squares: [Square; Color::COUNT],
 }
 
@@ -146,6 +146,11 @@ impl Position {
             piece_square_table_score: 0,
         });
         pos
+    }
+
+    #[inline(always)]
+    pub fn zobrist_hash(&self) -> u64 {
+        self.zobrist_hash
     }
 
     #[inline(always)]
