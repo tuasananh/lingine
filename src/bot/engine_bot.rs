@@ -10,8 +10,7 @@ use crate::core::{
     types::{Color, File, MAX_MOVES, Move, MoveGenType, Rank, Square},
 };
 use crate::search::{
-    INFINITY, MATE_VALUE, SearchContext, SearchExtension, SearchWindow, TranspositionTable,
-    negamax,
+    INFINITY, MATE_VALUE, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
 };
 use crate::uci::{
     BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
