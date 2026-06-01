@@ -289,6 +289,12 @@ pub fn negamax(
         return -MATE_VALUE + ply;
     }
 
+    // Validate that the TT move is actually legal in the current position.
+    // A stale or collided TT entry may reference a move that is not valid here.
+    if !tt_move.is_none() && !moves[..count].contains(&tt_move) {
+        tt_move = Move::none();
+    }
+
     // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move prioritized first, killers, and history
     sort_moves(
         pos,
