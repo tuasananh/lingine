@@ -1,6 +1,8 @@
 use clap::Parser;
 use lingine::core::{Position, types::Move};
-use lingine::search::{INFINITY, SearchContext, TranspositionTable, negamax};
+use lingine::search::{
+    INFINITY, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
+};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
@@ -54,7 +56,14 @@ fn main() -> anyhow::Result<()> {
         history_table: &mut history_table,
     };
 
-    let score = negamax(&mut pos, args.depth, 1, -INFINITY, INFINITY, 0, Move::none(), &mut ctx);
+    let score = negamax(
+        &mut pos,
+        args.depth,
+        1,
+        SearchWindow::new(-INFINITY, INFINITY),
+        SearchExtension::default(),
+        &mut ctx,
+    );
     let duration = start.elapsed();
 
     let nps = if duration.as_secs_f64() > 0.0001 {

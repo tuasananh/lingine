@@ -14,6 +14,54 @@ pub use transposition_table::{
     TranspositionTable, TranspositionTableEntry, TranspositionTableFlag,
 };
 
+/// Represents the alpha-beta search window.
+#[derive(Copy, Clone, Debug)]
+pub struct SearchWindow {
+    pub alpha: i32,
+    pub beta: i32,
+}
+
+impl SearchWindow {
+    /// Creates a new SearchWindow.
+    pub fn new(alpha: i32, beta: i32) -> Self {
+        Self { alpha, beta }
+    }
+
+    /// Negates the window (reverses and negates bounds) for the next ply in Negamax.
+    pub fn negate(self) -> Self {
+        Self {
+            alpha: -self.beta,
+            beta: -self.alpha,
+        }
+    }
+}
+
+/// Tracks search extension and move exclusion parameters for the current branch.
+#[derive(Copy, Clone, Debug)]
+pub struct SearchExtension {
+    pub extensions: i32,
+    pub excluded_move: Move,
+}
+
+impl Default for SearchExtension {
+    fn default() -> Self {
+        Self {
+            extensions: 0,
+            excluded_move: Move::none(),
+        }
+    }
+}
+
+impl SearchExtension {
+    /// Creates a new SearchExtension parameters set.
+    pub fn new(extensions: i32, excluded_move: Move) -> Self {
+        Self {
+            extensions,
+            excluded_move,
+        }
+    }
+}
+
 pub const INFINITY: i32 = 1_000_000;
 pub const MATE_VALUE: i32 = 100_000;
 
@@ -122,8 +170,7 @@ fn sort_moves(
 /// Prevents the horizon effect by searching captures only until a quiet position is reached.
 pub fn quiescence(
     pos: &mut Position,
-    mut alpha: i32,
-    beta: i32,
+    mut window: SearchWindow,
     ply: i32,
     qdepth: i32,
     ctx: &mut SearchContext,
@@ -167,11 +214,11 @@ pub fn quiescence(
             -stand_pat
         };
 
-        if eval_side >= beta {
+        if eval_side >= window.beta {
             return eval_side;
         }
-        if eval_side > alpha {
-            alpha = eval_side;
+        if eval_side > window.alpha {
+            window.alpha = eval_side;
         }
     }
 
@@ -202,22 +249,22 @@ pub fn quiescence(
 
     for m in moves.iter().copied().take(count) {
         pos.do_move(m);
-        let score = -quiescence(pos, -beta, -alpha, ply + 1, qdepth + 1, ctx);
+        let score = -quiescence(pos, window.negate(), ply + 1, qdepth + 1, ctx);
         pos.undo_move(m);
 
         if ctx.stop.load(Ordering::Relaxed) {
             return 0;
         }
 
-        if score >= beta {
+        if score >= window.beta {
             return score;
         }
-        if score > alpha {
-            alpha = score;
+        if score > window.alpha {
+            window.alpha = score;
         }
     }
 
-    alpha
+    window.alpha
 }
 
 /// Calculates the margin threshold required for singular extensions.
@@ -231,10 +278,8 @@ pub fn negamax(
     pos: &mut Position,
     depth: i32,
     ply: i32,
-    mut alpha: i32,
-    beta: i32,
-    extensions: i32,
-    excluded_move: Move,
+    mut window: SearchWindow,
+    mut ext_control: SearchExtension,
     ctx: &mut SearchContext,
 ) -> i32 {
     if ctx.stop.load(Ordering::Relaxed) {
@@ -261,13 +306,12 @@ pub fn negamax(
     }
 
     let mut depth = depth;
-    let mut extensions = extensions;
-    if pos.is_in_check(pos.side_to_move()) && extensions < 6 {
+    if pos.is_in_check(pos.side_to_move()) && ext_control.extensions < 6 {
         depth += 1;
-        extensions += 1;
+        ext_control.extensions += 1;
     }
 
-    let alpha_orig = alpha;
+    let alpha_orig = window.alpha;
 
     // Transposition Table Probing
     let mut tt_move = Move::none();
@@ -287,12 +331,12 @@ pub fn negamax(
             match entry.flag {
                 TranspositionTableFlag::Exact => return tt_score,
                 TranspositionTableFlag::Alpha => {
-                    if tt_score <= alpha {
+                    if tt_score <= window.alpha {
                         return tt_score;
                     }
                 }
                 TranspositionTableFlag::Beta => {
-                    if tt_score >= beta {
+                    if tt_score >= window.beta {
                         return tt_score;
                     }
                 }
@@ -304,8 +348,8 @@ pub fn negamax(
     let mut is_singular = false;
     if depth >= 8
         && !tt_move.is_none()
-        && excluded_move.is_none()
-        && extensions < 6
+        && ext_control.excluded_move.is_none()
+        && ext_control.extensions < 6
         && tt_entry_exists
         && tt_depth >= depth - 3
         && tt_flag != TranspositionTableFlag::Alpha
@@ -317,10 +361,8 @@ pub fn negamax(
             pos,
             rdepth,
             ply,
-            rbeta - 1,
-            rbeta,
-            extensions,
-            tt_move,
+            SearchWindow::new(rbeta - 1, rbeta),
+            SearchExtension::new(ext_control.extensions, tt_move),
             ctx,
         );
         if score < rbeta {
@@ -330,7 +372,7 @@ pub fn negamax(
 
     // Base case: fall back to quiescence search
     if depth <= 0 {
-        return quiescence(pos, alpha, beta, ply, 0, ctx);
+        return quiescence(pos, window, ply, 0, ctx);
     }
 
     let mut moves = [Move::none(); MAX_MOVES];
@@ -362,7 +404,7 @@ pub fn negamax(
     let mut best_move = Move::none();
 
     for m in moves.iter().copied().take(count) {
-        if m == excluded_move {
+        if m == ext_control.excluded_move {
             continue;
         }
 
@@ -372,7 +414,14 @@ pub fn negamax(
         }
 
         pos.do_move(m);
-        let score = -negamax(pos, depth - 1 + ext, ply + 1, -beta, -alpha, extensions + ext, Move::none(), ctx);
+        let score = -negamax(
+            pos,
+            depth - 1 + ext,
+            ply + 1,
+            window.negate(),
+            SearchExtension::new(ext_control.extensions + ext, Move::none()),
+            ctx,
+        );
         pos.undo_move(m);
 
         if ctx.stop.load(Ordering::Relaxed) {
@@ -383,10 +432,10 @@ pub fn negamax(
             best_score = score;
             best_move = m;
         }
-        if best_score > alpha {
-            alpha = best_score;
+        if best_score > window.alpha {
+            window.alpha = best_score;
         }
-        if alpha >= beta {
+        if window.alpha >= window.beta {
             // Update killers and history for quiet moves
             if pos.piece_at(m.square_to()) == Piece::None {
                 let ply_idx = ply as usize;
@@ -406,7 +455,7 @@ pub fn negamax(
 
     // Cache search results to Transposition Table
     if !ctx.stop.load(Ordering::Relaxed) {
-        let flag = if best_score >= beta {
+        let flag = if best_score >= window.beta {
             TranspositionTableFlag::Beta
         } else if best_score <= alpha_orig {
             TranspositionTableFlag::Alpha
@@ -479,7 +528,14 @@ mod tests {
             killers: &mut killers,
             history_table: &mut history_table,
         };
-        let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, 0, Move::none(), &mut ctx);
+        let score = negamax(
+            &mut pos,
+            1,
+            6,
+            SearchWindow::new(-INFINITY, INFINITY),
+            SearchExtension::default(),
+            &mut ctx,
+        );
         assert_eq!(score, 0);
     }
 
@@ -538,7 +594,14 @@ mod tests {
             killers: &mut killers,
             history_table: &mut history_table,
         };
-        let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, 0, Move::none(), &mut ctx);
+        let score = negamax(
+            &mut pos,
+            1,
+            5,
+            SearchWindow::new(-INFINITY, INFINITY),
+            SearchExtension::default(),
+            &mut ctx,
+        );
         assert_eq!(score, MATE_VALUE - 5);
     }
 }
