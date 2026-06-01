@@ -220,6 +220,12 @@ pub fn quiescence(
     alpha
 }
 
+/// Calculates the margin threshold required for singular extensions.
+#[inline(always)]
+fn singular_margin(depth: i32) -> i32 {
+    2 * depth
+}
+
 /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
 pub fn negamax(
     pos: &mut Position,
@@ -228,6 +234,7 @@ pub fn negamax(
     mut alpha: i32,
     beta: i32,
     extensions: i32,
+    excluded_move: Move,
     ctx: &mut SearchContext,
 ) -> i32 {
     if ctx.stop.load(Ordering::Relaxed) {
@@ -264,10 +271,19 @@ pub fn negamax(
 
     // Transposition Table Probing
     let mut tt_move = Move::none();
+    let mut tt_score = 0;
+    let mut tt_depth = 0;
+    let mut tt_flag = TranspositionTableFlag::Alpha;
+    let mut tt_entry_exists = false;
+
     if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash) {
         tt_move = entry.best_move;
+        tt_depth = entry.depth as i32;
+        tt_flag = entry.flag;
+        tt_score = TranspositionTable::score_from_transposition(entry.score, ply);
+        tt_entry_exists = true;
+
         if entry.depth >= depth as i16 {
-            let tt_score = TranspositionTable::score_from_transposition(entry.score, ply);
             match entry.flag {
                 TranspositionTableFlag::Exact => return tt_score,
                 TranspositionTableFlag::Alpha => {
@@ -281,6 +297,34 @@ pub fn negamax(
                     }
                 }
             }
+        }
+    }
+
+    // Singular Extensions
+    let mut is_singular = false;
+    if depth >= 8
+        && !tt_move.is_none()
+        && excluded_move.is_none()
+        && extensions < 6
+        && tt_entry_exists
+        && tt_depth >= depth - 3
+        && tt_flag != TranspositionTableFlag::Alpha
+        && tt_score.abs() < MATE_VALUE - 1000
+    {
+        let rdepth = depth - 3;
+        let rbeta = tt_score - singular_margin(depth);
+        let score = negamax(
+            pos,
+            rdepth,
+            ply,
+            rbeta - 1,
+            rbeta,
+            extensions,
+            tt_move,
+            ctx,
+        );
+        if score < rbeta {
+            is_singular = true;
         }
     }
 
@@ -318,8 +362,17 @@ pub fn negamax(
     let mut best_move = Move::none();
 
     for m in moves.iter().copied().take(count) {
+        if m == excluded_move {
+            continue;
+        }
+
+        let mut ext = 0;
+        if m == tt_move && is_singular {
+            ext = 1;
+        }
+
         pos.do_move(m);
-        let score = -negamax(pos, depth - 1, ply + 1, -beta, -alpha, extensions, ctx);
+        let score = -negamax(pos, depth - 1 + ext, ply + 1, -beta, -alpha, extensions + ext, Move::none(), ctx);
         pos.undo_move(m);
 
         if ctx.stop.load(Ordering::Relaxed) {
@@ -426,7 +479,7 @@ mod tests {
             killers: &mut killers,
             history_table: &mut history_table,
         };
-        let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, 0, &mut ctx);
+        let score = negamax(&mut pos, 1, 6, -INFINITY, INFINITY, 0, Move::none(), &mut ctx);
         assert_eq!(score, 0);
     }
 
@@ -485,7 +538,7 @@ mod tests {
             killers: &mut killers,
             history_table: &mut history_table,
         };
-        let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, 0, &mut ctx);
+        let score = negamax(&mut pos, 1, 5, -INFINITY, INFINITY, 0, Move::none(), &mut ctx);
         assert_eq!(score, MATE_VALUE - 5);
     }
 }

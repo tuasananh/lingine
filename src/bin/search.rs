@@ -54,7 +54,7 @@ fn main() -> anyhow::Result<()> {
         history_table: &mut history_table,
     };
 
-    let score = negamax(&mut pos, args.depth, 1, -INFINITY, INFINITY, 0, &mut ctx);
+    let score = negamax(&mut pos, args.depth, 1, -INFINITY, INFINITY, 0, Move::none(), &mut ctx);
     let duration = start.elapsed();
 
     let nps = if duration.as_secs_f64() > 0.0001 {

@@ -286,7 +286,7 @@ impl Engine for EngineBot {
                     }
                     pos.do_move(m);
                     let score =
-                        -negamax(&mut pos, depth - 1, 1, -search_beta, -curr_alpha, 0, &mut ctx);
+                        -negamax(&mut pos, depth - 1, 1, -search_beta, -curr_alpha, 0, Move::none(), &mut ctx);
                     pos.undo_move(m);
 
                     if params.stop.load(Ordering::Relaxed) {
