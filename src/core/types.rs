@@ -104,7 +104,7 @@ pub enum PieceType {
 pub enum Piece {
     None,
     WhiteRook,     WhiteAdvisor, WhiteCannon, WhitePawn, WhiteKnight, WhiteBishop, WhiteKing, 
-    BlackRook = 9, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
+    BlackRook, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
 }
 
 impl Piece {

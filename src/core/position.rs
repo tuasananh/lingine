@@ -95,7 +95,7 @@ pub struct Position {
     bitboard_by_color: [Bitboard; Color::COUNT],
 
     /// Active count of each piece category on the board.
-    piece_count: [u8; 16],
+    piece_count: [u8; Piece::COUNT],
     /// Stack tracking previous move parameter histories for undoing moves.
     history: Vec<StateInfo>,
     /// Total moves played in the game so far (White = 0, Black = 1, White's next = 2, etc.).
@@ -129,7 +129,7 @@ impl Position {
             board: [Piece::None; Square::COUNT],
             bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
             bitboard_by_color: [Bitboard::new(); Color::COUNT],
-            piece_count: [0; 16],
+            piece_count: [0; Piece::COUNT],
             history: Vec::new(),
             game_ply: 0,
             side_to_move: Color::White,
@@ -274,7 +274,7 @@ impl Position {
         self.board = [Piece::None; Square::COUNT];
         self.bitboard_by_type = [Bitboard::new(); PieceType::COUNT];
         self.bitboard_by_color = [Bitboard::new(); Color::COUNT];
-        self.piece_count = [0; 16];
+        self.piece_count = [0; Piece::COUNT];
         self.king_squares = [Square::E0, Square::E9];
         self.history.clear();
         self.game_ply = 0;
