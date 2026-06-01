@@ -17,7 +17,8 @@ use crate::uci::{
     UciOption, UciPosition, UciScore, UciScoreBound,
 };
 
-/// Helper to format an internal `Move` to its UCI algebraic string format (e.g., `"a0b1"`).
+/// Helper to format an internal `Move` to its UCI algebraic string format
+/// (e.g., `"a0b1"`).
 fn format_move(m: Move) -> String {
     if m.is_none() {
         return "0000".to_string();
@@ -31,7 +32,8 @@ fn format_move(m: Move) -> String {
     format!("{}{}{}{}", from_file, from_rank, to_file, to_rank)
 }
 
-/// A real, functional [`Engine`] implementation mapping to our search and evaluation.
+/// A real, functional [`Engine`] implementation mapping to our search and
+/// evaluation.
 pub struct EngineBot {
     /// Internal board state tracker.
     position: Position,
@@ -81,12 +83,13 @@ impl EngineBot {
             // Basic allocation: time_left / divisor + inc / 2
             let allocated = time / divisor as u32 + inc_val / 2;
 
-            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is smaller,
-            // to account for process/communication latency.
+            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is
+            // smaller, to account for process/communication latency.
             let buffer = Duration::from_millis(50).min(time / 10);
             let limit = time.saturating_sub(buffer);
 
-            // Ensure we allocate at least 10ms (or the remaining limit if it's even smaller)
+            // Ensure we allocate at least 10ms (or the remaining limit if it's even
+            // smaller)
             let min_time = Duration::from_millis(10).min(limit);
 
             Some(allocated.min(limit).max(min_time))
@@ -159,7 +162,8 @@ impl Engine for EngineBot {
                 continue;
             }
 
-            // Find matching move inside our generated legal moves list to guarantee validity
+            // Find matching move inside our generated legal moves list to guarantee
+            // validity
             let mut moves = [Move::none(); MAX_MOVES];
             let count = generate_moves(&self.position, MoveGenType::Legal, &mut moves);
 
@@ -216,7 +220,8 @@ impl Engine for EngineBot {
                 break;
             }
 
-            // Check if we have spent >50% of the allowed time to avoid timing out in next ply
+            // Check if we have spent >50% of the allowed time to avoid timing out in next
+            // ply
             if let Some(limit) = time_limit
                 && start_time.elapsed() > limit / 2
             {

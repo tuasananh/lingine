@@ -1,7 +1,8 @@
 mod attacks;
 mod tables;
 
-// Re-export public API so external callers (position.rs, etc.) keep their existing `use crate::movegen::*` paths.
+// Re-export public API so external callers (position.rs, etc.) keep their
+// existing `use crate::movegen::*` paths.
 pub use attacks::{cannon_attacks, gather_file_bits, rook_attacks};
 pub use tables::{
     ADVISOR_ATTACKS, BISHOP_TABLE, BishopEntry, FILE_TABLE, FileEntry, KING_ATTACKS, KNIGHT_TABLE,
@@ -49,7 +50,8 @@ fn generate_advisor_moves<const IS_WHITE: bool>(
     }
 }
 
-/// Generates diagonal moves for Elephants (Bishops), checking diagonal blocker intermediate eyes.
+/// Generates diagonal moves for Elephants (Bishops), checking diagonal blocker
+/// intermediate eyes.
 fn generate_bishop_moves<const IS_WHITE: bool>(
     pos: &Position,
     moves: &mut [Move; MAX_MOVES],
@@ -82,7 +84,8 @@ fn generate_bishop_moves<const IS_WHITE: bool>(
     }
 }
 
-/// Generates L-shaped moves for Horses (Knights), checking intermediate orthogonal blocker leg squares.
+/// Generates L-shaped moves for Horses (Knights), checking intermediate
+/// orthogonal blocker leg squares.
 fn generate_knight_moves<const IS_WHITE: bool>(
     pos: &Position,
     moves: &mut [Move; MAX_MOVES],
@@ -115,7 +118,8 @@ fn generate_knight_moves<const IS_WHITE: bool>(
     }
 }
 
-/// Generates moves for Soldiers (Pawns) based on whether they have crossed the river or not.
+/// Generates moves for Soldiers (Pawns) based on whether they have crossed the
+/// river or not.
 fn generate_pawn_moves<const IS_WHITE: bool>(
     pos: &Position,
     moves: &mut [Move; MAX_MOVES],
@@ -135,7 +139,8 @@ fn generate_pawn_moves<const IS_WHITE: bool>(
     }
 }
 
-/// Generates horizontal and vertical sliding moves for Chariots (Rooks) in O(1) lookups.
+/// Generates horizontal and vertical sliding moves for Chariots (Rooks) in O(1)
+/// lookups.
 fn generate_rook_moves<const IS_WHITE: bool>(
     pos: &Position,
     moves: &mut [Move; MAX_MOVES],
@@ -179,7 +184,8 @@ fn generate_rook_moves<const IS_WHITE: bool>(
     }
 }
 
-/// Generates horizontal and vertical moves/leap captures for Cannons in O(1) lookups.
+/// Generates horizontal and vertical moves/leap captures for Cannons in O(1)
+/// lookups.
 fn generate_cannon_moves<const IS_WHITE: bool>(
     pos: &Position,
     moves: &mut [Move; MAX_MOVES],
@@ -233,7 +239,8 @@ fn generate_cannon_moves<const IS_WHITE: bool>(
     }
 }
 
-/// Orchestrates move generators for all piece types, returning the total pseudo-legal move count.
+/// Orchestrates move generators for all piece types, returning the total
+/// pseudo-legal move count.
 fn generate_pseudo_legal<const IS_WHITE: bool>(
     pos: &Position,
     moves: &mut [Move; MAX_MOVES],
@@ -250,8 +257,9 @@ fn generate_pseudo_legal<const IS_WHITE: bool>(
 }
 
 /// The main entry point for move generation.
-/// Filters pseudo-legal moves into legal moves (e.g. by ensuring the King is not left in check)
-/// and respects the target `MoveGenType` request (Legal, PseudoLegal, Quiets, Captures, Evasions).
+/// Filters pseudo-legal moves into legal moves (e.g. by ensuring the King is
+/// not left in check) and respects the target `MoveGenType` request (Legal,
+/// PseudoLegal, Quiets, Captures, Evasions).
 pub fn generate_moves(
     pos: &Position,
     gen_type: MoveGenType,
@@ -501,8 +509,8 @@ mod tests {
             .copied()
             .collect();
         // Upwards blocked at E6 (so no E6, E7, E8, E9).
-        // Downwards blocked by opponent at E3 (so E4 is quiet, E3 is capture, but no E2, E1, E0).
-        // Plus 8 horizontal moves.
+        // Downwards blocked by opponent at E3 (so E4 is quiet, E3 is capture, but no
+        // E2, E1, E0). Plus 8 horizontal moves.
         // File moves allowed: E4, E3. (2 moves)
         // Rank moves: A5, B5, C5, D5, F5, G5, H5, I5 (8 moves)
         // Total: 10 moves.
@@ -556,8 +564,9 @@ mod tests {
             .filter(|m| m.square_from() == Square::E3)
             .copied()
             .collect();
-        // Moving the Rook horizontally (off file E) is illegal because it exposes the Kings to face each other!
-        // So the Rook can only move vertically along file E (D3, F3, etc. are illegal).
+        // Moving the Rook horizontally (off file E) is illegal because it exposes the
+        // Kings to face each other! So the Rook can only move vertically along
+        // file E (D3, F3, etc. are illegal).
         for m in r_moves {
             assert_eq!(m.square_to() as u8 % 9, 4); // must stay on file E (index 4)
         }

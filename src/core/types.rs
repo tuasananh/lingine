@@ -65,7 +65,8 @@ pub enum Square {
 
 impl Square {
     /// Constructs a `Square` from its corresponding `File` and `Rank`.
-    /// Maps using `rank_index * 9 + file_index` because each rank spans 9 vertical files.
+    /// Maps using `rank_index * 9 + file_index` because each rank spans 9
+    /// vertical files.
     #[inline(always)]
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
         let file_index = file as u8;
@@ -152,7 +153,8 @@ pub enum MoveGenType {
 
 /// A compact 16-bit move representation designed for performance:
 ///
-/// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since $2^7=128$).
+/// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since
+///   $2^7=128$).
 /// * **Bits 7 - 13**: Origin square (0 to 89, fits in 7 bits).
 /// * **Bits 14 - 15**: Move flags (Quiet, Capture, Check, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,7 +167,8 @@ impl Display for Move {
 }
 
 impl Move {
-    /// Constructs a basic quiet or capture move from an origin and destination square.
+    /// Constructs a basic quiet or capture move from an origin and destination
+    /// square.
     #[inline(always)]
     pub fn new(from: Square, to: Square) -> Self {
         Self((to as u16) | ((from as u16) << 7))
@@ -177,7 +180,8 @@ impl Move {
         Self((to as u16) | ((from as u16) << 7) | ((flags & 3) << 14))
     }
 
-    /// Extracts the starting square index by shifting past the destination bits.
+    /// Extracts the starting square index by shifting past the destination
+    /// bits.
     #[inline(always)]
     pub fn square_from(&self) -> Square {
         Square::from_repr(((self.0 >> 7) & 0x7F) as u8).unwrap()
@@ -208,10 +212,12 @@ impl Move {
     }
 }
 
-/// The maximum number of pseudo-legal moves in any given Xiangqi position (typically <= 120).
+/// The maximum number of pseudo-legal moves in any given Xiangqi position
+/// (typically <= 120).
 pub const MAX_MOVES: usize = 128;
 
-/// A stack-allocated array vector that holds up to `MAX_MOVES` without heap allocation.
+/// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
+/// allocation.
 pub type MoveList = ArrayVec<Move, MAX_MOVES>;
 
 #[cfg(test)]

@@ -18,7 +18,8 @@ pub enum TranspositionTableFlag {
 pub struct TranspositionTableEntry {
     /// Zobrist board hash key.
     pub key: Key,
-    /// The search depth this score was evaluated to (-1 represents empty/invalid).
+    /// The search depth this score was evaluated to (-1 represents
+    /// empty/invalid).
     pub depth: i16,
     /// The evaluation score (may be relative to mate).
     pub score: Value,
@@ -43,7 +44,8 @@ impl Default for TranspositionTableEntry {
     }
 }
 
-/// A cache structure storing previously evaluated search nodes to speed up alpha-beta pruning.
+/// A cache structure storing previously evaluated search nodes to speed up
+/// alpha-beta pruning.
 pub struct TranspositionTable {
     /// A vector of entries matching the table size.
     table: Vec<TranspositionTableEntry>,
@@ -58,7 +60,8 @@ impl Default for TranspositionTable {
 }
 
 impl TranspositionTable {
-    /// Creates a new Transposition Table instance allocated with a target MB capacity.
+    /// Creates a new Transposition Table instance allocated with a target MB
+    /// capacity.
     pub fn new(mb_size: usize) -> Self {
         let mut tt = Self {
             table: Vec::new(),
@@ -68,8 +71,9 @@ impl TranspositionTable {
         tt
     }
 
-    /// Resizes the Transposition Table. Caps element allocation to the largest power of 2
-    /// fitting within the memory limit to allow ultra-fast bitwise masking.
+    /// Resizes the Transposition Table. Caps element allocation to the largest
+    /// power of 2 fitting within the memory limit to allow ultra-fast
+    /// bitwise masking.
     pub fn resize(&mut self, mb_size: usize) {
         let entry_size = std::mem::size_of::<TranspositionTableEntry>();
         let target_bytes = mb_size * 1024 * 1024;
@@ -113,7 +117,8 @@ impl TranspositionTable {
         }
     }
 
-    /// Stores search details into the Transposition Table using a Depth-Preferred and Age-Preferred replacement strategy.
+    /// Stores search details into the Transposition Table using a
+    /// Depth-Preferred and Age-Preferred replacement strategy.
     pub fn store(
         &mut self,
         key: Key,
@@ -148,7 +153,8 @@ impl TranspositionTable {
         }
     }
 
-    /// Converts a search score to an absolute score independent of search depth (ply) for storing.
+    /// Converts a search score to an absolute score independent of search depth
+    /// (ply) for storing.
     #[inline(always)]
     pub fn score_to_transposition(score: Value, ply: i32) -> Value {
         if score > MATE_VALUE - 1000 {
@@ -160,7 +166,8 @@ impl TranspositionTable {
         }
     }
 
-    /// Restores a stored absolute score back to a ply-dependent search evaluation score.
+    /// Restores a stored absolute score back to a ply-dependent search
+    /// evaluation score.
     #[inline(always)]
     pub fn score_from_transposition(score: Value, ply: i32) -> Value {
         if score > MATE_VALUE - 1000 {
@@ -224,7 +231,8 @@ mod tests {
         let mate_score = MATE_VALUE - 10; // Mate in 10 plies
         let ply = 5;
 
-        // Score stored in transposition table should be independent of current search depth
+        // Score stored in transposition table should be independent of current search
+        // depth
         let stored = TranspositionTable::score_to_transposition(mate_score, ply);
         assert_eq!(stored, mate_score + ply); // MATE_VALUE - 10 + 5 = MATE_VALUE - 5
 

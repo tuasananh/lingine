@@ -11,8 +11,8 @@ use crate::{
     eval::piece_square_table::{piece_material_value, piece_square_table_value},
 };
 
-/// A fast Linear Congruential Generator (LCG) used to generate pseudo-random numbers
-/// for Zobrist position hashing.
+/// A fast Linear Congruential Generator (LCG) used to generate pseudo-random
+/// numbers for Zobrist position hashing.
 /// Uses standard Knuth MMIX LCG values:
 /// * **Multiplier**: `6364136223846793005`
 /// * **Increment**: `1442695040888963407`
@@ -49,7 +49,8 @@ struct ZobristTable {
 static ZOBRIST: OnceLock<ZobristTable> = OnceLock::new();
 
 impl ZobristTable {
-    /// Initializes the Zobrist key matrix using our deterministic LCG starting from seed `1070372`.
+    /// Initializes the Zobrist key matrix using our deterministic LCG starting
+    /// from seed `1070372`.
     fn init() -> Self {
         let mut prng = Lcg::new(1070372);
         let mut pieces = [[0u64; 90]; 16];
@@ -73,21 +74,24 @@ pub struct StateInfo {
     pub captured_piece: Piece,
     /// The prior Zobrist position hash value before the move occurred.
     pub old_zobrist: u64,
-    /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0 on captures/pawn moves).
+    /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
+    /// on captures/pawn moves).
     pub rule60: u16,
     /// Whether each color [White, Black] was in check in this position state.
     pub in_check: [bool; Color::COUNT],
     /// Precalculated incremental material score (from White's perspective)
     pub material_score: i32,
-    /// Precalculated incremental piece-square table positional score (from White's perspective)
+    /// Precalculated incremental piece-square table positional score (from
+    /// White's perspective)
     pub piece_square_table_score: i32,
 }
 
-/// Encapsulates the complete game board representation, bitboards, turn tracking, ply count,
-/// and incremental state histories for the engine.
+/// Encapsulates the complete game board representation, bitboards, turn
+/// tracking, ply count, and incremental state histories for the engine.
 #[derive(Clone)]
 pub struct Position {
-    /// Flat 90-square array mapping square index (0 to 89) to the Piece occupying it.
+    /// Flat 90-square array mapping square index (0 to 89) to the Piece
+    /// occupying it.
     board: [Piece; Square::COUNT],
     /// Precomputed bitboards showing piece placements grouped by `PieceType`.
     bitboard_by_type: [Bitboard; PieceType::COUNT],
@@ -98,14 +102,16 @@ pub struct Position {
     piece_count: [u8; Piece::COUNT],
     /// Stack tracking previous move parameter histories for undoing moves.
     history: Vec<StateInfo>,
-    /// Total moves played in the game so far (White = 0, Black = 1, White's next = 2, etc.).
+    /// Total moves played in the game so far (White = 0, Black = 1, White's
+    /// next = 2, etc.).
     game_ply: u16,
     /// The player active to play next.
     side_to_move: Color,
 
     /// Current transposition hash of the board position.
     zobrist_hash: u64,
-    /// Palace coordinates of both players' Generals (Kings) for faster check detection.
+    /// Palace coordinates of both players' Generals (Kings) for faster check
+    /// detection.
     king_squares: [Square; Color::COUNT],
 }
 
@@ -166,7 +172,8 @@ impl Position {
             .unwrap_or(0)
     }
 
-    /// Computes the complete material and Piece-Square Table scores from scratch.
+    /// Computes the complete material and Piece-Square Table scores from
+    /// scratch.
     pub fn compute_evaluation_scores(&self) -> (i32, i32) {
         let mut material_score = 0;
         let mut piece_square_table_score = 0;
@@ -214,8 +221,9 @@ impl Position {
         self.bitboard_by_color[color as usize]
     }
 
-    /// Safely introduces a piece onto a board square, updating the type/color bitboards,
-    /// King Palace trackers, and XORing its random signature into the Zobrist hash.
+    /// Safely introduces a piece onto a board square, updating the type/color
+    /// bitboards, King Palace trackers, and XORing its random signature
+    /// into the Zobrist hash.
     pub fn put_piece(&mut self, piece: Piece, square: Square) {
         self.board[square as usize] = piece;
         if piece != Piece::None {
@@ -251,7 +259,8 @@ impl Position {
         piece
     }
 
-    /// Maps standard algebraic piece FEN notation characters to their Piece enums.
+    /// Maps standard algebraic piece FEN notation characters to their Piece
+    /// enums.
     pub fn piece_from_char(c: char) -> Option<Piece> {
         match c {
             'R' => Some(Piece::WhiteRook),
@@ -384,8 +393,8 @@ impl Position {
         Ok(())
     }
 
-    /// Plays a move on the board, saving prior ply parameter states onto the stack
-    /// to support fast undo restores, and toggles active side.
+    /// Plays a move on the board, saving prior ply parameter states onto the
+    /// stack to support fast undo restores, and toggles active side.
     pub fn do_move(&mut self, m: Move) {
         let from = m.square_from();
         let to = m.square_to();
@@ -494,8 +503,8 @@ impl Position {
         self.game_ply += 1;
     }
 
-    /// Restores the position to the exact state before the last move was played,
-    /// popping details off the stack and re-toggling side to move.
+    /// Restores the position to the exact state before the last move was
+    /// played, popping details off the stack and re-toggling side to move.
     pub fn undo_move(&mut self, m: Move) {
         let from = m.square_from();
         let to = m.square_to();
@@ -524,24 +533,29 @@ impl Position {
         self.king_squares[color as usize]
     }
 
-    /// Identifies all opponent pieces of `attacker` color that attack the target `square`
-    /// assuming the given board `occupied` bitboard.
+    /// Identifies all opponent pieces of `attacker` color that attack the
+    /// target `square` assuming the given board `occupied` bitboard.
     ///
-    /// This represents an extremely optimized, loop-free backward bitwise scanner.
-    /// Rather than generating all moves for all opponent pieces, we shoot out rays and leaps
-    /// backwards starting from `square`:
+    /// This represents an extremely optimized, loop-free backward bitwise
+    /// scanner. Rather than generating all moves for all opponent pieces,
+    /// we shoot out rays and leaps backwards starting from `square`:
     ///
-    /// 1. **Pawn Scanner**: Traces reverse Pawn attack positions using static `PAWN_ATTACKS_TO`.
-    /// 2. **Knight Scanner**: Gathers the 6 unique Horse Legs around `square` into a 6-bit occupancy mask,
-    ///    looking up valid attack origin positions in `KNIGHT_TO_TABLE`.
-    /// 3. **Rook & King Scanner**: Traces orthogonal lines using precomputed sliding rank/file masks.
-    ///    Under the "Flying General" rule in Xiangqi, Kings cannot face each other directly along a file
-    ///    without intervening pieces; this direct face is treated as a Rook check.
-    /// 4. **Cannon Scanner**: Traces split rank/file leap capture paths using precomputed Cannon tables.
+    /// 1. **Pawn Scanner**: Traces reverse Pawn attack positions using static
+    ///    `PAWN_ATTACKS_TO`.
+    /// 2. **Knight Scanner**: Gathers the 6 unique Horse Legs around `square`
+    ///    into a 6-bit occupancy mask, looking up valid attack origin positions
+    ///    in `KNIGHT_TO_TABLE`.
+    /// 3. **Rook & King Scanner**: Traces orthogonal lines using precomputed
+    ///    sliding rank/file masks. Under the "Flying General" rule in Xiangqi,
+    ///    Kings cannot face each other directly along a file without
+    ///    intervening pieces; this direct face is treated as a Rook check.
+    /// 4. **Cannon Scanner**: Traces split rank/file leap capture paths using
+    ///    precomputed Cannon tables.
     #[inline(always)]
     fn checkers_to(&self, square: Square, occupied: Bitboard, attacker: Color) -> Bitboard {
-        // --- Isolate attacker's piece bitboards by intersecting piece-type and color masks ---
-        // Each variable holds bits only for attacker-colored pieces of that type.
+        // --- Isolate attacker's piece bitboards by intersecting piece-type and color
+        // masks --- Each variable holds bits only for attacker-colored pieces
+        // of that type.
         let opponent_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
             & self.bitboard_by_color[attacker as usize]; // attacker's Pawns
         let opponent_knights = self.bitboard_by_type[PieceType::Knight as usize]
@@ -555,56 +569,68 @@ impl Position {
 
         // --- Pawn scanner ---
         // Map attacker color to a table index (0 = White, 1 = Black).
-        // White and Black Pawns attack in opposite directions, so each has its own reverse-attack table.
+        // White and Black Pawns attack in opposite directions, so each has its own
+        // reverse-attack table.
         let them_color_idx = if attacker == Color::White { 0 } else { 1 };
-        // `PAWN_ATTACKS_TO[color][sq]` gives the set of squares FROM which a Pawn of that color
-        // could have attacked `square`. AND with actual Pawn positions to find real attackers.
+        // `PAWN_ATTACKS_TO[color][sq]` gives the set of squares FROM which a Pawn of
+        // that color could have attacked `square`. AND with actual Pawn
+        // positions to find real attackers.
         let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize].0 & opponent_pawns.0;
 
         // --- Knight scanner (Horse-Leg / blocking-pin aware) ---
-        // Look up the precomputed entry for `square` in the reverse Knight attack table.
-        // Each entry stores up to 6 "eye" squares (the leg-blocking squares around `square`)
-        // and a 64-entry array of attack masks indexed by a 6-bit occupancy key.
+        // Look up the precomputed entry for `square` in the reverse Knight attack
+        // table. Each entry stores up to 6 "eye" squares (the leg-blocking
+        // squares around `square`) and a 64-entry array of attack masks indexed
+        // by a 6-bit occupancy key.
         let entry = &KNIGHT_TO_TABLE[square as usize];
         let mut occ_idx = 0; // will become a 6-bit mask of which eye squares are occupied
         let mut i = 0;
         while i < 6 {
-            // For each potential eye square (the square a Knight must pass through on its L-move)...
+            // For each potential eye square (the square a Knight must pass through on its
+            // L-move)...
             if let Some(eye_sq) = entry.eyes[i] {
-                // ...set bit `i` in occ_idx if that eye square is currently occupied (leg is blocked).
+                // ...set bit `i` in occ_idx if that eye square is currently occupied (leg is
+                // blocked).
                 if occupied.is_occupied(eye_sq) {
                     occ_idx |= 1 << i;
                 }
             }
             i += 1;
         }
-        // Use the 6-bit occupancy key to look up which Knights can actually reach `square`
-        // (only those whose leg is NOT blocked), then intersect with real Knight positions.
+        // Use the 6-bit occupancy key to look up which Knights can actually reach
+        // `square` (only those whose leg is NOT blocked), then intersect with
+        // real Knight positions.
         let knight_attackers = entry.attacks[occ_idx].0 & opponent_knights.0;
 
         // --- Rook & King scanner (orthogonal sliding rays + Flying General rule) ---
-        // Compute all squares reachable by a Rook standing on `square` given `occupied`.
-        // A Rook on the target square sees exactly the squares that can send a Rook check.
+        // Compute all squares reachable by a Rook standing on `square` given
+        // `occupied`. A Rook on the target square sees exactly the squares that
+        // can send a Rook check.
         let rook_atk = rook_attacks(square, occupied);
-        // Intersect with attacker Rooks AND the attacker King: under the Flying General rule,
-        // two Kings facing each other on an open file counts as a check (treated as a Rook attack).
+        // Intersect with attacker Rooks AND the attacker King: under the Flying General
+        // rule, two Kings facing each other on an open file counts as a check
+        // (treated as a Rook attack).
         let rook_attackers = rook_atk.0 & (opponent_rooks.0 | opponent_king.0);
 
         // --- Cannon scanner (platform-leap captures) ---
-        // Compute Cannon attack squares from `square`: Cannons capture by leaping over exactly
-        // one intervening piece (the "platform"). `cannon_attacks` returns squares that have
-        // exactly one piece between them and `square` along a rank or file.
+        // Compute Cannon attack squares from `square`: Cannons capture by leaping over
+        // exactly one intervening piece (the "platform"). `cannon_attacks`
+        // returns squares that have exactly one piece between them and `square`
+        // along a rank or file.
         let cannon_atk = cannon_attacks(square, occupied);
-        // Intersect with attacker Cannons only (Kings/Rooks cannot leap over platforms).
+        // Intersect with attacker Cannons only (Kings/Rooks cannot leap over
+        // platforms).
         let cannon_attackers = cannon_atk.0 & opponent_cannons.0;
 
-        // Union all four attacker bitboards into a single result: every square occupied by
-        // an attacker-colored piece that can reach `square` under the current board occupancy.
+        // Union all four attacker bitboards into a single result: every square occupied
+        // by an attacker-colored piece that can reach `square` under the
+        // current board occupancy.
         Bitboard(pawn_attackers | knight_attackers | rook_attackers | cannon_attackers)
     }
 
-    /// Evaluates backward checkers attacking `square` after simulating a specific piece move.
-    /// Overrides positions without modifying active board structures.
+    /// Evaluates backward checkers attacking `square` after simulating a
+    /// specific piece move. Overrides positions without modifying active
+    /// board structures.
     #[inline(always)]
     fn checkers_to_after_move(
         &self,
@@ -694,8 +720,9 @@ impl Position {
         Bitboard(pawn_attackers | knight_attackers | rook_attackers | cannon_attackers)
     }
 
-    /// Evaluates if playing the move `m` places the opponent's General in check.
-    /// Runs a simulation update of `occupied` bitboards and calculates checkers pointing to the General.
+    /// Evaluates if playing the move `m` places the opponent's General in
+    /// check. Runs a simulation update of `occupied` bitboards and
+    /// calculates checkers pointing to the General.
     #[inline(always)]
     pub fn gives_check(&self, m: Move) -> bool {
         let us = self.side_to_move;
@@ -729,7 +756,8 @@ impl Position {
             .unwrap_or(Piece::None)
     }
 
-    /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is not left in check).
+    /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is
+    /// not left in check).
     #[inline(always)]
     pub fn legal(&self, m: Move) -> bool {
         let us = self.side_to_move;
@@ -779,7 +807,8 @@ impl Position {
             != 0
     }
 
-    /// Calculates the chase information for a given color, returning a 16-bit mask of chased pieces.
+    /// Calculates the chase information for a given color, returning a 16-bit
+    /// mask of chased pieces.
     pub fn chased(&mut self, mover: Color, id_board: &[u8; Square::COUNT]) -> u16 {
         use crate::core::movegen::{KNIGHT_TABLE, PAWN_ATTACKS};
 
@@ -854,7 +883,8 @@ impl Position {
             while let Some(to) = attacks.pop_lsb() {
                 let m = Move::new(from, to);
 
-                // Verify if the move is legal (meaning the king of mover is not in check after the move)
+                // Verify if the move is legal (meaning the king of mover is not in check after
+                // the move)
                 if self.legal(m) {
                     let target_piece = self.board[to as usize];
                     let target_ptype = target_piece.piece_type();
@@ -946,7 +976,8 @@ impl Position {
         chase
     }
 
-    /// Detects chases from state st - d to state st on a rollback clone of self.
+    /// Detects chases from state st - d to state st on a rollback clone of
+    /// self.
     pub fn detect_chases(&mut self, d: usize, ply: i32) -> i32 {
         let n = self.history.len();
         if n < d {
@@ -986,7 +1017,8 @@ impl Position {
         for m in moves_in_loop {
             let state = self.history.last().unwrap();
 
-            // Under Xiangqi rules, if the current side to move is in check, it overrides chase or is a draw.
+            // Under Xiangqi rules, if the current side to move is in check, it overrides
+            // chase or is a draw.
             let side_to_move_idx = self.side_to_move as usize;
             if state.in_check[side_to_move_idx] {
                 return 0; // Draw
@@ -1024,8 +1056,9 @@ impl Position {
         }
     }
 
-    /// Evaluates if the game has ended due to 60-move rule, insufficient material,
-    /// or loops (normal draws, perpetual checking, or perpetual chasing).
+    /// Evaluates if the game has ended due to 60-move rule, insufficient
+    /// material, or loops (normal draws, perpetual checking, or perpetual
+    /// chasing).
     ///
     /// Returns:
     /// - `Some(0)` for a draw.
@@ -1045,7 +1078,8 @@ impl Position {
         }
 
         // 2. Insufficient Material Draw
-        // If all Pawns are gone, check if remaining major pieces are capable of checkmating
+        // If all Pawns are gone, check if remaining major pieces are capable of
+        // checkmating
         if self.piece_count(Piece::WhitePawn) == 0 && self.piece_count(Piece::BlackPawn) == 0 {
             let white_majors = self.piece_count(Piece::WhiteRook) as u32
                 + self.piece_count(Piece::WhiteCannon) as u32
@@ -1077,7 +1111,8 @@ impl Position {
         let rule60_val = rule60 as usize;
         let max_back = rule60_val.min(n - 1);
 
-        // Repetitions must occur on the same side's turn, so we scan back in steps of 2 plies.
+        // Repetitions must occur on the same side's turn, so we scan back in steps of 2
+        // plies.
         let mut i = 4;
         while i <= max_back {
             if self.history[n - i].old_zobrist == current_hash {
@@ -1141,9 +1176,11 @@ mod tests {
     #[test]
     fn test_knight_leg_pin() {
         let mut pos = Position::new();
-        // White King at E0, White Advisor at F1, Black Knight at F2 (aligned to jump onto E0)
+        // White King at E0, White Advisor at F1, Black Knight at F2 (aligned to jump
+        // onto E0)
         pos.set("4k4/9/9/9/9/9/9/5h3/5A3/4K4 w - - 0 1").unwrap();
-        // Since F1 blocks the Knight's jump, the Advisor is fully pinned and cannot move away
+        // Since F1 blocks the Knight's jump, the Advisor is fully pinned and cannot
+        // move away
         assert!(!pos.legal(Move::new(Square::F1, Square::E2)));
         assert!(!pos.legal(Move::new(Square::F1, Square::G2)));
         assert!(!pos.legal(Move::new(Square::F1, Square::E0)));

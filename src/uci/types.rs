@@ -136,8 +136,8 @@ pub struct GoParameters {
     pub infinite: bool,
     /// Do perft from current position up to depth
     pub perft: Option<u32>,
-    /// Shared stop signal injected by the engine actor just before `engine.go()`
-    /// is called.
+    /// Shared stop signal injected by the engine actor just before
+    /// `engine.go()` is called.
     pub stop: Arc<AtomicBool>,
 }
 
@@ -332,7 +332,8 @@ impl TryFrom<&mut Iter<'_, &str>> for SetOptionParameters {
 
 /// Parsed parameters from the `register` UCI command.
 ///
-/// Lingine does not implement copy-protection, so `register` is effectively a no-op.
+/// Lingine does not implement copy-protection, so `register` is effectively a
+/// no-op.
 pub enum RegisterParameters {
     /// `register later` — engine is not yet registered; try again later.
     Later,
@@ -551,7 +552,8 @@ pub enum Bound {
 pub enum UciScore {
     /// Score in centipawns from the engine's point of view.
     Centipawns(i32),
-    /// Forced mate: positive = engine mates in N moves, negative = engine gets mated in N.
+    /// Forced mate: positive = engine mates in N moves, negative = engine gets
+    /// mated in N.
     Mate(i32),
 }
 
@@ -668,8 +670,8 @@ impl fmt::Display for UciInfo {
         if let Some(cpu) = self.cpuload {
             write!(f, " cpuload {cpu}")?;
         }
-        // Per spec: "if there is a string command the rest of the line will be interpreted as str"
-        // so `string` must come last.
+        // Per spec: "if there is a string command the rest of the line will be
+        // interpreted as str" so `string` must come last.
         if let Some(s) = &self.string {
             write!(f, " string {s}")?;
         }
@@ -680,7 +682,8 @@ impl fmt::Display for UciInfo {
 
 /// The engine's chosen move, sent after every `go` command completes.
 pub struct BestMove {
-    /// The best move in long algebraic notation (e.g. `"e2e4"`, `"0000"` for null).
+    /// The best move in long algebraic notation (e.g. `"e2e4"`, `"0000"` for
+    /// null).
     pub mv: String,
     /// Optional move to ponder on while the opponent thinks.
     pub ponder: Option<String>,

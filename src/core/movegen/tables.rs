@@ -1,13 +1,15 @@
 use crate::core::{bitboard::Bitboard, types::Square};
 
 /// Represents precomputed diagonal attack targets for a Bishop (Elephant).
-/// In Xiangqi, Bishops move exactly 2 steps diagonally, and their jump is blocked
-/// if the middle square (the "Elephant Eye") is occupied by ANY piece.
+/// In Xiangqi, Bishops move exactly 2 steps diagonally, and their jump is
+/// blocked if the middle square (the "Elephant Eye") is occupied by ANY piece.
 #[derive(Clone, Copy)]
 pub struct BishopEntry {
-    /// The 4 possible diagonal intermediate blocking squares (Elephant Eyes) around this square.
+    /// The 4 possible diagonal intermediate blocking squares (Elephant Eyes)
+    /// around this square.
     pub eyes: [Option<Square>; 4],
-    /// Precomputed valid target attack bitboards indexed by a 4-bit gathered blocker occupancy mask.
+    /// Precomputed valid target attack bitboards indexed by a 4-bit gathered
+    /// blocker occupancy mask.
     pub attacks: [Bitboard; 16],
 }
 
@@ -16,20 +18,25 @@ pub struct BishopEntry {
 /// if the intermediate orthogonal square (the "Horse Leg") is occupied.
 #[derive(Clone, Copy)]
 pub struct KnightEntry {
-    /// The 4 intermediate orthogonal blocking squares (Horse Legs) around this square.
+    /// The 4 intermediate orthogonal blocking squares (Horse Legs) around this
+    /// square.
     pub eyes: [Option<Square>; 4],
-    /// Precomputed valid target attack bitboards indexed by a 4-bit gathered blocker occupancy mask.
+    /// Precomputed valid target attack bitboards indexed by a 4-bit gathered
+    /// blocker occupancy mask.
     pub attacks: [Bitboard; 16],
 }
 
 /// Represents precomputed attack targets for Knight checking paths.
-/// Used in `Position::checkers_to` to perform rapid, O(1) backward checks from the King.
-/// Matches Knight attacks coming from up to 8 directions, which can share up to 6 unique Horse Legs.
+/// Used in `Position::checkers_to` to perform rapid, O(1) backward checks from
+/// the King. Matches Knight attacks coming from up to 8 directions, which can
+/// share up to 6 unique Horse Legs.
 #[derive(Clone, Copy)]
 pub struct KnightToEntry {
-    /// The 6 possible unique Horse Legs that can block any Knight's attack onto this square.
+    /// The 6 possible unique Horse Legs that can block any Knight's attack onto
+    /// this square.
     pub eyes: [Option<Square>; 6],
-    /// Precomputed attack origin bitboards indexed by a 6-bit gathered blocker occupancy mask (0 to 63).
+    /// Precomputed attack origin bitboards indexed by a 6-bit gathered blocker
+    /// occupancy mask (0 to 63).
     pub attacks: [Bitboard; 64],
 }
 
@@ -37,10 +44,11 @@ pub struct KnightToEntry {
 /// Indexed by the 9-bit rank occupancy state (0 to 511).
 #[derive(Clone, Copy)]
 pub struct RankEntry {
-    /// Rook sliding quiet and capture targets. Stops sliding immediately upon hitting a blocker.
+    /// Rook sliding quiet and capture targets. Stops sliding immediately upon
+    /// hitting a blocker.
     pub rook: [u16; 512],
-    /// Cannon quiet and leap capture targets. Skips quiet squares, jumps over exactly 1 screen,
-    /// and targets the first piece behind it.
+    /// Cannon quiet and leap capture targets. Skips quiet squares, jumps over
+    /// exactly 1 screen, and targets the first piece behind it.
     pub cannon: [u16; 512],
 }
 
@@ -55,8 +63,8 @@ pub struct FileEntry {
 }
 
 /// Precomputes valid orthogonal moves for the General (King) inside the Palace.
-/// Generals can only move 1 step orthogonally (up/down/left/right) and are strictly
-/// confined to the 3x3 Palace.
+/// Generals can only move 1 step orthogonally (up/down/left/right) and are
+/// strictly confined to the 3x3 Palace.
 const fn init_king_attacks() -> [Bitboard; 90] {
     let mut table = [Bitboard(0); 90];
     let mut from_idx = 0;
@@ -92,8 +100,8 @@ const fn init_king_attacks() -> [Bitboard; 90] {
 }
 
 /// Precomputes valid diagonal moves for Advisors inside the Palace.
-/// Advisors move exactly 1 step diagonally and are strictly confined to the Palace.
-/// There are exactly 5 valid Palace squares for an Advisor.
+/// Advisors move exactly 1 step diagonally and are strictly confined to the
+/// Palace. There are exactly 5 valid Palace squares for an Advisor.
 const fn init_advisor_attacks() -> [Bitboard; 90] {
     let mut table = [Bitboard(0); 90];
     let mut from_idx = 0;
@@ -131,7 +139,8 @@ const fn init_advisor_attacks() -> [Bitboard; 90] {
 /// Precomputes Pawn attack masks for both White and Black Pawns.
 ///
 /// * **Unpromoted (own side)**: Can only move exactly 1 step straight forward.
-/// * **Promoted (crossed river)**: Can move 1 step straight forward OR 1 step horizontally (left/right).
+/// * **Promoted (crossed river)**: Can move 1 step straight forward OR 1 step
+///   horizontally (left/right).
 const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
     let mut table = [[Bitboard(0); 90]; 2];
 
@@ -183,8 +192,9 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
 }
 
 /// Precomputes "reverse" Pawn attack lists.
-/// Represents which source squares a Pawn of the given color could have come from
-/// to attack the target square. Used in `Position::checkers_to` to check Pawn checks.
+/// Represents which source squares a Pawn of the given color could have come
+/// from to attack the target square. Used in `Position::checkers_to` to check
+/// Pawn checks.
 const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
     let mut table = [[Bitboard(0); 90]; 2];
 
@@ -234,8 +244,8 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
 }
 
 /// Precomputes Elephant (Bishop) jump entries.
-/// Elephant jumps are 2-step diagonal leaps, confined to their own side of the board.
-/// Intermediate blocking eyes (diagonally 1 step away) are checked.
+/// Elephant jumps are 2-step diagonal leaps, confined to their own side of the
+/// board. Intermediate blocking eyes (diagonally 1 step away) are checked.
 const fn init_bishop_table() -> [BishopEntry; 90] {
     let mut table = [BishopEntry {
         eyes: [None; 4],
@@ -299,8 +309,8 @@ const fn init_bishop_table() -> [BishopEntry; 90] {
 }
 
 /// Precomputes Horse (Knight) jumps and intermediate blocking Horse Legs.
-/// Knights move 1 step orthogonally then 1 step diagonally. If the 1st orthogonal square
-/// is occupied, the jump is blocked.
+/// Knights move 1 step orthogonally then 1 step diagonally. If the 1st
+/// orthogonal square is occupied, the jump is blocked.
 const fn init_knight_table() -> [KnightEntry; 90] {
     let mut table = [KnightEntry {
         eyes: [None; 4],
@@ -378,9 +388,10 @@ const fn init_knight_table() -> [KnightEntry; 90] {
 /// Precomputes sliding Rank occupancy attack masks.
 /// A rank has 9 files, so the occupancy is a 9-bit number (0..511).
 ///
-/// * **Rook**: Slides orthogonally, stopping on the first blocking piece (quiet on empty, capture on opponent).
-/// * **Cannon**: Quiet moves are identical to Rook, but captures require jumping over exactly 1 blocking screen,
-///   landing on the next piece.
+/// * **Rook**: Slides orthogonally, stopping on the first blocking piece (quiet
+///   on empty, capture on opponent).
+/// * **Cannon**: Quiet moves are identical to Rook, but captures require
+///   jumping over exactly 1 blocking screen, landing on the next piece.
 const fn init_rank_table() -> [RankEntry; 9] {
     let mut table = [RankEntry {
         rook: [0; 512],
@@ -660,8 +671,9 @@ const fn init_knight_to_table() -> [KnightToEntry; 90] {
     table
 }
 
-// Precomputed static lookup tables dissolved at compile-time to eliminate thread checks, lock contention,
-// and atomic operations during perft search loops.
+// Precomputed static lookup tables dissolved at compile-time to eliminate
+// thread checks, lock contention, and atomic operations during perft search
+// loops.
 pub static KING_ATTACKS: [Bitboard; 90] = init_king_attacks();
 pub static ADVISOR_ATTACKS: [Bitboard; 90] = init_advisor_attacks();
 pub static PAWN_ATTACKS: [[Bitboard; 90]; 2] = init_pawn_attacks();

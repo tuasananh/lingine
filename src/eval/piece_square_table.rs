@@ -1,7 +1,8 @@
 use crate::core::types::{Color, Piece, PieceType, Square};
 
-// Positional piece-square tables from White's (Red's) perspective on the 90-square board.
-// Square indices are 0 to 89, rank-major order (rank * 9 + file).
+// Positional piece-square tables from White's (Red's) perspective on the
+// 90-square board. Square indices are 0 to 89, rank-major order (rank * 9 +
+// file).
 
 #[rustfmt::skip]
 const PIECE_SQUARE_TABLE_KING: [i32; 90] = [
@@ -153,8 +154,9 @@ const PIECE_SQUARE_TABLE_PAWN: [i32; 90] = [
     5,  8, 10, 12, 15, 12, 10,  8,  5,
 ];
 
-/// Returns the Piece-Square Table (PST) positional value for a given piece type and color on a specific square.
-/// For Black pieces, the position is automatically mirrored vertically.
+/// Returns the Piece-Square Table (PST) positional value for a given piece type
+/// and color on a specific square. For Black pieces, the position is
+/// automatically mirrored vertically.
 #[inline(always)]
 pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square) -> i32 {
     let index = if color == Color::White {
@@ -180,8 +182,8 @@ pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square)
     }
 }
 
-/// Returns a piece's base material value, dynamically adjusting Pawn values based on
-/// whether they have crossed the river.
+/// Returns a piece's base material value, dynamically adjusting Pawn values
+/// based on whether they have crossed the river.
 #[inline(always)]
 pub fn piece_material_value(piece: Piece, sq: Square) -> i32 {
     match piece {
@@ -205,6 +207,7 @@ pub fn piece_material_value(piece: Piece, sq: Square) -> i32 {
                 30
             }
         }
-        Piece::WhiteKing | Piece::BlackKing => 0, // Treated as 0 for incremental score (kings never captured)
+        Piece::WhiteKing | Piece::BlackKing => 0, /* Treated as 0 for incremental score (kings
+                                                   * never captured) */
     }
 }

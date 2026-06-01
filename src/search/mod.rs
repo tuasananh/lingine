@@ -27,7 +27,8 @@ impl SearchWindow {
         Self { alpha, beta }
     }
 
-    /// Negates the window (reverses and negates bounds) for the next ply in Negamax.
+    /// Negates the window (reverses and negates bounds) for the next ply in
+    /// Negamax.
     pub fn negate(self) -> Self {
         Self {
             alpha: -self.beta,
@@ -36,7 +37,8 @@ impl SearchWindow {
     }
 }
 
-/// Tracks search extension and move exclusion parameters for the current branch.
+/// Tracks search extension and move exclusion parameters for the current
+/// branch.
 #[derive(Copy, Clone, Debug)]
 pub struct SearchExtension {
     pub extensions: i32,
@@ -139,7 +141,8 @@ fn get_move_score(
 }
 
 /// Sorts the first `count` moves in `moves` using a simple selection sort
-/// based on their heuristic scores, prioritizing the transposition table best move, killers, and history.
+/// based on their heuristic scores, prioritizing the transposition table best
+/// move, killers, and history.
 fn sort_moves(
     pos: &Position,
     moves: &mut [Move],
@@ -167,7 +170,8 @@ fn sort_moves(
 
 /// Implements Quiescence Search to evaluate tactical capture sequences.
 ///
-/// Prevents the horizon effect by searching captures only until a quiet position is reached.
+/// Prevents the horizon effect by searching captures only until a quiet
+/// position is reached.
 pub fn quiescence(
     pos: &mut Position,
     mut window: SearchWindow,
@@ -193,7 +197,8 @@ pub fn quiescence(
         }
     }
 
-    // Base case: to avoid infinite recursion and stack overflow from perpetual checks
+    // Base case: to avoid infinite recursion and stack overflow from perpetual
+    // checks
     if qdepth >= 12 {
         let stand_pat = evaluate(pos);
         return if pos.side_to_move() == Color::White {
@@ -222,8 +227,8 @@ pub fn quiescence(
         }
     }
 
-    // Generate moves: if in check, we must search all legal evasions to save the King.
-    // Otherwise, we only search capture moves.
+    // Generate moves: if in check, we must search all legal evasions to save the
+    // King. Otherwise, we only search capture moves.
     let mut moves = [Move::none(); MAX_MOVES];
     let count = if in_check {
         generate_moves(pos, MoveGenType::Legal, &mut moves)
@@ -300,7 +305,8 @@ pub fn negamax(
         }
     }
 
-    // Game over / rule evaluations (60-move rule, insufficient material, repetitions, perpetual checks)
+    // Game over / rule evaluations (60-move rule, insufficient material,
+    // repetitions, perpetual checks)
     if let Some(rule_score) = pos.rule_judge(ply) {
         return rule_score;
     }
@@ -395,7 +401,8 @@ pub fn negamax(
         tt_move = Move::none();
     }
 
-    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move prioritized first, killers, and history
+    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
+    // prioritized first, killers, and history
     sort_moves(
         pos,
         &mut moves,
@@ -493,7 +500,8 @@ mod tests {
     #[test]
     fn test_repetition_draw_repetition() {
         let mut pos = Position::new();
-        // Setup a simple position with files D and E blocked by pawns to avoid King-facing checks
+        // Setup a simple position with files D and E blocked by pawns to avoid
+        // King-facing checks
         pos.set("4k4/9/9/9/3PP4/9/9/9/9/4K4 w - - 0 1").unwrap();
         // Setup moves to repeat: King moves back and forth
         let w_move1 = Move::new(Square::E0, Square::D0);
@@ -579,7 +587,8 @@ mod tests {
         // 5. White checks again with Rook to D8 (repetition + check!)
         pos.do_move(r_check3);
 
-        // Now Black turn to move. White just gave the repeating check on all turns in the loop.
+        // Now Black turn to move. White just gave the repeating check on all turns in
+        // the loop.
         assert_eq!(pos.rule_judge(5), Some(100_000 - 5));
         assert!(pos.is_in_check(Color::Black));
 

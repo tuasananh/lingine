@@ -6,8 +6,8 @@ use strum::EnumCount;
 use crate::core::types::{Color, File, Rank, Square};
 
 /// Represents the occupancy or attack targets on the 90-square Xiangqi board.
-/// Packaged inside a `u128` wrapper where bits 0 to 89 correspond to the squares A0 (0) to I9 (89).
-/// The upper bits (90 to 127) are unused.
+/// Packaged inside a `u128` wrapper where bits 0 to 89 correspond to the
+/// squares A0 (0) to I9 (89). The upper bits (90 to 127) are unused.
 #[derive(
     BitAnd,
     BitAndAssign,
@@ -61,9 +61,10 @@ impl Bitboard {
         self.0.count_ones()
     }
 
-    /// Pops (extracts and clears) the Least Significant Bit (LSB) from the bitboard,
-    /// returning the corresponding `Square`. Returns `None` if the bitboard is empty.
-    /// Used for rapid, zero-overhead sequence generation and iterator-like popping of pieces.
+    /// Pops (extracts and clears) the Least Significant Bit (LSB) from the
+    /// bitboard, returning the corresponding `Square`. Returns `None` if
+    /// the bitboard is empty. Used for rapid, zero-overhead sequence
+    /// generation and iterator-like popping of pieces.
     #[inline(always)]
     pub fn pop_lsb(&mut self) -> Option<Square> {
         if self.0 == 0 {
@@ -75,7 +76,8 @@ impl Bitboard {
         }
     }
 
-    /// A const-compatible bitwise OR operator for building compile-time static lookup tables.
+    /// A const-compatible bitwise OR operator for building compile-time static
+    /// lookup tables.
     #[inline(always)]
     pub const fn const_or(&self, b: Self) -> Self {
         Self(self.0 | b.0)
@@ -87,16 +89,21 @@ impl Bitboard {
         Self(self.0 & b.0)
     }
 
-    /// A compile-time precomputed mask representing both Palace zones (3x3 squares at the center-bottom and center-top).
-    /// Used to validate Advisor and King moves which are strictly restricted to the Palace.
+    /// A compile-time precomputed mask representing both Palace zones (3x3
+    /// squares at the center-bottom and center-top). Used to validate
+    /// Advisor and King moves which are strictly restricted to the Palace.
     ///
-    /// * **White Palace**: Squares D0, E0, F0, D1, E1, F1, D2, E2, F2 (indexes 3..5, 12..14, 21..23).
-    /// * **Black Palace**: Squares D7, E7, F7, D8, E8, F8, D9, E9, F9 (indexes 66..68, 75..77, 84..86).
+    /// * **White Palace**: Squares D0, E0, F0, D1, E1, F1, D2, E2, F2 (indexes
+    ///   3..5, 12..14, 21..23).
+    /// * **Black Palace**: Squares D7, E7, F7, D8, E8, F8, D9, E9, F9 (indexes
+    ///   66..68, 75..77, 84..86).
     ///
-    /// Combined bitwise mask = `0x70381C0000000000E07038u128` (active bits corresponding exactly to these indices).
+    /// Combined bitwise mask = `0x70381C0000000000E07038u128` (active bits
+    /// corresponding exactly to these indices).
     pub const PALACE: Self = Self(0x70381C0000000000E07038u128);
 
-    /// Constructs a bitboard with all bits active along the specified vertical column (`File`).
+    /// Constructs a bitboard with all bits active along the specified vertical
+    /// column (`File`).
     pub const fn file(f: File) -> Self {
         let mut bits = 0u128;
         let mut r = 0u8;
@@ -111,7 +118,8 @@ impl Bitboard {
         Self(bits)
     }
 
-    /// Constructs a bitboard with all bits active along the specified horizontal row (`Rank`).
+    /// Constructs a bitboard with all bits active along the specified
+    /// horizontal row (`Rank`).
     pub const fn rank(r: Rank) -> Self {
         let mut bits = 0u128;
         let mut f = 0u8;
@@ -126,7 +134,8 @@ impl Bitboard {
         Self(bits)
     }
 
-    /// Returns a precomputed bitboard covering one half of the board (5 ranks) for a given player:
+    /// Returns a precomputed bitboard covering one half of the board (5 ranks)
+    /// for a given player:
     ///
     /// * **White Side**: Ranks R0 to R4 (indices 0 to 44).
     /// * **Black Side**: Ranks R5 to R9 (indices 45 to 89).
@@ -145,8 +154,9 @@ impl Bitboard {
         }
     }
 
-    /// A precomputed mask representing vertical pawn starting paths (Files FA, FC, FE, FG, FI).
-    /// In Xiangqi, Pawns can only cross the river and move sideways on files A, C, E, G, I before promotion.
+    /// A precomputed mask representing vertical pawn starting paths (Files FA,
+    /// FC, FE, FG, FI). In Xiangqi, Pawns can only cross the river and move
+    /// sideways on files A, C, E, G, I before promotion.
     pub const PAWN_FILE: Self = Self::file(File::FA)
         .const_or(Self::file(File::FC))
         .const_or(Self::file(File::FE))
@@ -154,8 +164,9 @@ impl Bitboard {
         .const_or(Self::file(File::FI));
 
     /// Computes the valid Pawn board zone for the given color.
-    /// Prior to crossing the river (opponent's side), Pawns can only move straight forward.
-    /// Once they cross, they can move forward or horizontally sideways (left/right).
+    /// Prior to crossing the river (opponent's side), Pawns can only move
+    /// straight forward. Once they cross, they can move forward or
+    /// horizontally sideways (left/right).
     pub const fn pawn(color: Color) -> Self {
         let other_side = Self::side(color.opposite());
         let my_side = Self::PAWN_FILE.const_and(match color {
