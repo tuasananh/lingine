@@ -383,6 +383,12 @@ pub fn negamax(
         return -MATE_VALUE + ply;
     }
 
+    // One-Reply Extensions
+    if count == 1 && ext_control.excluded_move.is_none() && ext_control.extensions < 6 {
+        depth += 1;
+        ext_control.extensions += 1;
+    }
+
     // Validate that the TT move is actually legal in the current position.
     // A stale or collided TT entry may reference a move that is not valid here.
     if !tt_move.is_none() && !moves[..count].contains(&tt_move) {
