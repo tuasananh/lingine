@@ -8,3 +8,4 @@ tools/
 .codegraph
 historical
 matches/
+__pycache__/

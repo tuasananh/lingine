@@ -132,6 +132,8 @@ impl Engine for EngineBot {
     fn ucinewgame(&mut self) {
         log::debug!("ucinewgame");
         self.position = Position::new();
+        self.transposition_table.clear();
+        self.age = 0;
     }
 
     fn register(&self, params: RegisterParameters) {
@@ -379,12 +381,24 @@ impl Engine for EngineBot {
             }
         }
 
-        let best_move_str = if best_move.is_none() {
+        // Safety check: validate best_move is legal in the current position.
+        // This guards against rare TT corruption, hash collisions, or search bugs
+        // that could otherwise cause the engine to output an illegal move.
+        let mut legal_moves = [Move::none(); MAX_MOVES];
+        let legal_count = generate_moves(&self.position, MoveGenType::Legal, &mut legal_moves);
+
+        let best_move_str = if best_move.is_none()
+            || !legal_moves[..legal_count].contains(&best_move)
+        {
+            if !best_move.is_none() {
+                log::warn!(
+                    "bestmove {} is not legal in current position — falling back to first legal move",
+                    format_move(best_move)
+                );
+            }
             // Pick first legal move as fallback
-            let mut moves = [Move::none(); MAX_MOVES];
-            let count = generate_moves(&self.position, MoveGenType::Legal, &mut moves);
-            if count > 0 {
-                format_move(moves[0])
+            if legal_count > 0 {
+                format_move(legal_moves[0])
             } else {
                 "0000".to_string()
             }

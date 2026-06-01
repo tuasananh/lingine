@@ -2,10 +2,13 @@ use std::sync::OnceLock;
 use strum::EnumCount;
 use thiserror::Error;
 
-use crate::core::{
-    bitboard::Bitboard,
-    movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
-    types::{BloomFilter, Color, File, Move, Piece, PieceType, Rank, Square},
+use crate::{
+    core::{
+        bitboard::Bitboard,
+        movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
+        types::{BloomFilter, Color, File, Move, Piece, PieceType, Rank, Square},
+    },
+    eval::piece_square_table::{piece_material_value, piece_square_table_value},
 };
 
 /// A fast Linear Congruential Generator (LCG) used to generate pseudo-random numbers
@@ -74,6 +77,10 @@ pub struct StateInfo {
     pub rule60: u16,
     /// Whether each color [White, Black] was in check in this position state.
     pub in_check: [bool; 2],
+    /// Precalculated incremental material score (from White's perspective)
+    pub material_score: i32,
+    /// Precalculated incremental piece-square table positional score (from White's perspective)
+    pub piece_square_table_score: i32,
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn tracking, ply count,
@@ -142,8 +149,46 @@ impl Position {
             old_zobrist: 0,
             rule60: 0,
             in_check: [false, false],
+            material_score: 0,
+            piece_square_table_score: 0,
         });
         pos
+    }
+
+    #[inline(always)]
+    pub fn material_score(&self) -> i32 {
+        self.history.last().map(|s| s.material_score).unwrap_or(0)
+    }
+
+    #[inline(always)]
+    pub fn piece_square_table_score(&self) -> i32 {
+        self.history
+            .last()
+            .map(|s| s.piece_square_table_score)
+            .unwrap_or(0)
+    }
+
+    /// Computes the complete material and Piece-Square Table scores from scratch.
+    pub fn compute_evaluation_scores(&self) -> (i32, i32) {
+        let mut material_score = 0;
+        let mut piece_square_table_score = 0;
+        for sq_idx in 0..Square::COUNT {
+            let sq = Square::from_repr(sq_idx as u8).unwrap();
+            let piece = self.board[sq_idx];
+            if piece != Piece::None {
+                let color = piece.color().unwrap();
+                let val = piece_material_value(piece, sq);
+                let pst = piece_square_table_value(piece.piece_type(), color, sq);
+                if color == Color::White {
+                    material_score += val;
+                    piece_square_table_score += pst;
+                } else {
+                    material_score -= val;
+                    piece_square_table_score -= pst;
+                }
+            }
+        }
+        (material_score, piece_square_table_score)
     }
 
     #[inline(always)]
@@ -327,12 +372,15 @@ impl Position {
             self.is_in_check(Color::White),
             self.is_in_check(Color::Black),
         ];
+        let (material_score, piece_square_table_score) = self.compute_evaluation_scores();
         self.history.push(StateInfo {
             last_move: Move::none(),
             captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
             rule60,
             in_check,
+            material_score,
+            piece_square_table_score,
         });
 
         Ok(())
@@ -346,8 +394,68 @@ impl Position {
         let piece = self.board[from as usize];
         let captured = self.board[to as usize];
 
-        let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
+        let last_state = self.history.last().expect("History stack is empty");
+        let rule60 = last_state.rule60;
         let old_zobrist = self.zobrist_hash;
+        let mut material_score = last_state.material_score;
+        let mut piece_square_table_score = last_state.piece_square_table_score;
+
+        // 1. Remove piece from from
+        if piece.color() == Some(Color::White) {
+            material_score -= crate::eval::piece_square_table::piece_material_value(piece, from);
+            piece_square_table_score -= crate::eval::piece_square_table::piece_square_table_value(
+                piece.piece_type(),
+                Color::White,
+                from,
+            );
+        } else if piece.color() == Some(Color::Black) {
+            material_score += crate::eval::piece_square_table::piece_material_value(piece, from);
+            piece_square_table_score += crate::eval::piece_square_table::piece_square_table_value(
+                piece.piece_type(),
+                Color::Black,
+                from,
+            );
+        }
+
+        // 2. Remove captured piece from to (if any)
+        if captured != Piece::None {
+            if captured.color() == Some(Color::White) {
+                material_score -=
+                    crate::eval::piece_square_table::piece_material_value(captured, to);
+                piece_square_table_score -=
+                    crate::eval::piece_square_table::piece_square_table_value(
+                        captured.piece_type(),
+                        Color::White,
+                        to,
+                    );
+            } else if captured.color() == Some(Color::Black) {
+                material_score +=
+                    crate::eval::piece_square_table::piece_material_value(captured, to);
+                piece_square_table_score +=
+                    crate::eval::piece_square_table::piece_square_table_value(
+                        captured.piece_type(),
+                        Color::Black,
+                        to,
+                    );
+            }
+        }
+
+        // 3. Put piece at to
+        if piece.color() == Some(Color::White) {
+            material_score += crate::eval::piece_square_table::piece_material_value(piece, to);
+            piece_square_table_score += crate::eval::piece_square_table::piece_square_table_value(
+                piece.piece_type(),
+                Color::White,
+                to,
+            );
+        } else if piece.color() == Some(Color::Black) {
+            material_score -= crate::eval::piece_square_table::piece_material_value(piece, to);
+            piece_square_table_score -= crate::eval::piece_square_table::piece_square_table_value(
+                piece.piece_type(),
+                Color::Black,
+                to,
+            );
+        }
 
         // Push current state onto history stack
         self.history.push(StateInfo {
@@ -356,6 +464,8 @@ impl Position {
             old_zobrist,
             rule60,
             in_check: [false, false],
+            material_score,
+            piece_square_table_score,
         });
 
         self.remove_piece(from);

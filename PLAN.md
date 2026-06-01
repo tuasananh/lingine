@@ -144,9 +144,9 @@ alignment._
 - [x] **Aspiration Windows**: Reduce search windows for speed
 - [x] **Move Ordering**: Order TT moves > MVV-LVA captures > Killers/History to
       maximize beta-cutoffs
-- [ ] **Piece-Square Tables (PST)**: Add positional piece-square tables for
+- [x] **Piece-Square Tables (PST)**: Add positional piece-square tables for
       developmental guidance and king safety
-- [ ] **Incremental Eval**: Keep evaluation updated incrementally during
+- [x] **Incremental Eval**: Keep evaluation updated incrementally during
       `do_move`/`undo_move` to avoid full board scan overhead
 - [ ] **Verification**: Run `./scripts/run_match.sh` vs v1.1.0 and run
       `./scripts/run_gauntlet.py` to confirm ELO gains
