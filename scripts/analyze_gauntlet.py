@@ -201,11 +201,13 @@ def calculate_opponent_stats(games, bot_name, custom_map=None, default_opp_elo=1
         # Standard Elo Difference against this opponent
         score_pct = s["score_pct"]
         if score_pct >= 0.999:
-            delta_elo = 400.0
+            adjusted_score = (n - 0.5) / n if n > 0 else 0.999
         elif score_pct <= 0.001:
-            delta_elo = -400.0
+            adjusted_score = 0.5 / n if n > 0 else 0.001
         else:
-            delta_elo = 400.0 * math.log10(score_pct / (1.0 - score_pct))
+            adjusted_score = score_pct
+            
+        delta_elo = 400.0 * math.log10(adjusted_score / (1.0 - adjusted_score))
             
         s["delta_elo"] = delta_elo
         s["estimated_elo"] = s["opponent_elo"] + delta_elo
@@ -875,7 +877,7 @@ def main():
         help="Default rating for opponents whose name doesn't contain a number (default: 1500)",
     )
     parser.add_argument(
-        "-m",
+        "-e",
         "--elo-map",
         type=str,
         default=None,
@@ -889,6 +891,7 @@ def main():
         help="Output filepath to generate a beautiful responsive HTML report dashboard",
     )
     parser.add_argument(
+        "-m",
         "--markdown",
         type=str,
         default=None,

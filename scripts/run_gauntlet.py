@@ -371,8 +371,8 @@ def main():
         else:
             engine_path = user_engine
 
-    if not engine_name:
-        default_name = os.path.basename(engine_path)
+    if not engine_name or not engine_name.strip():
+        default_name = os.path.basename(engine_path) if engine_path else "Lingine"
         if default_name.lower() == "lingine":
             default_name = "Lingine"
         print("\033[33mNo main engine name specified.\033[0m")
@@ -381,6 +381,10 @@ def main():
             engine_name = default_name
         else:
             engine_name = user_name
+
+    # Absolute fallback to prevent empty names
+    if not engine_name or not engine_name.strip():
+        engine_name = "gauntlet"
 
     import datetime
 

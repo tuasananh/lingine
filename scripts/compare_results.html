@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gauntlet Elo Performance Comparison</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.65);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-color: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.35);
+            --emerald: #10b981;
+            --rose: #ef4444;
+            --amber: #eab308;
+            --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+            --font-sans: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            padding: 2rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+
+        .header-pre {
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            font-size: 0.85rem;
+            color: var(--accent-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        h1 {
+            font-family: var(--font-display);
+            font-size: 2.75rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.75rem;
+        }
+
+        .meta-tag {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--card-border);
+            padding: 0.35rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Grid layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Card styles */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-value {
+            font-family: var(--font-display);
+            font-size: 2.25rem;
+            font-weight: 800;
+            line-height: 1.2;
+            color: #ffffff;
+        }
+
+        .card-subtext {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Accent classes */
+        .card-accent-emerald::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--emerald);
+        }
+        .card-accent-indigo::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-color);
+        }
+        .card-accent-purple::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: #8b5cf6;
+        }
+        .card-accent-amber::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--amber);
+        }
+
+        /* Tabs Styling */
+        .tabs-container {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 1.25rem;
+        }
+
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+            padding: 0.75rem 1.75rem;
+            border-radius: 12px;
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            outline: none;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--accent-color), #818cf8);
+            color: #ffffff;
+            border-color: transparent;
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .tab-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .tab-btn:hover .tab-icon {
+            transform: scale(1.1);
+        }
+
+        /* 1v1 Match Cards Layout */
+        .match-card-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .match-card-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .match-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1.5rem;
+            padding: 1.75rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .match-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(99, 102, 241, 0.35);
+            box-shadow: 0 12px 30px -10px rgba(99, 102, 241, 0.2);
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 1rem;
+            gap: 1rem;
+        }
+
+        .match-vs {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            overflow: hidden;
+        }
+
+        .match-title {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+
+        .match-subtitle {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-color);
+            text-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .match-score-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .match-stats-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+
+        .match-stats-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .match-stats-value {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+
+        .match-details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .match-detail-item {
+            background: rgba(255, 255, 255, 0.015);
+            border-radius: 8px;
+            padding: 0.6rem 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        .match-detail-label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .match-detail-value {
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .match-progress-container {
+            margin-top: auto;
+        }
+
+        /* Sections */
+        .section-title {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 20px;
+            background: var(--accent-color);
+            border-radius: 99px;
+        }
+
+        .layout-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .layout-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Table */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.95rem;
+        }
+
+        th {
+            font-family: var(--font-display);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        tr {
+            transition: background-color 0.2s ease;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.015);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .badge-accent {
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-emerald {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-gray {
+            background: rgba(255, 255, 255, 0.06);
+            color: #d1d5db;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Opponent matrix panel */
+        .matrix-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .select-input {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            font-family: var(--font-sans);
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .select-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        /* Progress bars */
+        .bar-container {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 9999px;
+            height: 10px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 9999px;
+            background: linear-gradient(90deg, var(--accent-color), #818cf8);
+        }
+
+        /* Loading & Error Overlays */
+        .status-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(11, 15, 25, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 2rem;
+            text-align: center;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        .status-card {
+            background: rgba(17, 24, 39, 0.8);
+            border: 1px solid var(--card-border);
+            border-radius: 1.5rem;
+            padding: 3rem 2rem;
+            max-width: 600px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        }
+
+        .status-title {
+            font-family: var(--font-display);
+            font-size: 1.75rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .status-message {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        .status-btn {
+            background: linear-gradient(135deg, var(--accent-color), #818cf8);
+            color: #ffffff;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            transition: transform 0.2s;
+        }
+
+        .status-btn:hover {
+            transform: scale(1.03);
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid var(--accent-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem auto;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            text-align: left;
+            margin: 1.5rem 0;
+            color: #a5b4fc;
+            overflow-x: auto;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        footer {
+            margin-top: 4rem;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- CORS / Local server instructions Overlay -->
+    <div id="status-overlay" class="status-overlay">
+        <div class="status-card" id="status-card">
+            <div id="loader-spinner" class="spinner"></div>
+            <h2 id="status-title" class="status-title">Dynamically Parsing Tournaments...</h2>
+            <div id="status-message" class="status-message">
+                Please wait while the page scans and parses your <code>summary.md</code> gauntlet files from the local directory structure.
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="main-container" style="opacity: 0; transition: opacity 0.5s;">
+        <header>
+            <div class="header-pre">Tournaments Comparison</div>
+            <h1 id="dashboard-title">Tournament Comparison Dashboard</h1>
+            <div class="meta-tag" id="meta-tag">Loading dates...</div>
+        </header>
+
+        <!-- Tabs Switcher -->
+        <div class="tabs-container">
+            <button class="tab-btn active" onclick="switchTab('gauntlet')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                Gauntlet Tournaments
+            </button>
+            <button class="tab-btn" onclick="switchTab('match')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                1v1 Head-to-Head Matches
+            </button>
+        </div>
+
+        <div id="comparison-content">
+            <!-- Gauntlet Specific View -->
+            <div id="gauntlet-view">
+                <!-- Dynamic stats widgets -->
+                <div class="dashboard-grid" id="stats-widgets">
+                    <!-- Javascript populated widgets -->
+                </div>
+
+                <!-- Chart Row -->
+                <div class="card" style="margin-bottom: 2rem; padding: 2rem;">
+                    <h2 class="section-title">Visual Elo Rating Comparison</h2>
+                    <div style="height: 350px; width: 100%; position: relative;">
+                        <canvas id="eloChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Row: Leaderboard Table and Opponents Matrix -->
+                <div class="layout-row">
+                    <!-- Leaderboard Table -->
+                    <div class="card" style="padding: 1.5rem 0;">
+                        <div style="padding: 0 1.5rem 1rem 1.5rem;">
+                            <h2 class="section-title" style="margin-bottom: 0;">Global Performance Leaderboard</h2>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Engine/Participant</th>
+                                        <th>Global MLE Elo</th>
+                                        <th>Confidence Interval</th>
+                                        <th>W / D / L</th>
+                                        <th>Win Rate</th>
+                                        <th>Matches</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboard-body">
+                                    <!-- Javascript populated rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Opponent Analysis Card -->
+                    <div class="card" style="display: flex; flex-direction: column;">
+                        <h2 class="section-title">Competitor Comparison</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                            Analyze how each participant performed against specific target opponent Elo ratings.
+                        </p>
+                        
+                        <div class="matrix-controls">
+                            <select class="select-input" id="opponent-select" onchange="updateOpponentComparison()">
+                                <!-- Javascript populated options -->
+                            </select>
+                        </div>
+
+                        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1.5rem;" id="opponent-comparison-body">
+                            <!-- Javascript populated comparisons -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1v1 Match Specific View -->
+            <div id="match-view" style="display: none;">
+                <!-- Match dynamic stats widgets -->
+                <div class="dashboard-grid" id="match-stats-widgets" style="margin-bottom: 2rem;">
+                    <!-- Javascript populated widgets -->
+                </div>
+
+                <h2 class="section-title" style="margin-bottom: 1.5rem;">Completed Head-to-Head Matches</h2>
+                <div class="match-card-grid" id="match-cards-container">
+                    <!-- Javascript populated match cards -->
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            Parsed and Rendered Client-Side in Browser • Antigravity AI Coding Assistant
+        </footer>
+    </div>
+
+    <!-- Client-Side Parsing Script -->
+    <script>
+        let gauntletData = [];
+        let matchData = [];
+        let chartInstance = null;
+        let activeTab = 'gauntlet';
+
+        // Tab Switcher function
+        function switchTab(tab) {
+            activeTab = tab;
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            const gauntletView = document.getElementById('gauntlet-view');
+            const matchView = document.getElementById('match-view');
+            const titleEl = document.getElementById('dashboard-title');
+
+            if (tab === 'gauntlet') {
+                tabButtons[0].classList.add('active');
+                tabButtons[1].classList.remove('active');
+                gauntletView.style.display = 'block';
+                matchView.style.display = 'none';
+                titleEl.textContent = 'Gauntlet Elo Leaderboard';
+            } else {
+                tabButtons[0].classList.remove('active');
+                tabButtons[1].classList.add('active');
+                gauntletView.style.display = 'none';
+                matchView.style.display = 'block';
+                titleEl.textContent = '1v1 Match Comparison';
+            }
+        }
+
+        // Regex parsing helper for summary.md content (Gauntlet Report)
+        function parseSummaryMd(content, folderName) {
+            const stats = {
+                folder: folderName,
+                is_match: false,
+                bot_name: "Unknown Bot",
+                date_str: "Unknown Date",
+                total_games: 0,
+                global_elo: 0.0,
+                standard_error: 0.0,
+                ci_low: 0.0,
+                ci_high: 0.0,
+                wins: 0,
+                draws: 0,
+                losses: 0,
+                win_rate: 0.0,
+                color_stats: {},
+                opponents: []
+            };
+
+            // 1. Bot Name
+            const titleMatch = content.match(/^#\s+Gauntlet Report:\s+(.+)$/m);
+            if (titleMatch) {
+                stats.bot_name = titleMatch[1].trim();
+            } else {
+                stats.bot_name = folderName.split("_")[0];
+            }
+
+            // 2. Date
+            const dateMatch = content.match(/Generated on:\s+(.+)$/m);
+            if (dateMatch) {
+                stats.date_str = dateMatch[1].trim();
+            }
+
+            // 3. Total Games
+            const gamesMatch = content.match(/Total Games Played:\s+\*\*(\d+)\*\*/);
+            if (gamesMatch) {
+                stats.total_games = parseInt(gamesMatch[1], 10);
+            }
+
+            // 4. Global MLE ELO
+            const eloMatch = content.match(/-\s+\*\*Global MLE ELO Rating:\*\*\s+\*\*(\d+)\s+ELO\*\*/);
+            if (eloMatch) {
+                stats.global_elo = parseFloat(eloMatch[1]);
+            }
+
+            // 5. Standard Error
+            const seMatch = content.match(/-\s+\*\*Standard Error:\*\*\s+±\s+([\d.]+)\s+ELO/);
+            if (seMatch) {
+                stats.standard_error = parseFloat(seMatch[1]);
+            }
+
+            // 6. Confidence Interval
+            const ciMatch = content.match(/-\s+\*\*95% Confidence Interval:\*\*\s+(\d+)\s+-\s+(\d+)\s+ELO/);
+            if (ciMatch) {
+                stats.ci_low = parseFloat(ciMatch[1]);
+                stats.ci_high = parseFloat(ciMatch[2]);
+            }
+
+            // 7. Overall Record
+            const recordMatch = content.match(/-\s+\*\*Overall Record:\*\*\s+(\d+)W,\s+(\d+)D,\s+(\d+)L\s+\(([\d.]+)%\s+score\s+rate\)/);
+            if (recordMatch) {
+                stats.wins = parseInt(recordMatch[1], 10);
+                stats.draws = parseInt(recordMatch[2], 10);
+                stats.losses = parseInt(recordMatch[3], 10);
+                stats.win_rate = parseFloat(recordMatch[4]);
+            }
+
+            // 8. Color Stats
+            const redMatch = content.match(/\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/);
+            if (redMatch) {
+                stats.color_stats.red = {
+                    games: parseInt(redMatch[1], 10),
+                    wins: parseInt(redMatch[2], 10),
+                    draws: parseInt(redMatch[3], 10),
+                    losses: parseInt(redMatch[4], 10),
+                    score_pct: parseFloat(redMatch[5])
+                };
+            }
+            const blackMatch = content.match(/\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/);
+            if (blackMatch) {
+                stats.color_stats.black = {
+                    games: parseInt(blackMatch[1], 10),
+                    wins: parseInt(blackMatch[2], 10),
+                    draws: parseInt(blackMatch[3], 10),
+                    losses: parseInt(blackMatch[4], 10),
+                    score_pct: parseFloat(blackMatch[5])
+                };
+            }
+
+            // 9. Parse Opponents Table
+            const tableRegex = /\|\s*([^|\s]+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)%\s*\|\s*([+-]?\d+)\s*\|\s*\*\*(\d+)\s*ELO\*\*\s*\|/g;
+            let match;
+            while ((match = tableRegex.exec(content)) !== null) {
+                stats.opponents.push({
+                    name: match[1],
+                    base_elo: parseInt(match[2], 10),
+                    games: parseInt(match[3], 10),
+                    wins: parseInt(match[4], 10),
+                    draws: parseInt(match[5], 10),
+                    losses: parseInt(match[6], 10),
+                    score_pct: parseFloat(match[7]),
+                    elo_diff: parseInt(match[8], 10),
+                    est_elo: parseInt(match[9], 10)
+                });
+            }
+
+            return stats;
+        }
+
+        // Regex parsing helper for summary.md content (1v1 Match Report)
+        function parseMatchSummaryMd(content, folderName) {
+            const stats = {
+                folder: folderName,
+                is_match: true,
+                engine1: "Unknown E1",
+                engine2: "Unknown E2",
+                date_str: "Unknown Date",
+                total_games: 0,
+                e1_wins: 0,
+                e1_draws: 0,
+                e1_losses: 0,
+                score_pct: 0.0,
+                elo_diff: 0.0,
+                standard_error: 0.0,
+                ci_low: 0.0,
+                ci_high: 0.0,
+                los: "N/A",
+                draw_rate: 0.0,
+                win_streak: 0,
+                loss_streak: 0,
+                avg_ply: "N/A"
+            };
+
+            // 1. Engine Names from Title
+            const titleMatch = content.match(/^#\s+Match Report:\s+(.+?)\s+vs\s+(.+)$/m);
+            if (titleMatch) {
+                stats.engine1 = titleMatch[1].trim();
+                stats.engine2 = titleMatch[2].trim();
+            } else {
+                const parts = folderName.split("-vs-");
+                if (parts.length === 2) {
+                    stats.engine1 = parts[0];
+                    stats.engine2 = parts[1].split("_")[0];
+                } else {
+                    stats.engine1 = folderName.split("_")[0];
+                    stats.engine2 = "Opponent";
+                }
+            }
+
+            // 2. Date
+            const dateMatch = content.match(/Generated on:\s+(.+)$/m);
+            if (dateMatch) {
+                stats.date_str = dateMatch[1].trim();
+            }
+
+            // 3. Total Games
+            const gamesMatch = content.match(/Total Games Played:\s+\*\*(\d+)\*\*/);
+            if (gamesMatch) {
+                stats.total_games = parseInt(gamesMatch[1], 10);
+            }
+
+            // 4. Record, Elo Diff, CI, standard error, etc.
+            const wMatch = content.match(/\|\s+\*\*Wins\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/);
+            if (wMatch) {
+                stats.e1_wins = parseInt(wMatch[1], 10);
+            }
+            const dMatch = content.match(/\|\s+\*\*Draws\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/);
+            if (dMatch) {
+                stats.e1_draws = parseInt(dMatch[1], 10);
+            }
+            const lMatch = content.match(/\|\s+\*\*Losses\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/);
+            if (lMatch) {
+                stats.e1_losses = parseInt(lMatch[1], 10);
+            }
+
+            const ptsMatch = content.match(/\|\s+\*\*Points\*\*\s+\|\s+[\d.]+\s+\/\s+\d+\s+\(([\d.]+)%\)\s+\|/);
+            if (ptsMatch) {
+                stats.score_pct = parseFloat(ptsMatch[1]);
+            }
+
+            const eloMatch = content.match(/\|\s+\*\*Elo Diff\*\*\s+\|\s+\*\*([+-]?[\d.]+)\*\*\s+\|/);
+            if (eloMatch) {
+                stats.elo_diff = parseFloat(eloMatch[1]);
+            }
+
+            const seMatch = content.match(/\|\s+\*\*Standard Error\*\*\s+\|\s+±\s+([\d.]+)\s+\|/);
+            if (seMatch) {
+                stats.standard_error = parseFloat(seMatch[1]);
+            }
+
+            const ciMatch = content.match(/\|\s+\*\*95% Confidence Interval\*\*\s+\|\s+\[([+-]?[\d.]+),\s*([+-]?[\d.]+)\]\s+\|/);
+            if (ciMatch) {
+                stats.ci_low = parseFloat(ciMatch[1]);
+                stats.ci_high = parseFloat(ciMatch[2]);
+            }
+
+            const losMatch = content.match(/\|\s+\*\*LOS \(Likelihood of Superiority\)\*\*\s+\|\s+([\d.]+%)\s+\|/);
+            if (losMatch) {
+                stats.los = losMatch[1];
+            }
+
+            const drMatch = content.match(/\|\s+\*\*Draw Rate\*\*\s+\|\s+([\d.]+%)\s+\|/);
+            if (drMatch) {
+                stats.draw_rate = parseFloat(drMatch[1]);
+            }
+
+            // 5. Streaks
+            const winStreakMatch = content.match(/-\s+\*\*Longest Win Streak:\*\*\s+(\d+)\s+games/);
+            if (winStreakMatch) {
+                stats.win_streak = parseInt(winStreakMatch[1], 10);
+            }
+            const lossStreakMatch = content.match(/-\s+\*\*Longest Loss Streak:\*\*\s+(\d+)\s+games/);
+            if (lossStreakMatch) {
+                stats.loss_streak = parseInt(lossStreakMatch[1], 10);
+            }
+
+            // 6. Avg Ply
+            const plyMatch = content.match(/-\s+\*\*Ply Count:\*\*\s+Average:\s+([\d.]+)\s+plies/);
+            if (plyMatch) {
+                stats.avg_ply = parseFloat(plyMatch[1]);
+            }
+
+            return stats;
+        }
+
+        // Dynamically scans /matches/ via AJAX
+        async function runClientSidePipeline() {
+            // Check protocol to alert if loaded via file:///
+            if (window.location.protocol === 'file:') {
+                renderCORSWarning("Local Security Restrict: Loaded via file://");
+                return;
+            }
+
+            try {
+                // Fetch the directories in the matches folder
+                // Under a local server, fetching the directory path returns the HTTP directory index
+                const matchesResponse = await fetch("../matches/");
+                if (!matchesResponse.ok) {
+                    throw new Error("HTTP request failed: Could not fetch 'matches/' directory listing.");
+                }
+                const htmlText = await matchesResponse.text();
+
+                // Parse the directory listing links
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = htmlText;
+                const links = tempDiv.getElementsByTagName("a");
+                const folders = [];
+
+                for (let link of links) {
+                    const href = link.getAttribute("href");
+                    // Identify directory paths (typically ending with / or containing folder patterns)
+                    if (href && href !== "../" && href !== "/") {
+                        const isDirectory = href.endsWith("/");
+                        
+                        let folderName = href;
+                        if (folderName.endsWith("/")) {
+                            folderName = folderName.slice(0, -1);
+                        }
+                        
+                        // Extract last segment to check for file extensions (to filter out index files)
+                        const lastSegment = folderName.split("/").pop();
+                        const hasFileExtension = /\.[a-zA-Z0-9]{2,4}$/.test(lastSegment);
+                        
+                        // A valid folder name:
+                        // 1. Should be non-empty
+                        // 2. Should not be in our folders list yet
+                        // 3. Must either end with a slash originally, OR if it doesn't end with a slash, 
+                        //    its last segment shouldn't look like a file with a 2-4 letter extension (like .html, .pgn, .md, .json, etc.).
+                        if (folderName && !folders.includes(folderName)) {
+                            if (isDirectory || !hasFileExtension) {
+                                folders.push(folderName);
+                            }
+                        }
+                    }
+                }
+
+                if (folders.length === 0) {
+                    renderEmptyState();
+                    return;
+                }
+
+                // Process folders concurrently
+                gauntletData = [];
+                matchData = [];
+                for (let folder of folders) {
+                    try {
+                        const summaryResponse = await fetch(`../matches/${folder}/summary.md`);
+                        if (summaryResponse.ok) {
+                            const mdContent = await summaryResponse.text();
+                            if (mdContent.includes("# Match Report:")) {
+                                const parsed = parseMatchSummaryMd(mdContent, folder);
+                                if (parsed && parsed.total_games > 0) {
+                                    matchData.push(parsed);
+                                }
+                            } else {
+                                const parsed = parseSummaryMd(mdContent, folder);
+                                if (parsed && parsed.total_games > 0) {
+                                    gauntletData.push(parsed);
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn(`Bypassed summary.md read for: ${folder}`);
+                    }
+                }
+
+                if (gauntletData.length === 0 && matchData.length === 0) {
+                    renderEmptyState();
+                    return;
+                }
+
+                // Sort results by MLE ELO descending
+                gauntletData.sort((a, b) => b.global_elo - a.global_elo);
+
+                // Build layout
+                hideOverlay();
+                renderDashboard();
+
+            } catch (error) {
+                console.error("Dashboard compilation failed:", error);
+                renderCORSWarning("Error loading directory indexes");
+            }
+        }
+
+        function hideOverlay() {
+            const overlay = document.getElementById("status-overlay");
+            overlay.style.opacity = 0;
+            setTimeout(() => {
+                overlay.style.display = "none";
+                const main = document.getElementById("main-container");
+                main.style.opacity = 1;
+            }, 500);
+        }
+
+        function renderCORSWarning(titleText) {
+            document.getElementById("loader-spinner").style.display = "none";
+            document.getElementById("status-title").textContent = titleText;
+            document.getElementById("status-title").style.color = "var(--rose)";
+            
+            document.getElementById("status-message").innerHTML = `
+                <p>To prevent local file-system intrusions, browsers restrict scripts from crawling directories directly via <code>file://</code> paths.</p>
+                <br>
+                <p>To dynamically parse and load all <code>matches/...</code> results directly in your browser, start a lightweight Python web server:</p>
+                <div class="code-block">
+                    # Run this in your lingine project root directory:<br>
+                    python3 -m http.server 8000
+                </div>
+                <p>Once started, open the following URL in your web browser:</p>
+                <br>
+                <button class="status-btn" onclick="window.location.href='http://localhost:8000/scripts/compare_results.html'">
+                    Open http://localhost:8000/scripts/compare_results.html
+                </button>
+            `;
+        }
+
+        function renderEmptyState() {
+            document.getElementById("loader-spinner").style.display = "none";
+            document.getElementById("status-title").textContent = "No Tournament Summaries Found";
+            document.getElementById("status-title").style.color = "var(--amber)";
+            document.getElementById("status-message").innerHTML = `
+                <p>No <code>summary.md</code> files were parsed in any subdirectories of the <code>matches/</code> folder.</p>
+                <br>
+                <p>Run a tournament to generate results:</p>
+                <div style="display: flex; flex-direction: column; gap: 1.5rem; text-align: left; max-width: 500px; margin: 1.5rem auto;">
+                    <div>
+                        <strong style="color: #ffffff;">Run 1v1 match:</strong>
+                        <div class="code-block" style="margin: 0.25rem 0 0 0;">./scripts/run_match.sh</div>
+                    </div>
+                    <div>
+                        <strong style="color: #ffffff;">Run gauntlet:</strong>
+                        <div class="code-block" style="margin: 0.25rem 0 0 0;">python3 scripts/run_gauntlet.py</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboard() {
+            const now = new Date();
+            document.getElementById("meta-tag").textContent = `Auto-Compiled: ${now.toLocaleDateString()} ${now.toLocaleTimeString()} • Dynamically parsed client-side`;
+            
+            // Build Gauntlet View if we have data
+            if (gauntletData.length > 0) {
+                buildStatsWidgets();
+                buildLeaderboardTable();
+                buildEloChart();
+                buildOpponentSelector();
+                updateOpponentComparison();
+            } else {
+                document.getElementById('gauntlet-view').innerHTML = `
+                    <div class="card card-accent-indigo" style="text-align: center; padding: 3rem; margin-bottom: 2rem;">
+                        <h3 style="font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 0.5rem; color: #ffffff;">No Gauntlet Results Found</h3>
+                        <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.5rem;">Run a gauntlet tournament to compare engine ratings against various opponents.</p>
+                        <div class="code-block" style="display: inline-block; text-align: left; max-width: 500px;">
+                            python3 scripts/run_gauntlet.py
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Build Match View if we have data
+            buildMatchDashboard();
+
+            // Set default tab based on data availability
+            if (gauntletData.length === 0 && matchData.length > 0) {
+                switchTab('match');
+            } else {
+                switchTab('gauntlet');
+            }
+        }
+
+        function buildStatsWidgets() {
+            const container = document.getElementById('stats-widgets');
+            if (!container) return;
+
+            const totalRuns = gauntletData.length;
+            const topBot = gauntletData[0];
+            const totalGamesPlayed = gauntletData.reduce((acc, curr) => acc + curr.total_games, 0);
+            const avgWinRate = (gauntletData.reduce((acc, curr) => acc + curr.win_rate, 0) / totalRuns).toFixed(1);
+            
+            container.innerHTML = `
+                <div class="card card-accent-indigo">
+                    <div class="card-label">Top Performer</div>
+                    <div class="card-value">${topBot.bot_name}</div>
+                    <div class="card-subtext">Peak Elo: <strong>${topBot.global_elo} ELO</strong></div>
+                </div>
+                <div class="card card-accent-emerald">
+                    <div class="card-label">Peak MLE Rating</div>
+                    <div class="card-value">${topBot.global_elo} ELO</div>
+                    <div class="card-subtext">95% CI: ${topBot.ci_low} - ${topBot.ci_high} ELO</div>
+                </div>
+                <div class="card card-accent-purple">
+                    <div class="card-label">Total Matches Run</div>
+                    <div class="card-value">${totalRuns}</div>
+                    <div class="card-subtext">Cumulative stats loaded</div>
+                </div>
+                <div class="card card-accent-amber">
+                    <div class="card-label">Avg. Win / Score Rate</div>
+                    <div class="card-value" style="color: var(--amber);">${avgWinRate}%</div>
+                    <div class="card-subtext">Across ${totalGamesPlayed} total games</div>
+                </div>
+            `;
+        }
+
+        function buildLeaderboardTable() {
+            const tbody = document.getElementById('leaderboard-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            gauntletData.forEach((bot, index) => {
+                const row = document.createElement('tr');
+                
+                let rankBadge = '';
+                if (index === 0) rankBadge = '🏆 ';
+                else if (index === 1) rankBadge = '🥈 ';
+                else if (index === 2) rankBadge = '🥉 ';
+                
+                row.innerHTML = `
+                    <td style="font-weight: 600; white-space: nowrap;">${rankBadge}${bot.bot_name}</td>
+                    <td><span class="badge badge-accent" style="font-size: 0.95rem;">${bot.global_elo} ELO</span></td>
+                    <td style="color: var(--text-muted); font-size: 0.9rem;">
+                        ${bot.ci_low} - ${bot.ci_high} ELO <span style="font-size: 0.8rem; color: #818cf8;">(±${bot.standard_error.toFixed(1)})</span>
+                    </td>
+                    <td style="font-family: monospace; font-size: 0.9rem; white-space: nowrap;">
+                        <span style="color: var(--emerald); font-weight: 600;">${bot.wins}W</span> / 
+                        <span style="color: var(--amber); font-weight: 600;">${bot.draws}D</span> / 
+                        <span style="color: var(--rose); font-weight: 600;">${bot.losses}L</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 120px;">
+                            <span style="font-weight: 600; font-size: 0.85rem; width: 45px; text-align: right;">${bot.win_rate.toFixed(1)}%</span>
+                            <div class="bar-container" style="flex-grow: 1; margin: 0;">
+                                <div class="bar-fill" style="width: ${bot.win_rate}%;"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="font-weight: 500;">${bot.total_games}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function buildEloChart() {
+            const eloCanvas = document.getElementById('eloChart');
+            if (!eloCanvas) return;
+            const ctx = eloCanvas.getContext('2d');
+            
+            const labels = gauntletData.map(bot => bot.bot_name);
+            const elos = gauntletData.map(bot => bot.global_elo);
+            const ciLows = gauntletData.map(bot => bot.ci_low);
+            const ciHighs = gauntletData.map(bot => bot.ci_high);
+
+            // Dynamically calculate y-axis limits to prevent error bars from getting clipped
+            const validCiLows = ciLows.filter(val => typeof val === 'number' && !isNaN(val));
+            const validCiHighs = ciHighs.filter(val => typeof val === 'number' && !isNaN(val));
+            let yMin = undefined;
+            let yMax = undefined;
+            if (validCiLows.length > 0 && validCiHighs.length > 0) {
+                const minCI = Math.min(...validCiLows);
+                const maxCI = Math.max(...validCiHighs);
+                yMin = Math.floor((minCI - 20) / 10) * 10;
+                yMax = Math.ceil((maxCI + 20) / 10) * 10;
+            }
+            
+            const errorBarPlugin = {
+                id: 'errorBars',
+                afterDatasetsDraw(chart) {
+                    const { ctx, scales: { x, y } } = chart;
+                    ctx.save();
+                    ctx.strokeStyle = '#a5b4fc';
+                    ctx.lineWidth = 2.5;
+                    
+                    chart.getDatasetMeta(0).data.forEach((bar, index) => {
+                        const botIndex = index;
+                        const xPos = bar.x;
+                        const yLow = y.getPixelForValue(ciLows[botIndex]);
+                        const yHigh = y.getPixelForValue(ciHighs[botIndex]);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(xPos, yLow);
+                        ctx.lineTo(xPos, yHigh);
+                        ctx.stroke();
+                        
+                        const capWidth = 8;
+                        ctx.beginPath();
+                        ctx.moveTo(xPos - capWidth, yLow);
+                        ctx.lineTo(xPos + capWidth, yLow);
+                        ctx.moveTo(xPos - capWidth, yHigh);
+                        ctx.lineTo(xPos + capWidth, yHigh);
+                        ctx.stroke();
+                    });
+                    ctx.restore();
+                }
+            };
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Global MLE Elo Rating (Bradley-Terry)',
+                        data: elos,
+                        backgroundColor: 'rgba(99, 102, 241, 0.4)',
+                        borderColor: '#6366f1',
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        maxBarThickness: 60
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: yMin,
+                            max: yMax,
+                            beginAtZero: false,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans' } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans', weight: '600' } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const bot = gauntletData[context.dataIndex];
+                                    return ` MLE Elo: ${bot.global_elo} (95% CI: ${bot.ci_low} - ${bot.ci_high})`;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [errorBarPlugin]
+            });
+        }
+
+        function buildOpponentSelector() {
+            const select = document.getElementById('opponent-select');
+            if (!select) return;
+            select.innerHTML = '';
+            
+            const opponentNames = new Set();
+            gauntletData.forEach(bot => {
+                bot.opponents.forEach(opp => {
+                    opponentNames.add(opp.name);
+                });
+            });
+            
+            const sortedNames = Array.from(opponentNames).sort();
+            
+            if (sortedNames.length === 0) {
+                select.style.display = 'none';
+                return;
+            }
+            
+            sortedNames.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = `Target Opponent: ${name}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function updateOpponentComparison() {
+            const select = document.getElementById('opponent-select');
+            if (!select) return;
+            const targetOppName = select.value;
+            const container = document.getElementById('opponent-comparison-body');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (!targetOppName) return;
+            
+            const comparisons = [];
+            gauntletData.forEach(bot => {
+                const opp = bot.opponents.find(o => o.name === targetOppName);
+                if (opp) {
+                    comparisons.push({
+                        bot_name: bot.bot_name,
+                        win_rate: opp.score_pct,
+                        est_elo: opp.est_elo,
+                        elo_diff: opp.elo_diff,
+                        record: `${opp.wins}W / ${opp.draws}D / ${opp.losses}L`
+                    });
+                }
+            });
+            
+            if (comparisons.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No matches played against this target.</p>';
+                return;
+            }
+            
+            comparisons.sort((a, b) => b.est_elo - a.est_elo);
+            
+            comparisons.forEach((item, index) => {
+                const diffColor = item.elo_diff >= 0 ? 'var(--emerald)' : 'var(--rose)';
+                const diffSign = item.elo_diff >= 0 ? '+' : '';
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+                itemDiv.style.paddingBottom = '1rem';
+                itemDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <span style="font-weight: 700; font-size: 1.05rem;">${index + 1}. ${item.bot_name}</span>
+                        <span class="badge badge-emerald" style="font-size: 0.9rem;">${item.est_elo} ELO Performance</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                        <span>Score: <strong>${item.win_rate.toFixed(1)}%</strong> (${item.record})</span>
+                        <span style="color: ${diffColor}; font-weight: 700;">Relative Diff: ${diffSign}${item.elo_diff} Elo</span>
+                    </div>
+                    <div class="bar-container">
+                        <div class="bar-fill" style="width: ${item.win_rate}%;"></div>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
+        }
+
+        // ─── Match Results Dashboard Populators ──────────────────────────────
+
+        function buildMatchDashboard() {
+            buildMatchStatsWidgets();
+            buildMatchCards();
+        }
+
+        function buildMatchStatsWidgets() {
+            const container = document.getElementById('match-stats-widgets');
+            if (!container) return;
+
+            const totalMatches = matchData.length;
+            if (totalMatches === 0) {
+                container.innerHTML = `
+                    <div class="card card-accent-indigo" style="grid-column: span 4; text-align: center; padding: 2.5rem;">
+                        <h3 style="font-family: var(--font-display); font-size: 1.25rem; margin-bottom: 0.5rem; color: #ffffff;">No Completed 1v1 Matches Found</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Run some 1v1 tournament matches with <code>run_match.sh</code> to display head-to-head metrics here.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const totalGames = matchData.reduce((acc, curr) => acc + curr.total_games, 0);
+            
+            // Find most dominant match result (highest Elo diff absolute value)
+            let dominantMatch = matchData[0];
+            matchData.forEach(m => {
+                if (Math.abs(m.elo_diff) > Math.abs(dominantMatch.elo_diff)) {
+                    dominantMatch = m;
+                }
+            });
+
+            container.innerHTML = `
+                <div class="card card-accent-indigo">
+                    <div class="card-label">1v1 Matches Run</div>
+                    <div class="card-value">${totalMatches}</div>
+                    <div class="card-subtext">Completed head-to-head matchups</div>
+                </div>
+                <div class="card card-accent-emerald">
+                    <div class="card-label">Total Games Played</div>
+                    <div class="card-value">${totalGames}</div>
+                    <div class="card-subtext">Across all 1v1 matchups</div>
+                </div>
+                <div class="card card-accent-purple">
+                    <div class="card-label">Largest Elo Gap</div>
+                    <div class="card-value">${Math.abs(dominantMatch.elo_diff).toFixed(1)} ELO</div>
+                    <div class="card-subtext">${dominantMatch.engine1} vs ${dominantMatch.engine2}</div>
+                </div>
+                <div class="card card-accent-amber">
+                    <div class="card-label">Avg. Match Size</div>
+                    <div class="card-value" style="color: var(--amber);">${Math.round(totalGames / totalMatches)} games</div>
+                    <div class="card-subtext">Per head-to-head run</div>
+                </div>
+            `;
+        }
+
+        function buildMatchCards() {
+            const container = document.getElementById('match-cards-container');
+            if (!container) return;
+
+            if (matchData.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // Sort matches chronologically/by folder name descending (newest matches first)
+            const sortedMatches = [...matchData].sort((a, b) => b.folder.localeCompare(a.folder));
+
+            container.innerHTML = '';
+            sortedMatches.forEach(match => {
+                const card = document.createElement('div');
+                card.className = 'match-card';
+                
+                const eloSign = match.elo_diff >= 0 ? '+' : '';
+                const eloColor = match.elo_diff >= 0 ? 'var(--emerald)' : 'var(--rose)';
+                const eloBg = match.elo_diff >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                const eloBorder = match.elo_diff >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+
+                card.innerHTML = `
+                    <div class="match-header">
+                        <div class="match-vs">
+                            <span class="match-subtitle">Head-to-Head Matchup</span>
+                            <span class="match-title" title="${match.engine1} vs ${match.engine2}">${match.engine1} <span style="color: var(--accent-color);">vs</span> ${match.engine2}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Date: ${match.date_str}</span>
+                        </div>
+                        <span class="badge" style="background: ${eloBg}; color: ${eloColor}; border: 1px solid ${eloBorder}; font-size: 0.95rem; font-weight: 700; padding: 0.35rem 0.75rem;">
+                            ${eloSign}${match.elo_diff.toFixed(1)} ELO
+                        </span>
+                    </div>
+
+                    <div class="match-score-summary">
+                        <div class="match-stats-col">
+                            <span class="match-stats-label">${match.engine1.slice(0, 15)} Wins</span>
+                            <span class="match-stats-value" style="color: var(--emerald);">${match.e1_wins}</span>
+                        </div>
+                        <div class="match-stats-col" style="border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05);">
+                            <span class="match-stats-label">Draws</span>
+                            <span class="match-stats-value" style="color: var(--amber);">${match.e1_draws}</span>
+                        </div>
+                        <div class="match-stats-col">
+                            <span class="match-stats-label">${match.engine2.slice(0, 15)} Wins</span>
+                            <span class="match-stats-value" style="color: var(--rose);">${match.e1_losses}</span>
+                        </div>
+                    </div>
+
+                    <div class="match-details-grid">
+                        <div class="match-detail-item">
+                            <span class="match-detail-label">Confidence Interval (95%)</span>
+                            <span class="match-detail-value">${match.ci_low !== 0 || match.ci_high !== 0 ? `[${match.ci_low.toFixed(1)}, ${match.ci_high.toFixed(1)}]` : 'N/A'}</span>
+                        </div>
+                        <div class="match-detail-item">
+                            <span class="match-detail-label">Standard Error</span>
+                            <span class="match-detail-value">${match.standard_error !== 0 ? `±${match.standard_error.toFixed(1)} Elo` : 'N/A'}</span>
+                        </div>
+                        <div class="match-detail-item">
+                            <span class="match-detail-label">Likelihood of Superiority</span>
+                            <span class="match-detail-value" style="color: #818cf8;">${match.los}</span>
+                        </div>
+                        <div class="match-detail-item">
+                            <span class="match-detail-label">Draw Rate / Tot Games</span>
+                            <span class="match-detail-value">${match.draw_rate.toFixed(1)}% / ${match.total_games}g</span>
+                        </div>
+                        <div class="match-detail-item">
+                            <span class="match-detail-label">Max Performance Streaks</span>
+                            <span class="match-detail-value" style="font-size: 0.8rem;">
+                                <span style="color: var(--emerald); font-weight: 700;">${match.win_streak}W</span> / 
+                                <span style="color: var(--rose); font-weight: 700;">${match.loss_streak}L</span>
+                            </span>
+                        </div>
+                        <div class="match-detail-item">
+                            <span class="match-detail-label">Average Game Length</span>
+                            <span class="match-detail-value">${match.avg_ply !== 'N/A' ? `${match.avg_ply} plies` : 'N/A'}</span>
+                        </div>
+                    </div>
+
+                    <div class="match-progress-container">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+                            <span>${match.engine1.slice(0, 15)} Score Rate</span>
+                            <span>${match.score_pct.toFixed(1)}%</span>
+                        </div>
+                        <div class="bar-container" style="margin: 0; height: 8px;">
+                            <div class="bar-fill" style="width: ${match.score_pct}%; background: linear-gradient(90deg, ${eloColor}, #818cf8);"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Initialize Pipeline on Load
+        window.addEventListener('DOMContentLoaded', runClientSidePipeline);
+    </script>
+</body>
+</html>

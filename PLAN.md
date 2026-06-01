@@ -148,12 +148,22 @@ alignment._
       developmental guidance and king safety
 - [x] **Incremental Eval**: Keep evaluation updated incrementally during
       `do_move`/`undo_move` to avoid full board scan overhead
-- [ ] **Verification**: Run `./scripts/run_match.sh` vs v1.1.0 and run
+- [x] **Verification**: Run `./scripts/run_match.sh` vs v1.1.0 and run
       `./scripts/run_gauntlet.py` to confirm ELO gains
 
 #### Iteration 3: The Runner (Target: ~2000 ELO)
 
 _Goal: Fast, selective tactical search and positional maturity._
+
+- [x] **Search Extensions**: Selectively extend depth for volatile tactical
+      lines:
+  - **Check Extensions**: Extend search by 1 ply when in check (with a cap on
+    max extensions along a path to prevent search explosion).
+  - **Singular Extensions**: If depth $\ge 8$ and the TT best move is clearly
+    superior, verify it via reduced-depth search on other moves and extend it by
+    1 ply.
+  - **One-Reply Extensions**: If side to move has only one legal move, extend
+    search by 1 ply.
 
 - [ ] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
 - [ ] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
@@ -295,6 +305,31 @@ src/
 | Advisor (士)  | 110                                    |
 | Pawn (兵)     | 30–70 (increases after crossing river) |
 | King (將)     | ∞                                      |
+
+### Search Extensions design
+
+To counteract the horizon effect and verify critical tactical lines, three
+selective extensions will be integrated:
+
+1. **Check Extensions**:
+   - **Condition**: `pos.is_in_check(pos.side_to_move())`.
+   - **Action**: Extend the search depth by 1 ply.
+   - **Guard**: Cap cumulative extensions along a single search path (e.g.,
+     `extensions < 6`) to prevent infinite recursion in loops.
+
+2. **Singular Extensions**:
+   - **Condition**: depth $\ge 8$, a valid TT entry exists for the current
+     position, the TT entry depth $\ge$ depth - 3, and the TT score is not a
+     fail-low or fail-high bound.
+   - **Action**: Run a reduced search of all moves other than the TT move with
+     depth `depth - 3` and beta = `tt_score - singular_margin(depth)`. If this
+     sub-search returns a score below beta, the TT move is deemed singular.
+     Extend its search depth by 1 ply.
+
+3. **One-Reply Extensions**:
+   - **Condition**: The number of legal moves `count == 1`.
+   - **Action**: Extend search depth by 1 ply because the branching factor is 0,
+     incurring no tree size explosion.
 
 ### ELO milestones (rough)
 

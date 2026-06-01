@@ -223,12 +223,15 @@ def compute_elo_diff(wins, draws, losses):
     score_pct = points / n
 
     # Elo difference from logistic model
+    # Use standard half-game correction for extreme scores (0% and 100%) to maintain monotonicity
     if score_pct >= 0.999:
-        elo_diff = 400.0
+        adjusted_score = (n - 0.5) / n if n > 0 else 0.999
     elif score_pct <= 0.001:
-        elo_diff = -400.0
+        adjusted_score = 0.5 / n if n > 0 else 0.001
     else:
-        elo_diff = 400.0 * math.log10(score_pct / (1.0 - score_pct))
+        adjusted_score = score_pct
+
+    elo_diff = 400.0 * math.log10(adjusted_score / (1.0 - adjusted_score))
 
     # Standard Error using trinomial variance
     # Var(score) = (W*(1-mu)^2 + D*(0.5-mu)^2 + L*(0-mu)^2) / (n-1)
@@ -240,17 +243,11 @@ def compute_elo_diff(wins, draws, losses):
                      + losses * (0.0 - mu)**2) / (n - 1)
         se_score = math.sqrt(var_score / n)
 
-        # Convert SE in score-space to SE in Elo-space via derivative
-        # dElo/dS = 400 / (S * (1-S) * ln(10))
-        if 0.001 < score_pct < 0.999:
-            dElo_dS = 400.0 / (score_pct * (1.0 - score_pct) * math.log(10.0))
-            se_elo = abs(dElo_dS) * se_score
-            ci_low = elo_diff - 1.96 * se_elo
-            ci_high = elo_diff + 1.96 * se_elo
-        else:
-            se_elo = None
-            ci_low = None
-            ci_high = None
+        # Convert SE in score-space to SE in Elo-space via derivative using adjusted score to prevent division by zero
+        dElo_dS = 400.0 / (adjusted_score * (1.0 - adjusted_score) * math.log(10.0))
+        se_elo = abs(dElo_dS) * se_score
+        ci_low = elo_diff - 1.96 * se_elo
+        ci_high = elo_diff + 1.96 * se_elo
     else:
         se_elo = None
         ci_low = None
