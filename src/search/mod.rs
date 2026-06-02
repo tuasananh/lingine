@@ -118,9 +118,11 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
             } else {
                 // Quiet move
                 let ply_idx = ply as usize;
-                if ply_idx < 128 && m == ctx.killers[ply_idx][0] {
+                // We might not need to check for ply_idx out of bounds since ply should not
+                // exceed MAX_PLY in normal circumstances
+                if m == ctx.killers[ply_idx][0] {
                     9000
-                } else if ply_idx < 128 && m == ctx.killers[ply_idx][1] {
+                } else if m == ctx.killers[ply_idx][1] {
                     8000
                 } else {
                     let side_idx = pos.side_to_move() as usize;
