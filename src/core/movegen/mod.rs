@@ -245,6 +245,8 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
             write_idx += 1
         }
     }
+
+    moves.truncate(write_idx);
 }
 
 #[cfg(test)]
