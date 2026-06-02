@@ -82,14 +82,7 @@ impl Engine for PrintBot {
     /// Sends one `info string` message and immediately returns the null move.
     ///
     /// A real implementation would run a search loop here, checking the stop
-    /// flag periodically:
-    /// ```rust,ignore
-    /// while !params.stop.load(Ordering::Relaxed) {
-    ///     // search deeper…
-    ///     tx.send(UciInfo { depth: Some(current_depth), … }).ok();
-    /// }
-    /// Ok(best_move_found)
-    /// ```
+    /// flag periodically
     fn go(&mut self, _params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove> {
         // No real search — send a single info string so the protocol layer
         // has something to print, then return a null move.
