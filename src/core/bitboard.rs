@@ -22,7 +22,7 @@ use crate::core::types::{Color, File, Rank, Square};
     Eq,
     Debug,
 )]
-pub struct Bitboard(pub u128);
+pub struct Bitboard(u128);
 
 impl Default for Bitboard {
     fn default() -> Self {
@@ -35,6 +35,21 @@ impl Bitboard {
     #[inline(always)]
     pub const fn new() -> Self {
         Self(0)
+    }
+
+    #[inline(always)]
+    pub const fn from_raw(bitboard: u128) -> Self {
+        Self(bitboard)
+    }
+
+    #[inline(always)]
+    pub const fn raw(&self) -> u128 {
+        self.0
+    }
+
+    #[inline(always)]
+    pub const fn is_empty(&self) -> bool {
+        self.0 == 0
     }
 
     /// Verifies if a given square bit is active (set to 1) in the bitboard.

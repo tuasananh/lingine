@@ -66,7 +66,7 @@ pub struct FileEntry {
 /// Generals can only move 1 step orthogonally (up/down/left/right) and are
 /// strictly confined to the 3x3 Palace.
 const fn init_king_attacks() -> [Bitboard; 90] {
-    let mut table = [Bitboard(0); 90];
+    let mut table = [Bitboard::from_raw(0); 90];
     let mut from_idx = 0;
     while from_idx < 90 {
         let f = (from_idx % 9) as i8;
@@ -92,7 +92,7 @@ const fn init_king_attacks() -> [Bitboard; 90] {
                 }
                 i += 1;
             }
-            table[from_idx as usize] = Bitboard(mask);
+            table[from_idx as usize] = Bitboard::from_raw(mask);
         }
         from_idx += 1;
     }
@@ -103,7 +103,7 @@ const fn init_king_attacks() -> [Bitboard; 90] {
 /// Advisors move exactly 1 step diagonally and are strictly confined to the
 /// Palace. There are exactly 5 valid Palace squares for an Advisor.
 const fn init_advisor_attacks() -> [Bitboard; 90] {
-    let mut table = [Bitboard(0); 90];
+    let mut table = [Bitboard::from_raw(0); 90];
     let mut from_idx = 0;
     while from_idx < 90 {
         let f = (from_idx % 9) as i8;
@@ -129,7 +129,7 @@ const fn init_advisor_attacks() -> [Bitboard; 90] {
                 }
                 i += 1;
             }
-            table[from_idx as usize] = Bitboard(mask);
+            table[from_idx as usize] = Bitboard::from_raw(mask);
         }
         from_idx += 1;
     }
@@ -142,7 +142,7 @@ const fn init_advisor_attacks() -> [Bitboard; 90] {
 /// * **Promoted (crossed river)**: Can move 1 step straight forward OR 1 step
 ///   horizontally (left/right).
 const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
-    let mut table = [[Bitboard(0); 90]; 2];
+    let mut table = [[Bitboard::from_raw(0); 90]; 2];
 
     // Index 0: White Pawn
     let mut from_idx = 0;
@@ -162,7 +162,7 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Right sideways move
             }
         }
-        table[0][from_idx as usize] = Bitboard(mask);
+        table[0][from_idx as usize] = Bitboard::from_raw(mask);
         from_idx += 1;
     }
 
@@ -184,7 +184,7 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Right sideways move
             }
         }
-        table[1][from_idx as usize] = Bitboard(mask);
+        table[1][from_idx as usize] = Bitboard::from_raw(mask);
         from_idx += 1;
     }
 
@@ -196,7 +196,7 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
 /// from to attack the target square. Used in `Position::checkers_to` to check
 /// Pawn checks.
 const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
-    let mut table = [[Bitboard(0); 90]; 2];
+    let mut table = [[Bitboard::from_raw(0); 90]; 2];
 
     // Index 0: White pawn attacking a square
     let mut square_idx = 0;
@@ -215,7 +215,7 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Came from right
             }
         }
-        table[0][square_idx as usize] = Bitboard(mask);
+        table[0][square_idx as usize] = Bitboard::from_raw(mask);
         square_idx += 1;
     }
 
@@ -236,7 +236,7 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Came from right
             }
         }
-        table[1][square_idx as usize] = Bitboard(mask);
+        table[1][square_idx as usize] = Bitboard::from_raw(mask);
         square_idx += 1;
     }
 
@@ -249,7 +249,7 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
 const fn init_bishop_table() -> [BishopEntry; 90] {
     let mut table = [BishopEntry {
         eyes: [None; 4],
-        attacks: [Bitboard(0); 16],
+        attacks: [Bitboard::from_raw(0); 16],
     }; 90];
     let mut from_idx = 0;
     while from_idx < 90 {
@@ -299,7 +299,7 @@ const fn init_bishop_table() -> [BishopEntry; 90] {
                 }
                 j += 1;
             }
-            table[from_idx as usize].attacks[occ_idx] = Bitboard(mask);
+            table[from_idx as usize].attacks[occ_idx] = Bitboard::from_raw(mask);
             occ_idx += 1;
         }
 
@@ -314,7 +314,7 @@ const fn init_bishop_table() -> [BishopEntry; 90] {
 const fn init_knight_table() -> [KnightEntry; 90] {
     let mut table = [KnightEntry {
         eyes: [None; 4],
-        attacks: [Bitboard(0); 16],
+        attacks: [Bitboard::from_raw(0); 16],
     }; 90];
     let mut from_idx = 0;
     while from_idx < 90 {
@@ -376,7 +376,7 @@ const fn init_knight_table() -> [KnightEntry; 90] {
                 }
                 e += 1;
             }
-            table[from_idx as usize].attacks[occ_idx] = Bitboard(mask);
+            table[from_idx as usize].attacks[occ_idx] = Bitboard::from_raw(mask);
             occ_idx += 1;
         }
 
@@ -544,7 +544,7 @@ const fn init_file_table() -> [FileEntry; 10] {
 const fn init_knight_to_table() -> [KnightToEntry; 90] {
     let mut table = [KnightToEntry {
         eyes: [None; 6],
-        attacks: [Bitboard(0); 64],
+        attacks: [Bitboard::from_raw(0); 64],
     }; 90];
     let mut from_idx = 0;
     while from_idx < 90 {
@@ -662,7 +662,7 @@ const fn init_knight_to_table() -> [KnightToEntry; 90] {
                 }
                 i += 1;
             }
-            table[from_idx as usize].attacks[occ_idx] = Bitboard(mask);
+            table[from_idx as usize].attacks[occ_idx] = Bitboard::from_raw(mask);
             occ_idx += 1;
         }
 
@@ -685,7 +685,7 @@ pub static FILE_TABLE: [FileEntry; 10] = init_file_table();
 pub static KNIGHT_TO_TABLE: [KnightToEntry; 90] = init_knight_to_table();
 
 const fn init_file_attacks_by_mask() -> [[Bitboard; 1024]; 9] {
-    let mut table = [[Bitboard(0); 1024]; 9];
+    let mut table = [[Bitboard::from_raw(0); 1024]; 9];
     let mut f = 0;
     while f < 9 {
         let mut mask = 0;
@@ -698,7 +698,7 @@ const fn init_file_attacks_by_mask() -> [[Bitboard; 1024]; 9] {
                 }
                 r += 1;
             }
-            table[f as usize][mask as usize] = Bitboard(bits);
+            table[f as usize][mask as usize] = Bitboard::from_raw(bits);
             mask += 1;
         }
         f += 1;

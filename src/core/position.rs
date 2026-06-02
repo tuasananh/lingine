@@ -553,7 +553,7 @@ impl Position {
         // `PAWN_ATTACKS_TO[color][sq]` gives the set of squares FROM which a Pawn of
         // that color could have attacked `square`. AND with actual Pawn
         // positions to find real attackers.
-        let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize].0 & opponent_pawns.0;
+        let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize] & opponent_pawns;
 
         // --- Knight scanner (Horse-Leg / blocking-pin aware) ---
         // Look up the precomputed entry for `square` in the reverse Knight attack
@@ -578,7 +578,7 @@ impl Position {
         // Use the 6-bit occupancy key to look up which Knights can actually reach
         // `square` (only those whose leg is NOT blocked), then intersect with
         // real Knight positions.
-        let knight_attackers = entry.attacks[occ_idx].0 & opponent_knights.0;
+        let knight_attackers = entry.attacks[occ_idx] & opponent_knights;
 
         // --- Rook & King scanner (orthogonal sliding rays + Flying General rule) ---
         // Compute all squares reachable by a Rook standing on `square` given
@@ -588,7 +588,7 @@ impl Position {
         // Intersect with attacker Rooks AND the attacker King: under the Flying General
         // rule, two Kings facing each other on an open file counts as a check
         // (treated as a Rook attack).
-        let rook_attackers = rook_atk.0 & (opponent_rooks.0 | opponent_king.0);
+        let rook_attackers = rook_atk & (opponent_rooks | opponent_king);
 
         // --- Cannon scanner (platform-leap captures) ---
         // Compute Cannon attack squares from `square`: Cannons capture by leaping over
@@ -598,12 +598,12 @@ impl Position {
         let cannon_atk = cannon_attacks(square, occupied);
         // Intersect with attacker Cannons only (Kings/Rooks cannot leap over
         // platforms).
-        let cannon_attackers = cannon_atk.0 & opponent_cannons.0;
+        let cannon_attackers = cannon_atk & opponent_cannons;
 
         // Union all four attacker bitboards into a single result: every square occupied
         // by an attacker-colored piece that can reach `square` under the
         // current board occupancy.
-        Bitboard(pawn_attackers | knight_attackers | rook_attackers | cannon_attackers)
+        pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
     }
 
     /// Evaluates backward checkers attacking `square` after simulating a
@@ -674,7 +674,7 @@ impl Position {
         }
 
         let them_color_idx = if attacker == Color::White { 0 } else { 1 };
-        let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize].0 & opponent_pawns.0;
+        let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize] & opponent_pawns;
 
         let entry = &KNIGHT_TO_TABLE[square as usize];
         let mut occ_idx = 0;
@@ -687,15 +687,15 @@ impl Position {
             }
             i += 1;
         }
-        let knight_attackers = entry.attacks[occ_idx].0 & opponent_knights.0;
+        let knight_attackers = entry.attacks[occ_idx] & opponent_knights;
 
         let rook_atk = rook_attacks(square, occupied);
-        let rook_attackers = rook_atk.0 & (opponent_rooks.0 | opponent_king.0);
+        let rook_attackers = rook_atk & (opponent_rooks | opponent_king);
 
         let cannon_atk = cannon_attacks(square, occupied);
-        let cannon_attackers = cannon_atk.0 & opponent_cannons.0;
+        let cannon_attackers = cannon_atk & opponent_cannons;
 
-        Bitboard(pawn_attackers | knight_attackers | rook_attackers | cannon_attackers)
+        pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
     }
 
     /// Evaluates if playing the move `m` places the opponent's General in
@@ -715,9 +715,9 @@ impl Position {
         occupied.clear_bit(from);
         occupied.set_bit(to);
 
-        self.checkers_to_after_move(them_king_sq, occupied, us, from, to, moved_piece)
-            .0
-            != 0
+        !self
+            .checkers_to_after_move(them_king_sq, occupied, us, from, to, moved_piece)
+            .is_empty()
     }
 
     /// Checks if the given player's King is currently in check.
@@ -755,15 +755,14 @@ impl Position {
         occupied.set_bit(to);
 
         self.checkers_to_after_move(king_sq, occupied, us.opposite(), from, to, moved_piece)
-            .0
-            == 0
+            .is_empty()
     }
 
     #[inline(always)]
     pub fn is_square_attacked(&self, square: Square, attacker: Color) -> bool {
         let occupied = self.bitboard_by_color[Color::White as usize]
             | self.bitboard_by_color[Color::Black as usize];
-        self.checkers_to(square, occupied, attacker).0 != 0
+        !self.checkers_to(square, occupied, attacker).is_empty()
     }
 
     #[inline(always)]
@@ -780,9 +779,9 @@ impl Position {
         occupied.clear_bit(from);
         occupied.set_bit(to);
 
-        self.checkers_to_after_move(square, occupied, attacker, from, to, moved_piece)
-            .0
-            != 0
+        !self
+            .checkers_to_after_move(square, occupied, attacker, from, to, moved_piece)
+            .is_empty()
     }
 
     /// Calculates the chase information for a given color, returning a 16-bit
@@ -798,34 +797,34 @@ impl Position {
         // 1. Target pieces that can be chased (excluding King):
         // Rooks, Cannons, Knights, Advisors, Bishops of the opponent,
         // and crossed-river Pawns of the opponent.
-        let mut targets_mask = self.bitboard_by_type[PieceType::Rook as usize].0
-            | self.bitboard_by_type[PieceType::Cannon as usize].0
-            | self.bitboard_by_type[PieceType::Knight as usize].0
-            | self.bitboard_by_type[PieceType::Advisor as usize].0
-            | self.bitboard_by_type[PieceType::Bishop as usize].0;
+        let mut targets_mask = self.bitboard_by_type[PieceType::Rook as usize]
+            | self.bitboard_by_type[PieceType::Cannon as usize]
+            | self.bitboard_by_type[PieceType::Knight as usize]
+            | self.bitboard_by_type[PieceType::Advisor as usize]
+            | self.bitboard_by_type[PieceType::Bishop as usize];
 
         // Add crossed-river pawns of the opponent
-        let opp_pawns = self.bitboard_by_type[PieceType::Pawn as usize].0
-            & self.bitboard_by_color[opponent as usize].0;
-        let opp_side_mask = Bitboard::side(mover).0; // The river-crossed zone is mover's side!
+        let opp_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
+            & self.bitboard_by_color[opponent as usize];
+        let opp_side_mask = Bitboard::side(mover); // The river-crossed zone is mover's side!
         targets_mask |= opp_pawns & opp_side_mask;
 
         // Filter targets to only include the opponent's pieces
-        let targets = Bitboard(targets_mask & self.bitboard_by_color[opponent as usize].0);
+        let targets = targets_mask & self.bitboard_by_color[opponent as usize];
 
         // 2. Chasing attackers:
         // Rooks, Cannons, Knights, and crossed-river Pawns of the mover.
-        let mut attackers_mask = self.bitboard_by_type[PieceType::Rook as usize].0
-            | self.bitboard_by_type[PieceType::Cannon as usize].0
-            | self.bitboard_by_type[PieceType::Knight as usize].0;
+        let mut attackers_mask = self.bitboard_by_type[PieceType::Rook as usize]
+            | self.bitboard_by_type[PieceType::Cannon as usize]
+            | self.bitboard_by_type[PieceType::Knight as usize];
 
-        let my_pawns = self.bitboard_by_type[PieceType::Pawn as usize].0
-            & self.bitboard_by_color[mover as usize].0;
-        let my_side_mask = Bitboard::side(opponent).0; // river-crossed zone is opponent's side!
+        let my_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
+            & self.bitboard_by_color[mover as usize];
+        let my_side_mask = Bitboard::side(opponent); // river-crossed zone is opponent's side!
         attackers_mask |= my_pawns & my_side_mask;
 
         // Filter attackers to only include mover's pieces
-        let mut attackers = Bitboard(attackers_mask & self.bitboard_by_color[mover as usize].0);
+        let mut attackers = attackers_mask & self.bitboard_by_color[mover as usize];
 
         // 3. Scan all attackers to see if they attack any target
         while let Some(from) = attackers.pop_lsb() {

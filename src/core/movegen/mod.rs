@@ -10,14 +10,14 @@ pub use tables::{
     RankEntry,
 };
 
-use crate::core::{Bitboard, Color, Move, MoveGenType, MoveList, PieceType, Position, Square};
+use crate::core::{Color, Move, MoveGenType, MoveList, PieceType, Position, Square};
 
 /// Generates valid orthogonal moves for the General (King) inside the Palace.
 fn generate_king_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let from_sq = pos.king_square(us);
     let us_pieces = pos.bitboard_by_color(us);
-    let mut target_bb = Bitboard(KING_ATTACKS[from_sq as usize].0 & !us_pieces.0);
+    let mut target_bb = KING_ATTACKS[from_sq as usize] & !us_pieces;
     while let Some(to_sq) = target_bb.pop_lsb() {
         moves.push(Move::new(from_sq, to_sq));
     }
@@ -29,7 +29,7 @@ fn generate_advisor_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut Move
     let us_pieces = pos.bitboard_by_color(us);
     let mut advisors = pos.bitboard_by_type(PieceType::Advisor) & us_pieces;
     while let Some(from_sq) = advisors.pop_lsb() {
-        let mut target_bb = Bitboard(ADVISOR_ATTACKS[from_sq as usize].0 & !us_pieces.0);
+        let mut target_bb = ADVISOR_ATTACKS[from_sq as usize] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
             moves.push(Move::new(from_sq, to_sq));
         }
@@ -58,7 +58,7 @@ fn generate_bishop_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
             i += 1;
         }
 
-        let mut target_bb = Bitboard(entry.attacks[occ_idx].0 & !us_pieces.0);
+        let mut target_bb = entry.attacks[occ_idx] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
             moves.push(Move::new(from_sq, to_sq));
         }
@@ -87,7 +87,7 @@ fn generate_knight_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
             i += 1;
         }
 
-        let mut target_bb = Bitboard(entry.attacks[occ_idx].0 & !us_pieces.0);
+        let mut target_bb = entry.attacks[occ_idx] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
             moves.push(Move::new(from_sq, to_sq));
         }
@@ -103,7 +103,7 @@ fn generate_pawn_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveLis
     let color_idx = if IS_WHITE { 0 } else { 1 };
 
     while let Some(from_sq) = pawns.pop_lsb() {
-        let mut target_bb = Bitboard(PAWN_ATTACKS[color_idx][from_sq as usize].0 & !us_pieces.0);
+        let mut target_bb = PAWN_ATTACKS[color_idx][from_sq as usize] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
             moves.push(Move::new(from_sq, to_sq));
         }
@@ -124,8 +124,8 @@ fn generate_rook_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveLis
         let r = from_idx / 9;
 
         // 1. Rank attacks
-        let rank_occ = ((occupied.0 >> (r * 9)) & 0x1FF) as usize;
-        let us_rank_mask = ((us_pieces.0 >> (r * 9)) & 0x1FF) as u16;
+        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+        let us_rank_mask = ((us_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
         let mut rank_attack_mask = RANK_TABLE[f].rook[rank_occ] & !us_rank_mask;
 
         while rank_attack_mask != 0 {
@@ -136,8 +136,8 @@ fn generate_rook_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveLis
         }
 
         // 2. File attacks
-        let file_occ = gather_file_bits(occupied.0, f);
-        let us_file_mask = gather_file_bits(us_pieces.0, f) as u16;
+        let file_occ = gather_file_bits(occupied.raw(), f);
+        let us_file_mask = gather_file_bits(us_pieces.raw(), f) as u16;
         let mut file_attack_mask = FILE_TABLE[r].rook[file_occ] & !us_file_mask;
 
         while file_attack_mask != 0 {
@@ -165,11 +165,11 @@ fn generate_cannon_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
         let r = from_idx / 9;
 
         // 1. Rank moves (horizontal quiet + leap captures)
-        let rank_occ = ((occupied.0 >> (r * 9)) & 0x1FF) as usize;
-        let them_rank_mask = ((them_pieces.0 >> (r * 9)) & 0x1FF) as u16;
+        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+        let them_rank_mask = ((them_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
 
         let rank_quiet_mask =
-            RANK_TABLE[f].rook[rank_occ] & !((occupied.0 >> (r * 9)) & 0x1FF) as u16;
+            RANK_TABLE[f].rook[rank_occ] & !((occupied.raw() >> (r * 9)) & 0x1FF) as u16;
         let rank_capture_mask = RANK_TABLE[f].cannon[rank_occ] & them_rank_mask;
 
         let mut rank_attack_mask = rank_quiet_mask | rank_capture_mask;
@@ -181,9 +181,9 @@ fn generate_cannon_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
         }
 
         // 2. File moves (vertical quiet + leap captures)
-        let file_occ = gather_file_bits(occupied.0, f);
-        let them_file_mask = gather_file_bits(them_pieces.0, f) as u16;
-        let occ_file_mask = gather_file_bits(occupied.0, f) as u16;
+        let file_occ = gather_file_bits(occupied.raw(), f);
+        let them_file_mask = gather_file_bits(them_pieces.raw(), f) as u16;
+        let occ_file_mask = gather_file_bits(occupied.raw(), f) as u16;
 
         let file_quiet_mask = FILE_TABLE[r].rook[file_occ] & !occ_file_mask;
         let file_capture_mask = FILE_TABLE[r].cannon[file_occ] & them_file_mask;
@@ -534,10 +534,10 @@ mod tests {
         for color in [Color::White, Color::Black] {
             assert_eq!(a.king_square(color), b.king_square(color));
             assert_eq!(a.is_in_check(color), b.is_in_check(color));
-            assert_eq!(a.bitboard_by_color(color).0, b.bitboard_by_color(color).0);
+            assert_eq!(a.bitboard_by_color(color), b.bitboard_by_color(color));
         }
         for pt in PieceType::iter() {
-            assert_eq!(a.bitboard_by_type(pt).0, b.bitboard_by_type(pt).0);
+            assert_eq!(a.bitboard_by_type(pt), b.bitboard_by_type(pt));
         }
         for piece in Piece::iter() {
             assert_eq!(a.piece_count(piece), b.piece_count(piece));
