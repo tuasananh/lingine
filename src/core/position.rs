@@ -1,4 +1,3 @@
-use std::sync::OnceLock;
 use strum::EnumCount;
 use thiserror::Error;
 
@@ -22,11 +21,11 @@ struct Lcg {
 
 impl Lcg {
     /// Creates a new LCG starting from a given seed.
-    fn new(seed: u64) -> Self {
+    const fn new(seed: u64) -> Self {
         Self { state: seed }
     }
     /// Returns the next 64-bit pseudo-random number in the sequence.
-    fn next(&mut self) -> u64 {
+    const fn next(&mut self) -> u64 {
         self.state = self
             .state
             .wrapping_mul(6364136223846793005)
@@ -41,23 +40,28 @@ impl Lcg {
 struct ZobristTable {
     /// Random keys for every piece type on every one of the 90 squares:
     /// Categorized as `pieces[piece_index][square_index]`.
-    pieces: [[u64; 90]; 16],
+    pieces: [[u64; Square::COUNT]; Piece::COUNT],
     /// XOR'ed into the hash if it is Black's turn to move.
     side: u64,
 }
 
-static ZOBRIST: OnceLock<ZobristTable> = OnceLock::new();
+static ZOBRIST: ZobristTable = ZobristTable::init();
 
 impl ZobristTable {
-    /// Initializes the Zobrist key matrix using our deterministic LCG starting
-    /// from seed `1070372`.
-    fn init() -> Self {
-        let mut prng = Lcg::new(1070372);
-        let mut pieces = [[0u64; 90]; 16];
-        for piece in &mut pieces {
-            for square in piece {
-                *square = prng.next();
+    const SEED: u64 = 202416124 ^ 202400076 ^ 2416167;
+
+    /// Initializes the Zobrist key matrix using LCG
+    const fn init() -> Self {
+        let mut prng = Lcg::new(Self::SEED);
+        let mut pieces = [[0u64; Square::COUNT]; Piece::COUNT];
+        let mut piece_idx = 0;
+        while piece_idx < Piece::COUNT {
+            let mut square_idx = 0;
+            while square_idx < Square::COUNT {
+                pieces[piece_idx][square_idx] = prng.next();
+                square_idx += 1;
             }
+            piece_idx += 1;
         }
         let side = prng.next();
         Self { pieces, side }
@@ -237,8 +241,7 @@ impl Position {
                 self.king_squares[c as usize] = square;
             }
 
-            let table = ZOBRIST.get_or_init(ZobristTable::init);
-            self.zobrist_hash ^= table.pieces[piece as usize][square as usize];
+            self.zobrist_hash ^= ZOBRIST.pieces[piece as usize][square as usize];
         }
     }
 
@@ -252,8 +255,7 @@ impl Position {
             self.bitboard_by_type[pt as usize].clear_bit(square);
             self.bitboard_by_color[c as usize].clear_bit(square);
             self.piece_count[piece as usize] -= 1;
-            let table = ZOBRIST.get_or_init(ZobristTable::init);
-            self.zobrist_hash ^= table.pieces[piece as usize][square as usize];
+            self.zobrist_hash ^= ZOBRIST.pieces[piece as usize][square as usize];
             self.board[square as usize] = Piece::None;
         }
         piece
@@ -353,8 +355,7 @@ impl Position {
                 }
             };
             if self.side_to_move == Color::Black {
-                let table = ZOBRIST.get_or_init(ZobristTable::init);
-                self.zobrist_hash ^= table.side;
+                self.zobrist_hash ^= ZOBRIST.side;
             }
         } else {
             self.side_to_move = Color::White;
@@ -475,8 +476,7 @@ impl Position {
         }
 
         // Toggle side to move
-        let table = ZOBRIST.get_or_init(ZobristTable::init);
-        self.zobrist_hash ^= table.side;
+        self.zobrist_hash ^= ZOBRIST.side;
         self.side_to_move = self.side_to_move.opposite();
         self.game_ply += 1;
     }
