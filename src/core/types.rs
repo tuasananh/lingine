@@ -158,7 +158,7 @@ pub enum MoveGenType {
 /// * **Bits 7 - 13**: Origin square (0 to 89, fits in 7 bits).
 /// * **Bits 14 - 15**: Move flags (Quiet, Capture, Check, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Move(pub u16);
+pub struct Move(u16);
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
