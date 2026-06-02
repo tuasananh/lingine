@@ -18,15 +18,15 @@ pub enum TranspositionTableFlag {
 pub struct TranspositionTableEntry {
     /// Zobrist board hash key.
     pub key: Key,
+    /// The evaluation score (may be relative to mate).
+    pub score: Value,
     /// The search depth this score was evaluated to (-1 represents
     /// empty/invalid).
     pub depth: i16,
-    /// The evaluation score (may be relative to mate).
-    pub score: Value,
-    /// The evaluation boundary flag.
-    pub flag: TranspositionTableFlag,
     /// The best move found at this position.
     pub best_move: Move,
+    /// The evaluation boundary flag.
+    pub flag: TranspositionTableFlag,
     /// The search sequence generation/age to track relevance.
     pub age: u8,
 }
