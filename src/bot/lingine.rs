@@ -11,13 +11,13 @@ use crate::search::{
     INFINITY, MATE_VALUE, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
 };
 use crate::uci::{
-    BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
-    UciOption, UciPosition, UciScore, UciScoreBound,
+    BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
+    UciId, UciInfo, UciOption, UciScore, UciScoreBound,
 };
 
 /// A real, functional [`Engine`] implementation mapping to our search and
 /// evaluation.
-pub struct EngineBot {
+pub struct Lingine {
     /// Internal board state tracker.
     position: Position,
     /// Transposition table to cache evaluated search nodes.
@@ -26,7 +26,7 @@ pub struct EngineBot {
     age: u8,
 }
 
-impl Default for EngineBot {
+impl Default for Lingine {
     fn default() -> Self {
         Self {
             position: Position::default(),
@@ -36,7 +36,7 @@ impl Default for EngineBot {
     }
 }
 
-impl EngineBot {
+impl Lingine {
     /// Creates a new EngineBot instance.
     pub fn new() -> Self {
         Self::default()
@@ -82,7 +82,7 @@ impl EngineBot {
     }
 }
 
-impl Engine for EngineBot {
+impl Engine for Lingine {
     fn uci(&self) -> (UciId, Vec<UciOption>) {
         let id = UciId {
             name: "Lingine".into(),
@@ -133,7 +133,7 @@ impl Engine for EngineBot {
         }
     }
 
-    fn position(&mut self, position: UciPosition) -> Result<()> {
+    fn position(&mut self, position: PositionParameters) -> Result<()> {
         log::debug!("position fen={:?} moves={:?}", position.fen, position.moves);
 
         // Parse starting FEN
@@ -316,11 +316,11 @@ impl Engine for EngineBot {
 
             // If the search was not aborted, save search outcomes and print UCI progress
             if !params.stop.load(Ordering::Relaxed) {
-                if !depth_best_move.is_none() {
+                if !depth_best_move.is_null() {
                     best_move = depth_best_move;
                 }
 
-                let pv_vec = if best_move.is_none() {
+                let pv_vec = if best_move.is_null() {
                     None
                 } else {
                     Some(vec![best_move.to_uci_string()])
@@ -367,8 +367,8 @@ impl Engine for EngineBot {
         let mut legal_moves = MoveList::new();
         generate_moves(&self.position, MoveGenType::Legal, &mut legal_moves);
 
-        let best_move_str = if best_move.is_none() || !legal_moves.contains(&best_move) {
-            if !best_move.is_none() {
+        let best_move_str = if best_move.is_null() || !legal_moves.contains(&best_move) {
+            if !best_move.is_null() {
                 log::warn!(
                     "bestmove {} is not legal in current position — falling back to first legal move",
                     best_move.to_uci_string()

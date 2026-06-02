@@ -3,8 +3,8 @@ use std::sync::mpsc::Sender;
 use anyhow::Result;
 
 use crate::uci::{
-    BestMove, Engine, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo,
-    UciOption, UciPosition,
+    BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
+    UciId, UciInfo, UciOption,
 };
 
 /// A stub [`Engine`] implementation used to verify the UCI protocol layer
@@ -81,7 +81,7 @@ impl Engine for PrintBot {
 
     /// Logs the FEN and move list. Always succeeds; a real engine would apply
     /// the moves to its internal board representation.
-    fn position(&mut self, position: UciPosition) -> Result<()> {
+    fn position(&mut self, position: PositionParameters) -> Result<()> {
         log::debug!("position fen={:?} moves={:?}", position.fen, position.moves);
         Ok(())
     }
@@ -161,7 +161,7 @@ mod tests {
         bot.ucinewgame();
         bot.register(RegisterParameters::Later);
 
-        let pos = UciPosition {
+        let pos = PositionParameters {
             fen: "startpos".into(),
             moves: vec![],
         };

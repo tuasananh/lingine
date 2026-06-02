@@ -205,16 +205,16 @@ impl Move {
         Self(0)
     }
 
-    /// Checks if the move is empty.
+    /// Checks if the move is null.
     #[inline(always)]
-    pub fn is_none(&self) -> bool {
+    pub fn is_null(&self) -> bool {
         self.0 == 0
     }
 
     /// Converts the move into its UCI string format
     pub fn to_uci_string(&self) -> String {
-        if self.is_none() {
-            return "none".to_string();
+        if self.is_null() {
+            return "null".to_string();
         }
         let from = self.square_from();
         let to = self.square_to();
@@ -296,16 +296,16 @@ mod tests {
         assert_eq!(m_quiet.square_from(), Square::A0);
         assert_eq!(m_quiet.square_to(), Square::I9);
         assert_eq!(m_quiet.flags(), 0);
-        assert!(!m_quiet.is_none());
+        assert!(!m_quiet.is_null());
 
         let m_flags = Move::new_with_flags(Square::E4, Square::E5, 3);
         assert_eq!(m_flags.square_from(), Square::E4);
         assert_eq!(m_flags.square_to(), Square::E5);
         assert_eq!(m_flags.flags(), 3);
-        assert!(!m_flags.is_none());
+        assert!(!m_flags.is_null());
 
         let m_none = Move::none();
-        assert!(m_none.is_none());
+        assert!(m_none.is_null());
 
         assert_eq!(format!("{}", m_quiet), "A0 to I9");
     }

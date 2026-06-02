@@ -28,11 +28,11 @@ use super::output::EngineOutput;
 /// ## Thread C — Output printer (spawned)
 /// Drains the output channel and calls `println!` for every message. Owning
 /// all output in a single thread prevents any stdout races.
-pub struct UCIHandler<T: Engine> {
+pub struct Handler<T: Engine> {
     engine: T,
 }
 
-impl<T: Engine + 'static> UCIHandler<T> {
+impl<T: Engine + 'static> Handler<T> {
     pub fn new(engine: T) -> Self {
         Self { engine }
     }

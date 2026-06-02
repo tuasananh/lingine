@@ -110,7 +110,7 @@ fn sort_moves(
         // Returns a heuristic move-ordering score. Captures are scored highly based
         // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
         // prioritized at the very top.
-        let move_score = if m == tt_move && !m.is_none() {
+        let move_score = if m == tt_move && !m.is_null() {
             20000 // Prioritize TT best move above all else
         } else {
             let to_piece = pos.piece_at(m.square_to());
@@ -325,8 +325,8 @@ pub fn negamax(
     // Singular Extensions
     let mut is_singular = false;
     if depth >= 8
-        && !tt_move.is_none()
-        && ext_control.excluded_move.is_none()
+        && !tt_move.is_null()
+        && ext_control.excluded_move.is_null()
         && ext_control.extensions < 6
         && tt_entry_exists
         && tt_depth >= depth - 3
@@ -362,14 +362,14 @@ pub fn negamax(
     }
 
     // One-Reply Extensions
-    if moves.len() == 1 && ext_control.excluded_move.is_none() && ext_control.extensions < 6 {
+    if moves.len() == 1 && ext_control.excluded_move.is_null() && ext_control.extensions < 6 {
         depth += 1;
         ext_control.extensions += 1;
     }
 
     // Validate that the TT move is actually legal in the current position.
     // A stale or collided TT entry may reference a move that is not valid here.
-    if !tt_move.is_none() && !moves.contains(&tt_move) {
+    if !tt_move.is_null() && !moves.contains(&tt_move) {
         tt_move = Move::none();
     }
 
