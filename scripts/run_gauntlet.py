@@ -14,11 +14,11 @@ def print_header(title):
 
 
 def check_dependencies():
-    """Kiểm tra các file công cụ và dữ liệu khai cuộc bắt buộc."""
+    """Verify that all required tool files and opening data are present."""
     required_files = {
-        "tools/sylvan-cli": "Công cụ tổ chức giải đấu sylvan-cli",
-        "tools/fairy-stockfish_x86-64": "Engine đối thủ Fairy-Stockfish",
-        "tools/xqdb_masters_40711_UCI_games.pgn": "Cơ sở dữ liệu khai cuộc Masters PGN",
+        "tools/sylvan-cli": "Tournament coordinator sylvan-cli",
+        "tools/fairy-stockfish_x86-64": "Fairy-Stockfish baseline opponent engine",
+        "tools/xqdb_masters_40711_UCI_games.pgn": "Masters opening database PGN",
     }
 
     missing = []
@@ -27,10 +27,10 @@ def check_dependencies():
             missing.append(f"- {description} ({filepath})")
 
     if missing:
-        print_header("LỖI: THIẾU CÔNG CỤ HOẶC DỮ LIỆU")
-        print("Vui lòng chạy script cài đặt trước khi chạy giải đấu:")
+        print_header("ERROR: MISSING TOOLS OR DATA")
+        print("Please run the installation script before starting the tournament:")
         print("  ./scripts/setup_tools.sh\n")
-        print("Các thành phần còn thiếu hiện tại:")
+        print("Current missing components:")
         for item in missing:
             print(item)
         print("=" * 70)
@@ -38,8 +38,8 @@ def check_dependencies():
 
 
 def build_engine():
-    """Biên dịch phiên bản phát hành mới nhất của Lingine."""
-    print("\n[1/3] Đang biên dịch Lingine (cargo build --release)...")
+    """Compile the latest release version of Lingine."""
+    print("\n[1/3] Compiling Lingine (cargo build --release)...")
     try:
         result = subprocess.run(
             ["cargo", "build", "--release"],
@@ -48,49 +48,49 @@ def build_engine():
             text=True,
         )
         if result.returncode != 0:
-            print_header("LỖI BIÊN DỊCH DỰ ÁN RUST")
+            print_header("RUST PROJECT COMPILATION ERROR")
             print(result.stderr)
             sys.exit(1)
-        print("=> Biên dịch thành công: ./target/release/lingine")
+        print("=> Compilation successful: ./target/release/lingine")
     except FileNotFoundError:
-        print_header("LỖI: KHÔNG TÌM THẤY RUST/CARGO")
-        print("Vui lòng đảm bảo bạn đã cài đặt Rust (cargo).")
+        print_header("ERROR: RUST/CARGO NOT FOUND")
+        print("Please make sure Rust (cargo) is installed on your system.")
         sys.exit(1)
 
 
 def run_tournament(args):
-    """Thực thi giải đấu gauntlet thông qua sylvan-cli với các tùy chọn từ cấu hình."""
-    # Phát hiện số core CPU nếu người dùng không chỉ định concurrency
+    """Execute the gauntlet tournament via sylvan-cli with configured options."""
+    # Auto-detect CPU cores if user concurrency is not specified
     if args.concurrency is None:
         cores = os.cpu_count() or 4
-        # Tự động tối ưu ở mức 1 engine mỗi core (2 engines mỗi game, do đó cores // 2)
-        # Giới hạn tối đa 20 để tránh overhead quản lý tiến trình quá lớn của hệ điều hành
+        # Optimize at 1 engine per core (2 engines per game, hence cores // 2)
+        # Cap at 20 parallel threads to avoid OS process scheduling overhead
         concurrency = min(20, max(1, cores // 2))
-        concurrency_msg = f"{concurrency} (Tự động tối ưu hiệu năng từ {cores} cores)"
+        concurrency_msg = f"{concurrency} (Auto-optimized for {cores} CPU threads)"
     else:
         concurrency = args.concurrency
-        concurrency_msg = f"{concurrency} (Người dùng cấu hình)"
+        concurrency_msg = f"{concurrency} (User configured)"
 
-    # Phân tích danh sách ELO đối thủ
+    # Parse opponent ELO list
     try:
         elo_list = [int(x.strip()) for x in args.elos.split(",")]
     except ValueError:
-        print("Lỗi: Danh sách ELO đối thủ không hợp lệ. Ví dụ đúng: 1000,1200,1400")
+        print("Error: Invalid opponent ELO list. Correct example: 1000,1200,1400")
         sys.exit(1)
 
     total_games = len(elo_list) * args.games
 
-    print("\n[2/3] Khởi chạy giải đấu Gauntlet...")
-    print(f"  -> Số trận đấu chạy song song (concurrency): {concurrency_msg}")
-    print(f"  -> Các mốc ELO đối thủ: {', '.join(map(str, elo_list))}")
+    print("\n[2/3] Launching ELO Gauntlet tournament...")
+    print(f"  -> Parallel matches (concurrency): {concurrency_msg}")
+    print(f"  -> Opponent ELO benchmarks: {', '.join(map(str, elo_list))}")
     print(
-        f"  -> Số ván đấu mỗi cặp đối đầu: {args.games} ván (Tổng cộng: {total_games} ván)"
+        f"  -> Games per opponent tier: {args.games} (Total: {total_games} games)"
     )
-    print(f"  -> Thiết lập kiểm soát thời gian (Time Control): {args.tc}")
-    print(f"  -> Độ sâu khai cuộc: {args.depth} plies")
-    print(f"  -> Tệp tin PGN kết quả: {args.pgnout}")
+    print(f"  -> Time Control configuration: {args.tc}")
+    print(f"  -> Opening book depth: {args.depth} plies")
+    print(f"  -> Output PGN records file: {args.pgnout}")
 
-    # Xóa file gauntlet PGN cũ để tránh cộng dồn kết quả cũ
+    # Delete old gauntlet PGN to avoid score contamination
     if os.path.exists(args.pgnout):
         os.remove(args.pgnout)
 
@@ -102,7 +102,7 @@ def run_tournament(args):
         f"stderr={args.name}_err.log",
     ]
 
-    # Thêm động thực thể bot Fairy-Stockfish cho mỗi mốc ELO cấu hình
+    # Dynamically register Fairy-Stockfish engine instances for each ELO milestone
     for elo in elo_list:
         cmd.extend(
             [
@@ -138,10 +138,10 @@ def run_tournament(args):
 
     try:
         subprocess.run(cmd, check=True)
-        print("=> Giải đấu kết thúc hoàn tất!")
+        print("=> Gauntlet tournament completed successfully!")
     except subprocess.CalledProcessError as e:
-        print_header("LỖI THỰC THI Sylvan-CLI")
-        print(f"Sylvan-CLI gặp sự cố khi chạy giải đấu. Mã lỗi: {e.returncode}")
+        print_header("SYLVAN-CLI EXECUTION ERROR")
+        print(f"Sylvan-CLI encountered an issue running the tournament. Exit code: {e.returncode}")
         sys.exit(1)
 
 
@@ -173,17 +173,17 @@ def parse_pgn(pgn_path):
 
 
 def calculate_and_display_elo(args):
-    """Đọc PGN kết quả và phân tích chỉ số ELO."""
-    print("\n[3/3] Đang phân tích kết quả và tính toán ELO...")
+    """Parse the PGN results file and calculate absolute ELO rating."""
+    print("\n[3/3] Analyzing match outcomes and estimating ELO...")
     games = parse_pgn(args.pgnout)
 
     if not games:
         print(
-            f"Lỗi: Không tìm thấy dữ liệu giải đấu trong '{args.pgnout}' để tính toán."
+            f"Error: No match records found in '{args.pgnout}' for ELO analysis."
         )
         sys.exit(1)
 
-    # Phân tích danh sách ELO đối thủ
+    # Parse configured opponent ELOs
     opponent_elos = {}
     for elo_str in args.elos.split(","):
         elo_val = int(elo_str.strip())
@@ -222,15 +222,15 @@ def calculate_and_display_elo(args):
             stats[opponent]["draws"] += 1
 
     print("\n" + "=" * 70)
-    print(f"           BẢNG PHÂN TÍCH HIỆU SUẤT ELO - {args.name.upper()}             ")
+    print(f"           ELO PERFORMANCE ANALYSIS REPORT - {args.name.upper()}             ")
     print("=" * 70)
     print(
-        f"{'Đối thủ':<15}{'Trận':<8}{'Thắng':<8}{'Hòa':<8}{'Thua':<8}{'Tỉ lệ điểm':<12}{'Ước lượng ELO':<15}"
+        f"{'Opponent':<15}{'Games':<8}{'Wins':<8}{'Draws':<8}{'Losses':<8}{'Score %':<12}{'Est. ELO':<15}"
     )
     print("-" * 70)
 
     elo_estimates = []
-    # Chỉ sắp xếp và hiển thị các đối thủ có nằm trong cấu hình ELO
+    # Only sort and display configured benchmark opponents
     sorted_opponents = sorted(
         [k for k in stats.keys() if k in opponent_elos],
         key=lambda x: opponent_elos.get(x, 1200),
@@ -267,16 +267,16 @@ def calculate_and_display_elo(args):
     if elo_estimates:
         final_elo = sum(elo_estimates) / len(elo_estimates)
         print(
-            f"\n=> ĐIỂM ELO TRUNG BÌNH ƯỚC TÍNH CỦA {args.name.upper()}: {int(round(final_elo))} ELO"
+            f"\n=> AVERAGE ESTIMATED ELO RATING FOR {args.name.upper()}: {int(round(final_elo))} ELO"
         )
     else:
-        print("\nKhông đủ dữ liệu ván đấu phù hợp để ước tính ELO.")
+        print("\nInsufficient match data available to calculate ELO estimates.")
     print("=" * 70 + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Chương trình tổ chức giải đấu Gauntlet & Ước lượng ELO cho các Engine Chess/Xiangqi."
+        description="Tournament coordinator and ELO evaluator for Xiangqi/Chinese Chess engines."
     )
     parser.add_argument(
         "-c",
@@ -285,35 +285,35 @@ def main():
         type=int,
         default=None,
         dest="concurrency",
-        help="Số trận đấu chạy song song đồng thời (số nhân CPU sử dụng, mặc định: tự động tối ưu)",
+        help="Number of concurrent matches to run in parallel (default: auto-optimized)",
     )
     parser.add_argument(
         "-g",
         "--games",
         type=int,
         default=10,
-        help="Số ván đấu chơi với mỗi mốc đối thủ ELO (mặc định: 10)",
+        help="Number of games to play against each ELO tier opponent (default: 10)",
     )
     parser.add_argument(
         "-t",
         "--tc",
         type=str,
         default="10/10+0.1",
-        help="Thiết lập kiểm soát thời gian (Time Control) (mặc định: 10/10+0.1)",
+        help="Time control setting in minutes/increment format (default: 10/10+0.1)",
     )
     parser.add_argument(
         "-d",
         "--depth",
         type=int,
         default=12,
-        help="Độ sâu nước đi khai cuộc bắt buộc (plies) (mặc định: 12)",
+        help="Forced opening book depth in plies (default: 12)",
     )
     parser.add_argument(
         "-f",
         "--openings-file",
         type=str,
         default="tools/xqdb_masters_40711_UCI_games.pgn",
-        help="Đường dẫn đến tệp tin PGN/EPD khai cuộc (mặc định: tools/xqdb_masters_40711_UCI_games.pgn)",
+        help="Path to the openings PGN/EPD database (default: tools/xqdb_masters_40711_UCI_games.pgn)",
     )
     parser.add_argument(
         "-a",
@@ -322,7 +322,7 @@ def main():
         type=str,
         default=None,
         dest="engine",
-        help="Đường dẫn đến engine chính tham gia gauntlet (mặc định: ./target/release/lingine)",
+        help="Path to the main engine binary under test (default: ./target/release/lingine)",
     )
     parser.add_argument(
         "--name",
@@ -330,7 +330,7 @@ def main():
         type=str,
         default=None,
         dest="name",
-        help="Tên của engine chính tham gia gauntlet (mặc định: Lingine)",
+        help="Name of the main engine under test (default: Lingine)",
     )
     parser.add_argument(
         "-o",
@@ -339,20 +339,20 @@ def main():
         type=str,
         default=None,
         dest="outdir",
-        help="Thư mục lưu kết quả giải đấu (chứa records.pgn và summary.md, mặc định: matches/BOT_NAME_TIMESTAMP)",
+        help="Output directory to store tournament results (default: matches/BOT_NAME_TIMESTAMP)",
     )
     parser.add_argument(
         "-e",
         "--elos",
         type=str,
         default="1200,1400,1600,1800,2000,2200",
-        help="Danh sách ELO đối thủ, phân tách bằng dấu phẩy (mặc định: 1200,1400,1600,1800,2000,2200)",
+        help="Comma-separated list of baseline opponent ELO bounds (default: 1200,1400,1600,1800,2000,2200)",
     )
     parser.add_argument(
         "-s",
         "--skip-build",
         action="store_true",
-        help="Bỏ qua bước tự động biên dịch 'cargo build --release'",
+        help="Skip automatic Rust compilation of target/release/lingine",
     )
 
     args = parser.parse_args()
@@ -418,12 +418,12 @@ def main():
     if not args.skip_build and args.engine == "./target/release/lingine":
         build_engine()
     else:
-        print(f"\n[1/3] Đã bỏ qua bước biên dịch (Engine chính: '{args.engine}').")
+        print(f"\n[1/3] Skipped engine compilation (Main engine path: '{args.engine}').")
 
     run_tournament(args)
     calculate_and_display_elo(args)
 
-    print("\n=> Đang chạy phân tích chi tiết và tạo summary.md...")
+    print("\n=> Executing detailed game outcomes analysis and generating summary.md...")
     try:
         analyze_cmd = [
             sys.executable,
@@ -436,10 +436,10 @@ def main():
         ]
         subprocess.run(analyze_cmd, check=True)
         print(
-            f"=> Phân tích hoàn tất! Kết quả được lưu tại: {os.path.join(args.outdir, 'summary.md')}"
+            f"=> Analysis completed! Performance summaries saved to: {os.path.join(args.outdir, 'summary.md')}"
         )
     except Exception as e:
-        print(f"Lỗi khi chạy phân tích gauntlet: {e}")
+        print(f"Error executing gauntlet outcome analysis: {e}")
 
 
 if __name__ == "__main__":
