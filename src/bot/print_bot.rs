@@ -11,15 +11,8 @@ use crate::uci::{
 /// end-to-end before the real search engine is written.
 ///
 /// Every method is a no-op or log statement. `go` always returns
-/// [`BestMove::null()`] (`"bestmove 0000"`).
+/// [`BestMove::null()`] (`"bestmove null"`).
 ///
-/// # Usage
-/// Construct with the unit-struct literal:
-/// ```rust,ignore
-/// UCIHandler::new(PrintBot).run(stdin().lock())?;
-/// ```
-///
-/// Replace `PrintBot` with the real engine type once search is implemented.
 #[derive(Default)]
 pub struct PrintBot;
 
