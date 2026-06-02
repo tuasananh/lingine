@@ -1,3 +1,23 @@
+//! Transposition Table (TT) cache system to optimize search space exploration.
+//!
+//! The Transposition Table acts as an O(1) hash table mapping Zobrist position
+//! keys to previously evaluated search states. This allows the search algorithm
+//! to prune identical positions reached via different move sequences
+//! (transpositions).
+//!
+//! Key elements:
+//! 1. **Table Sizing**: Memory capacity allocated in Megabytes (MB). Elements
+//!    are restricted to the nearest smaller power-of-two count to support
+//!    ultra-fast bitwise masking modulo.
+//! 2. **Replacement Strategy**: Uses a hybrid Depth-Preferred and Age-Preferred
+//!    replacement policy to overwrite existing slots only when the new entry is
+//!    deeper, a different board position collided, or the existing entry is
+//!    stale (belongs to an older search age).
+//! 3. **Score Mapping**: Stored scores are converted to ply-independent values
+//!    inside the table, and converted back to ply-dependent values on probe
+//!    retrieval. This preserves correct mate-distance scores across different
+//!    branches of the search tree.
+
 use strum::FromRepr;
 
 use crate::core::{Move, TranspositionTableKey, Value};
@@ -167,7 +187,8 @@ impl TranspositionTable {
         let is_empty = existing.flag() == TranspositionTableFlag::Empty;
         let is_collision = existing.key != key;
         let is_deeper = value.depth >= existing.depth;
-        // Since age is wrapping u8, we can consider an entry "older" if its age is different from the current age.
+        // Since age is wrapping u8, we can consider an entry "older" if its age is
+        // different from the current age.
         let is_older = value.age != existing.age;
 
         // Store if the slot is unused, a different board position collided,

@@ -1,3 +1,12 @@
+//! Bitboard representation of the 9x10 Xiangqi board.
+//!
+//! The board has 90 squares, represented by the first 90 bits (0..89) of a
+//! `u128`. Bit indices are mapped in rank-major order using `rank_index * 9 +
+//! file_index`. Bits 90 to 127 are unused.
+//!
+//! High performance is achieved by utilizing bitwise operations for move
+//! generation, board occupancy tracking, and attack calculations.
+
 use std::fmt::Display;
 
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};

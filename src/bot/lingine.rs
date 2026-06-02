@@ -1,3 +1,17 @@
+//! Standard `Engine` implementation wrapping Lingine's search and evaluation.
+//!
+//! This module coordinates the UCI command inputs to drive the engine:
+//! 1. **Time Management (`calculate_search_time`)**: Allocates time budgets
+//!    based on remaining time, increments, remaining plies, and leaves a safe
+//!    time-buffer (to avoid timeouts from GUI latency).
+//! 2. **Iterative Deepening Search Loop (`go`)**: Coordinates iterative
+//!    deepening from depth 1 upwards, updating aspiration windows, sorting
+//!    moves at the root, checking stop flags, and sending real-time progress
+//!    info (`UciInfo`) back via mpsc channels.
+//! 3. **Search Fallbacks**: Ensures only legal moves are played and falls back
+//!    to first-available legal move in case of emergency search errors or hash
+//!    collisions.
+
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};

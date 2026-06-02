@@ -1,3 +1,11 @@
+//! Core domain types for the Lingine Xiangqi engine.
+//!
+//! This module defines the fundamental types used throughout the chess engine,
+//! including representations for players (`Color`), board coordinates
+//! (`Square`, `File`, `Rank`), chess pieces (`Piece`, `PieceType`), search
+//! scores (`Value`), and a highly optimized 16-bit compact representation for
+//! moves (`Move`).
+
 use std::fmt::Display;
 
 use arrayvec::ArrayVec;
@@ -305,7 +313,8 @@ impl Move {
         Square::from_repr((self.0 & 0x7F) as u8).unwrap()
     }
 
-    /// Extracts the transposition table flags from the upper 2 bits of the move encoding.
+    /// Extracts the transposition table flags from the upper 2 bits of the move
+    /// encoding.
     #[inline]
     pub const fn flag(&self) -> TranspositionTableFlag {
         TranspositionTableFlag::from_repr((self.0 >> 14) as u8).unwrap()

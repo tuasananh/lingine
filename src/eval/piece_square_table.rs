@@ -1,3 +1,24 @@
+//! Precomputed Piece-Square Tables (PST) and static piece material scores.
+//!
+//! This module defines the positional weighting for all Xiangqi piece types.
+//! Positional values are represented from White's (Red's) perspective, and are
+//! automatically mirrored both vertically (ranks) and horizontally (files) for
+//! Black pieces.
+//!
+//! Core components:
+//! 1. **PST Tables**: Matrix matrices of size 90 mapping square indices to
+//!    positional bonuses/penalties.
+//!    - Advisors and Bishops are restricted to their valid Palace/side squares
+//!      (unreachable squares are 0).
+//!    - Pawns, Knights, Cannons, and Rooks receive progression-based bonuses.
+//! 2. **Mirrored Black Coordinates**: Flips both the file (8 - file) and rank
+//!    (9 - rank) to maintain symmetry.
+//! 3. **Dynamic Material Values**:
+//!    - Standard pieces: Rook (600), Cannon (285), Knight (270), Elephant
+//!      (120), Advisor (110), King (0).
+//!    - Pawn: Starts with 30 in its own territory, and increases to 70 once it
+//!      crosses the river, reflecting its newly acquired sideways mobility.
+
 use crate::core::{Color, Piece, PieceType, Square, Value};
 
 macro_rules! values {

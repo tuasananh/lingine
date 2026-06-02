@@ -1,3 +1,22 @@
+//! High-performance move generator for all 7 Xiangqi piece types.
+//!
+//! This module orchestrates move generation for:
+//! 1. **General (King)**: Moves 1 step orthogonally within the Palace.
+//! 2. **Advisor (Shi)**: Moves 1 step diagonally within the Palace.
+//! 3. **Elephant (Bishop)**: Moves 2 steps diagonally, blocked by intermediate
+//!    diagonal Elephant Eyes. Cannot cross the river.
+//! 4. **Horse (Knight)**: Moves L-shape (1 orthogonal, 1 diagonal), blocked by
+//!    intermediate orthogonal Horse Legs.
+//! 5. **Soldier (Pawn)**: Moves 1 step forward. After crossing the river, can
+//!    also move sideways.
+//! 6. **Chariot (Rook)**: Slides orthogonally, blocked by the first piece.
+//! 7. **Cannon**: Slides orthogonally, must jump exactly one piece (hurdle) to
+//!    capture.
+//!
+//! Features dynamic filtering of pseudo-legal moves into fully legal moves by
+//! verifying that execution does not leave the friendly King in check
+//! (incorporating the Flying General rule).
+
 mod attacks;
 mod tables;
 

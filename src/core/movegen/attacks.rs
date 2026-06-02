@@ -1,3 +1,18 @@
+//! Dynamic bit-gathering and O(1) sliding ray attack calculations.
+//!
+//! This module contains highly optimized logic to calculate attacks
+//! dynamically. Rather than using slow, conditional ray-scanning loops, we
+//! gather file or rank occupancy into compact index keys and query precomputed
+//! tables (`RANK_TABLE` and `FILE_TABLE`).
+//!
+//! Key elements:
+//! 1. **Vertical File Packing (`gather_file_bits`)**: Packs 10 file bits spaced
+//!    exactly 9 bits apart in the 128-bit integer into a contiguous 10-bit
+//!    lookup key in O(1) time using magic multiplication.
+//! 2. **Rook and Cannon Attacks**: Combine horizontal rank tables and vertical
+//!    file tables to yield exact sliding paths and Cannon leap capture targets
+//!    instantly.
+
 use crate::core::{bitboard::Bitboard, types::Square};
 
 use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};

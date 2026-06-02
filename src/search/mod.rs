@@ -1,3 +1,30 @@
+//! Negamax Fail-Soft Alpha-Beta Search engine with selective search extensions.
+//!
+//! This module implements the main search logic used to determine the best
+//! moves:
+//! 1. **Fail-Soft Negamax Alpha-Beta Pruning**: Recursively searches the game
+//!    tree to find optimal moves while pruning branches that cannot impact the
+//!    search outcome.
+//! 2. **Aspiration Windows**: Minimizes the search space width around the
+//!    previous depth's best score. Widens boundaries progressively on fail-low
+//!    (fail-soft lower limit) or fail-high bounds.
+//! 3. **Move Ordering Heuristics**: Prioritizes the best transposition table
+//!    move, MVV-LVA (Most Valuable Victim - Least Valuable Attacker) capture
+//!    heuristics, killer moves, and history heuristic tables to trigger
+//!    beta-cutoffs as early as possible.
+//! 4. **Quiescence Search**: Solves the horizon effect by searching only
+//!    tactical capture sequences until a stable, quiet position is reached.
+//! 5. **Selective Search Extensions**:
+//!    - **Check Extensions**: Automatically extends the depth by 1 ply when in
+//!      check.
+//!    - **Singular Extensions**: Verifies if the transposition table move is
+//!      exceptionally superior compared to alternative moves at that node. If
+//!      so, extends the search by 1 ply. Requires a reduced-depth probe with an
+//!      aspiration-like threshold.
+//!    - **One-Reply Extensions**: If only a single legal move exists, extends
+//!      the depth by 1 ply to prevent arbitrary horizon cutoffs since there is
+//!      no branching factor.
+
 use std::cmp::Reverse;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

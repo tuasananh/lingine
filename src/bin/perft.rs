@@ -9,7 +9,8 @@ use clap::Parser;
 )]
 struct Args {
     /// Board position in FEN notation.
-    /// If both --fen and --index are omitted, this defaults to standard initial position (index 1).
+    /// If both --fen and --index are omitted, this defaults to standard initial
+    /// position (index 1).
     #[arg(short, long)]
     fen: Option<String>,
 
@@ -48,11 +49,13 @@ fn main() -> anyhow::Result<()> {
         );
         println!("FEN: {}", pos.fen);
 
-        // Try to find the expected record for this specific depth if it exists in our static table
+        // Try to find the expected record for this specific depth if it exists in our
+        // static table
         let expected = pos.expected.iter().find(|e| e.depth == args.depth).copied();
         (pos.fen.clone(), expected)
     } else {
-        // fen_arg is guaranteed to be Some because if both were None, we fell back to index 1 above.
+        // fen_arg is guaranteed to be Some because if both were None, we fell back to
+        // index 1 above.
         (fen_arg.unwrap(), None)
     };
 
@@ -104,8 +107,8 @@ pub struct PerftPosition {
 
 static PERFT_POSITIONS: OnceLock<Vec<PerftPosition>> = OnceLock::new();
 
-/// Returns the list of standard perft positions, parsed dynamically on first call
-/// from the compile-time included `perft_positions.txt` file.
+/// Returns the list of standard perft positions, parsed dynamically on first
+/// call from the compile-time included `perft_positions.txt` file.
 pub fn perft_positions() -> &'static [PerftPosition] {
     PERFT_POSITIONS.get_or_init(|| parse_positions(include_str!("perft_positions.txt")))
 }
@@ -213,9 +216,10 @@ impl Perft {
         }
     }
 
-    /// Runs the perft test for a given FEN string and depth. It initializes a position
-    /// from the FEN, then calls the recursive helper function to count nodes, checks,
-    /// captures, and mates. The results are printed to the console.
+    /// Runs the perft test for a given FEN string and depth. It initializes a
+    /// position from the FEN, then calls the recursive helper function to
+    /// count nodes, checks, captures, and mates. The results are printed to
+    /// the console.
     pub fn perft(fen: &str, depth: u32) -> Result<PerftExpected> {
         let mut helper = Perft::default();
         let mut pos = Position::new();

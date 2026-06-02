@@ -12,7 +12,6 @@ use crate::uci::{
 ///
 /// Every method is a no-op or log statement. `go` always returns
 /// [`BestMove::null()`] (`"bestmove null"`).
-///
 #[derive(Default)]
 pub struct PrintBot;
 

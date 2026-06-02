@@ -1,3 +1,23 @@
+//! Xiangqi game board state tracker, FEN parser, and move execution logic.
+//!
+//! This module implements `Position`, which represents the entire state of a
+//! Xiangqi game, including the flat 90-square board, precomputed piece and
+//! color bitboards, and game history plies.
+//!
+//! Key features:
+//! 1. **Incremental Evaluation**: Material and Piece-Square Table (PST) scores
+//!    are kept up-to-date incrementally during `do_move` and `undo_move` to
+//!    avoid expensive full-board scans.
+//! 2. **Loop-free Checker Detection**: Utilizes backward sliding ray and
+//!    leg-blocking table lookup scans starting from the King's square to
+//!    determine if a side is in check in O(1) time.
+//! 3. **Xiangqi Special Rules (Flying General)**: Handles the Flying General
+//!    rule where Kings cannot face each other directly along an open file
+//!    (treated as a Rook check).
+//! 4. **Repetition & Perpetual Detection**: Detects perpetual checks and
+//!    perpetual chases using recursive rollback analysis and asymmetric
+//!    scoring, forcing perpetual checkers/chasers to lose.
+
 use strum::EnumCount;
 use thiserror::Error;
 
