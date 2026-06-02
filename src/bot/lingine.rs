@@ -237,7 +237,7 @@ impl Engine for Lingine {
 
             loop {
                 let search_alpha = alpha.max(-Value::INFINITY);
-                let search_beta = beta.min(-Value::INFINITY);
+                let search_beta = beta.min(Value::INFINITY);
 
                 let mut ctx = SearchContext {
                     stop: &params.stop,
