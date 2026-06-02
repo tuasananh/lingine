@@ -2,17 +2,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use crate::core::movegen::generate_moves;
-use crate::core::{
-    Position,
-    types::{Color, MAX_MOVES, Move, MoveGenType, Piece, PieceType},
-};
+use crate::core::{Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, generate_moves};
 use crate::eval::evaluate;
 
-pub mod transposition_table;
-pub use transposition_table::{
-    TranspositionTable, TranspositionTableEntry, TranspositionTableFlag,
-};
+mod transposition_table;
+pub use transposition_table::*;
 
 /// Represents the alpha-beta search window.
 #[derive(Copy, Clone, Debug)]
@@ -146,16 +140,15 @@ fn get_move_score(
 fn sort_moves(
     pos: &Position,
     moves: &mut [Move],
-    count: usize,
     tt_move: Move,
     killers: &[[Move; 2]; 128],
     history_table: &[[[i32; 90]; 90]; 2],
     ply: i32,
 ) {
-    for i in 0..count {
+    for i in 0..moves.len() {
         let mut best_idx = i;
         let mut best_val = get_move_score(pos, moves[i], tt_move, killers, history_table, ply);
-        for (j, mv) in moves.iter().enumerate().take(count).skip(i + 1) {
+        for (j, mv) in moves.iter().enumerate().skip(i + 1) {
             let val = get_move_score(pos, *mv, tt_move, killers, history_table, ply);
             if val > best_val {
                 best_val = val;
@@ -229,15 +222,15 @@ pub fn quiescence(
 
     // Generate moves: if in check, we must search all legal evasions to save the
     // King. Otherwise, we only search capture moves.
-    let mut moves = [Move::none(); MAX_MOVES];
-    let count = if in_check {
+    let mut moves = MoveList::new();
+    if in_check {
         generate_moves(pos, MoveGenType::Legal, &mut moves)
     } else {
         generate_moves(pos, MoveGenType::Captures, &mut moves)
     };
 
     // Checkmate detection: in check with no legal moves = checkmate
-    if in_check && count == 0 {
+    if in_check && moves.is_empty() {
         return -MATE_VALUE + ply;
     }
 
@@ -245,14 +238,13 @@ pub fn quiescence(
     sort_moves(
         pos,
         &mut moves,
-        count,
         Move::none(),
         ctx.killers,
         ctx.history_table,
         ply,
     );
 
-    for m in moves.iter().copied().take(count) {
+    for m in moves {
         pos.do_move(m);
         let score = -quiescence(pos, window.negate(), ply + 1, qdepth + 1, ctx);
         pos.undo_move(m);
@@ -381,23 +373,23 @@ pub fn negamax(
         return quiescence(pos, window, ply, 0, ctx);
     }
 
-    let mut moves = [Move::none(); MAX_MOVES];
-    let count = generate_moves(pos, MoveGenType::Legal, &mut moves);
+    let mut moves = MoveList::new();
+    generate_moves(pos, MoveGenType::Legal, &mut moves);
 
     // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
-    if count == 0 {
+    if moves.is_empty() {
         return -MATE_VALUE + ply;
     }
 
     // One-Reply Extensions
-    if count == 1 && ext_control.excluded_move.is_none() && ext_control.extensions < 6 {
+    if moves.len() == 1 && ext_control.excluded_move.is_none() && ext_control.extensions < 6 {
         depth += 1;
         ext_control.extensions += 1;
     }
 
     // Validate that the TT move is actually legal in the current position.
     // A stale or collided TT entry may reference a move that is not valid here.
-    if !tt_move.is_none() && !moves[..count].contains(&tt_move) {
+    if !tt_move.is_none() && !moves.contains(&tt_move) {
         tt_move = Move::none();
     }
 
@@ -406,7 +398,6 @@ pub fn negamax(
     sort_moves(
         pos,
         &mut moves,
-        count,
         tt_move,
         ctx.killers,
         ctx.history_table,
@@ -416,7 +407,7 @@ pub fn negamax(
     let mut best_score = -INFINITY;
     let mut best_move = Move::none();
 
-    for m in moves.iter().copied().take(count) {
+    for m in moves {
         if m == ext_control.excluded_move {
             continue;
         }
@@ -491,8 +482,8 @@ pub fn negamax(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::position::Position;
-    use crate::core::types::{Color, Move, Square};
+    use crate::core::Position;
+    use crate::core::{Color, Move, Square};
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::time::Instant;

@@ -1,4 +1,4 @@
-use crate::core::types::{Color, Piece, PieceType, Square};
+use crate::core::{Color, Piece, PieceType, Square};
 
 // Positional piece-square tables from White's (Red's) perspective on the
 // 90-square board. Square indices are 0 to 89, rank-major order (rank * 9 +

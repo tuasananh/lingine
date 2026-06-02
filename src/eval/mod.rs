@@ -1,6 +1,7 @@
-pub mod piece_square_table;
+mod piece_square_table;
+pub use piece_square_table::*;
 
-use crate::core::{Position, types::Value};
+use crate::core::{Position, Value};
 
 /// Performs static evaluation of the given position in centipawns from
 /// White's perspective.
@@ -14,7 +15,7 @@ pub fn evaluate(pos: &Position) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::types::MoveGenType;
+    use crate::core::{MoveGenType, MoveList, Piece, generate_moves};
 
     #[test]
     fn test_initial_material_evaluation() {
@@ -46,8 +47,8 @@ mod tests {
         // Pawn at E4 (index 40) White Pawn is crossed: +70. Black Pawn is
         // crossed: -70. Balance = 0.
         pos.set("4k4/9/9/9/4p3p/4P4/9/9/9/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.piece_count(crate::core::types::Piece::WhitePawn), 1);
-        assert_eq!(pos.piece_count(crate::core::types::Piece::BlackPawn), 2); // E4, I4
+        assert_eq!(pos.piece_count(Piece::WhitePawn), 1);
+        assert_eq!(pos.piece_count(Piece::BlackPawn), 2); // E4, I4
 
         let mut pos2 = Position::new();
         // Simple case: just a White Pawn at E4 (uncrossed) vs. Black Pawn at E5
@@ -77,11 +78,10 @@ mod tests {
             pos.set(&fen).unwrap();
 
             // Generate all pseudo-legal moves
-            let mut moves = [crate::core::types::Move::none(); crate::core::types::MAX_MOVES];
-            let count =
-                crate::core::movegen::generate_moves(&pos, MoveGenType::PseudoLegal, &mut moves);
+            let mut moves = MoveList::new();
+            generate_moves(&pos, MoveGenType::PseudoLegal, &mut moves);
 
-            for m in moves.iter().copied().take(count) {
+            for m in moves {
                 if pos.legal(m) {
                     let pre_material = pos.material_score();
                     let pre_pst = pos.piece_square_table_score();

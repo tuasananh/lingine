@@ -8,7 +8,7 @@ use crate::{
         movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
         types::{Color, File, Move, Piece, PieceType, Rank, Square},
     },
-    eval::piece_square_table::{piece_material_value, piece_square_table_value},
+    eval::{piece_material_value, piece_square_table_value},
 };
 
 /// A fast Linear Congruential Generator (LCG) used to generate pseudo-random
@@ -409,59 +409,37 @@ impl Position {
 
         // 1. Remove piece from from
         if piece.color() == Some(Color::White) {
-            material_score -= crate::eval::piece_square_table::piece_material_value(piece, from);
-            piece_square_table_score -= crate::eval::piece_square_table::piece_square_table_value(
-                piece.piece_type(),
-                Color::White,
-                from,
-            );
+            material_score -= piece_material_value(piece, from);
+            piece_square_table_score -=
+                piece_square_table_value(piece.piece_type(), Color::White, from);
         } else if piece.color() == Some(Color::Black) {
-            material_score += crate::eval::piece_square_table::piece_material_value(piece, from);
-            piece_square_table_score += crate::eval::piece_square_table::piece_square_table_value(
-                piece.piece_type(),
-                Color::Black,
-                from,
-            );
+            material_score += piece_material_value(piece, from);
+            piece_square_table_score +=
+                piece_square_table_value(piece.piece_type(), Color::Black, from);
         }
 
         // 2. Remove captured piece from to (if any)
         if captured != Piece::None {
             if captured.color() == Some(Color::White) {
-                material_score -=
-                    crate::eval::piece_square_table::piece_material_value(captured, to);
+                material_score -= piece_material_value(captured, to);
                 piece_square_table_score -=
-                    crate::eval::piece_square_table::piece_square_table_value(
-                        captured.piece_type(),
-                        Color::White,
-                        to,
-                    );
+                    piece_square_table_value(captured.piece_type(), Color::White, to);
             } else if captured.color() == Some(Color::Black) {
-                material_score +=
-                    crate::eval::piece_square_table::piece_material_value(captured, to);
+                material_score += piece_material_value(captured, to);
                 piece_square_table_score +=
-                    crate::eval::piece_square_table::piece_square_table_value(
-                        captured.piece_type(),
-                        Color::Black,
-                        to,
-                    );
+                    piece_square_table_value(captured.piece_type(), Color::Black, to);
             }
         }
 
         // 3. Put piece at to
         if piece.color() == Some(Color::White) {
-            material_score += crate::eval::piece_square_table::piece_material_value(piece, to);
-            piece_square_table_score += crate::eval::piece_square_table::piece_square_table_value(
-                piece.piece_type(),
-                Color::White,
-                to,
-            );
+            material_score += piece_material_value(piece, to);
+            piece_square_table_score +=
+                piece_square_table_value(piece.piece_type(), Color::White, to);
         } else if piece.color() == Some(Color::Black) {
-            material_score -= crate::eval::piece_square_table::piece_material_value(piece, to);
-            piece_square_table_score -= crate::eval::piece_square_table::piece_square_table_value(
-                piece.piece_type(),
-                Color::Black,
-                to,
-            );
+            material_score -= piece_material_value(piece, to);
+            piece_square_table_score -=
+                piece_square_table_value(piece.piece_type(), Color::Black, to);
         }
 
         // Push current state onto history stack

@@ -1,4 +1,4 @@
-use crate::core::types::{Key, Move, Value};
+use crate::core::{Key, Move, Value};
 use crate::search::MATE_VALUE;
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.

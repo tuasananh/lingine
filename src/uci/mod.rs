@@ -2,7 +2,7 @@ mod command;
 mod engine;
 mod handler;
 mod output;
-pub mod types;
+mod types;
 
 pub use engine::Engine;
 pub use handler::UCIHandler;

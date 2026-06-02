@@ -210,11 +210,25 @@ impl Move {
     pub fn is_none(&self) -> bool {
         self.0 == 0
     }
+
+    /// Converts the move into its UCI string format
+    pub fn to_uci_string(&self) -> String {
+        if self.is_none() {
+            return "none".to_string();
+        }
+        let from = self.square_from();
+        let to = self.square_to();
+        let from_file = (b'a' + from.file() as u8) as char;
+        let from_rank = (b'0' + from.rank() as u8) as char;
+        let to_file = (b'a' + to.file() as u8) as char;
+        let to_rank = (b'0' + to.rank() as u8) as char;
+        format!("{}{}{}{}", from_file, from_rank, to_file, to_rank)
+    }
 }
 
 /// The maximum number of pseudo-legal moves in any given Xiangqi position
 /// (typically <= 120).
-pub const MAX_MOVES: usize = 128;
+const MAX_MOVES: usize = 128;
 
 /// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
 /// allocation.
