@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -95,48 +96,8 @@ fn get_piece_value_rank(p: Piece) -> i32 {
     }
 }
 
-/// Returns a heuristic move-ordering score. Captures are scored highly based
-/// on MVV-LVA. Quiet moves get score 0. The transposition table best move is
-/// prioritized at the very top.
-fn get_move_score(
-    pos: &Position,
-    m: Move,
-    tt_move: Move,
-    killers: &[[Move; 2]; 128],
-    history_table: &[[[i32; 90]; 90]; 2],
-    ply: i32,
-) -> i32 {
-    if m == tt_move && !m.is_none() {
-        return 20000; // Prioritize TT best move above all else
-    }
-    let to_piece = pos.piece_at(m.square_to());
-    if to_piece != Piece::None {
-        // Capture: 10000 + victim_rank * 100 - attacker_rank
-        let victim = get_piece_value_rank(to_piece);
-        let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
-        10000 + victim * 100 - attacker
-    } else {
-        // Quiet move
-        let ply_idx = ply as usize;
-        if ply_idx < 128 {
-            if m == killers[ply_idx][0] {
-                return 9000;
-            }
-            if m == killers[ply_idx][1] {
-                return 8000;
-            }
-        }
-        let side_idx = pos.side_to_move() as usize;
-        let from_idx = m.square_from() as usize;
-        let to_idx = m.square_to() as usize;
-        // History score capped at 7000
-        history_table[side_idx][from_idx][to_idx]
-    }
-}
-
-/// Sorts the first `count` moves in `moves` using a simple selection sort
-/// based on their heuristic scores, prioritizing the transposition table best
-/// move, killers, and history.
+/// Sorts the moves based on their heuristic scores, prioritizing the
+/// transposition table best move, killers, and history.
 fn sort_moves(
     pos: &Position,
     moves: &mut [Move],
@@ -145,20 +106,39 @@ fn sort_moves(
     history_table: &[[[i32; 90]; 90]; 2],
     ply: i32,
 ) {
-    for i in 0..moves.len() {
-        let mut best_idx = i;
-        let mut best_val = get_move_score(pos, moves[i], tt_move, killers, history_table, ply);
-        for (j, mv) in moves.iter().enumerate().skip(i + 1) {
-            let val = get_move_score(pos, *mv, tt_move, killers, history_table, ply);
-            if val > best_val {
-                best_val = val;
-                best_idx = j;
+    moves.sort_by_cached_key(|&m| {
+        // Returns a heuristic move-ordering score. Captures are scored highly based
+        // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
+        // prioritized at the very top.
+        let move_score = if m == tt_move && !m.is_none() {
+            20000 // Prioritize TT best move above all else
+        } else {
+            let to_piece = pos.piece_at(m.square_to());
+            if to_piece != Piece::None {
+                // Capture: 10000 + victim_rank * 100 - attacker_rank
+                let victim = get_piece_value_rank(to_piece);
+                let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
+                10000 + victim * 100 - attacker
+            } else {
+                // Quiet move
+                let ply_idx = ply as usize;
+                if ply_idx < 128 && m == killers[ply_idx][0] {
+                    9000
+                } else if ply_idx < 128 && m == killers[ply_idx][1] {
+                    8000
+                } else {
+                    let side_idx = pos.side_to_move() as usize;
+                    let from_idx = m.square_from() as usize;
+                    let to_idx = m.square_to() as usize;
+                    // History score capped at 7000
+                    history_table[side_idx][from_idx][to_idx]
+                }
             }
-        }
-        if best_idx != i {
-            moves.swap(i, best_idx);
-        }
-    }
+        };
+
+        // Sort it in reverse since we want the best one
+        Reverse(move_score)
+    });
 }
 
 /// Implements Quiescence Search to evaluate tactical capture sequences.
