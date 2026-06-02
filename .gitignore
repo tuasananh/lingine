@@ -9,3 +9,4 @@ tools/
 historical
 matches/
 __pycache__/
+*.log

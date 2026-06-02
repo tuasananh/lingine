@@ -19,15 +19,19 @@ pub enum EngineCommand {
     /// Only produced when the keyword is followed by exactly `"on"` or `"off"`;
     /// a missing or unrecognised value silently yields `Ok(None)`.
     Debug(bool),
-    /// `isready` — GUI asks whether the engine is ready; handler replies `readyok`.
+    /// `isready` — GUI asks whether the engine is ready; handler replies
+    /// `readyok`.
     IsReady,
     /// `setoption name <name> [value <value>]` — change a configuration option.
     SetOption(SetOptionParameters),
-    /// `register later|name <n> code <c>` — engine registration (copy-protection).
+    /// `register later|name <n> code <c>` — engine registration
+    /// (copy-protection).
     Register(RegisterParameters),
-    /// `ucinewgame` — the next position will be from a different game; reset state.
+    /// `ucinewgame` — the next position will be from a different game; reset
+    /// state.
     NewGame,
-    /// `position startpos|fen <fen> [moves <mv>…]` — set the current board position.
+    /// `position startpos|fen <fen> [moves <mv>…]` — set the current board
+    /// position.
     Position(UciPosition),
     /// `go <params>` — start searching the current position.
     ///
@@ -42,7 +46,8 @@ pub enum EngineCommand {
     /// command, so the engine's search loop can observe the signal without
     /// waiting for the command queue to drain.
     Stop,
-    /// `ponderhit` — the opponent played the ponder move; switch to normal search.
+    /// `ponderhit` — the opponent played the ponder move; switch to normal
+    /// search.
     ///
     /// # Limitation
     /// Thread B is blocked inside `engine.go()` while searching, so this
@@ -56,8 +61,8 @@ pub enum EngineCommand {
 impl EngineCommand {
     /// Parse one line of UCI input into a command.
     ///
-    /// Returns `Ok(None)` for blank lines and unknown commands (silently ignored
-    /// per the UCI spec).
+    /// Returns `Ok(None)` for blank lines and unknown commands (silently
+    /// ignored per the UCI spec).
     /// Returns `Ok(Some(cmd))` for valid, fully-parsed commands.
     /// Returns `Err` only for *structurally invalid* known commands — for
     /// example, a `position` line with a malformed FEN, or a `go` line with a

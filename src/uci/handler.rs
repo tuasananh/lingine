@@ -40,7 +40,8 @@ impl<T: Engine + 'static> UCIHandler<T> {
     /// Start the UCI loop.
     ///
     /// Spawns Threads B and C, then runs Thread A logic on the calling thread
-    /// until EOF or a `quit` command. Joins both spawned threads before returning.
+    /// until EOF or a `quit` command. Joins both spawned threads before
+    /// returning.
     pub fn run<R: BufRead>(self, reader: R) -> Result<()> {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let (cmd_tx, cmd_rx) = mpsc::channel::<EngineCommand>();

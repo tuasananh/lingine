@@ -1,63 +1,44 @@
 mod attacks;
 mod tables;
 
-// Re-export public API so external callers (position.rs, etc.) keep their existing `use crate::movegen::*` paths.
-#[allow(unused_imports)]
+// Re-export public API so external callers (position.rs, etc.) keep their
+// existing `use crate::movegen::*` paths.
 pub use attacks::{cannon_attacks, gather_file_bits, rook_attacks};
-#[allow(unused_imports)]
 pub use tables::{
     ADVISOR_ATTACKS, BISHOP_TABLE, BishopEntry, FILE_TABLE, FileEntry, KING_ATTACKS, KNIGHT_TABLE,
     KNIGHT_TO_TABLE, KnightEntry, KnightToEntry, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
     RankEntry,
 };
 
-use crate::core::{
-    bitboard::Bitboard,
-    position::Position,
-    types::{Color, MAX_MOVES, Move, MoveGenType, PieceType, Square},
-};
+use crate::core::{Color, Move, MoveGenType, MoveList, PieceType, Position, Square};
 
 /// Generates valid orthogonal moves for the General (King) inside the Palace.
-fn generate_king_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+fn generate_king_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
-    if let Some(from_sq) = pos.king_square(us) {
-        let us_pieces = pos.bitboard_by_color(us);
-        let mut target_bb = Bitboard(KING_ATTACKS[from_sq as usize].0 & !us_pieces.0);
-        while let Some(to_sq) = target_bb.pop_lsb() {
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
-        }
+    let from_sq = pos.king_square(us);
+    let us_pieces = pos.bitboard_by_color(us);
+    let mut target_bb = KING_ATTACKS[from_sq as usize] & !us_pieces;
+    while let Some(to_sq) = target_bb.pop_lsb() {
+        moves.push(Move::new(from_sq, to_sq));
     }
 }
 
 /// Generates diagonal moves for Advisors inside the Palace.
-fn generate_advisor_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+fn generate_advisor_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let mut advisors = pos.bitboard_by_type(PieceType::Advisor) & us_pieces;
     while let Some(from_sq) = advisors.pop_lsb() {
-        let mut target_bb = Bitboard(ADVISOR_ATTACKS[from_sq as usize].0 & !us_pieces.0);
+        let mut target_bb = ADVISOR_ATTACKS[from_sq as usize] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
     }
 }
 
-/// Generates diagonal moves for Elephants (Bishops), checking diagonal blocker intermediate eyes.
-fn generate_bishop_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+/// Generates diagonal moves for Elephants (Bishops), checking diagonal blocker
+/// intermediate eyes.
+fn generate_bishop_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
@@ -77,20 +58,16 @@ fn generate_bishop_moves<const IS_WHITE: bool>(
             i += 1;
         }
 
-        let mut target_bb = Bitboard(entry.attacks[occ_idx].0 & !us_pieces.0);
+        let mut target_bb = entry.attacks[occ_idx] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
     }
 }
 
-/// Generates L-shaped moves for Horses (Knights), checking intermediate orthogonal blocker leg squares.
-fn generate_knight_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+/// Generates L-shaped moves for Horses (Knights), checking intermediate
+/// orthogonal blocker leg squares.
+fn generate_knight_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
@@ -110,40 +87,32 @@ fn generate_knight_moves<const IS_WHITE: bool>(
             i += 1;
         }
 
-        let mut target_bb = Bitboard(entry.attacks[occ_idx].0 & !us_pieces.0);
+        let mut target_bb = entry.attacks[occ_idx] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
     }
 }
 
-/// Generates moves for Soldiers (Pawns) based on whether they have crossed the river or not.
-fn generate_pawn_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+/// Generates moves for Soldiers (Pawns) based on whether they have crossed the
+/// river or not.
+fn generate_pawn_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let mut pawns = pos.bitboard_by_type(PieceType::Pawn) & us_pieces;
     let color_idx = if IS_WHITE { 0 } else { 1 };
 
     while let Some(from_sq) = pawns.pop_lsb() {
-        let mut target_bb = Bitboard(PAWN_ATTACKS[color_idx][from_sq as usize].0 & !us_pieces.0);
+        let mut target_bb = PAWN_ATTACKS[color_idx][from_sq as usize] & !us_pieces;
         while let Some(to_sq) = target_bb.pop_lsb() {
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
     }
 }
 
-/// Generates horizontal and vertical sliding moves for Chariots (Rooks) in O(1) lookups.
-fn generate_rook_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+/// Generates horizontal and vertical sliding moves for Chariots (Rooks) in O(1)
+/// lookups.
+fn generate_rook_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
@@ -155,39 +124,34 @@ fn generate_rook_moves<const IS_WHITE: bool>(
         let r = from_idx / 9;
 
         // 1. Rank attacks
-        let rank_occ = ((occupied.0 >> (r * 9)) & 0x1FF) as usize;
-        let us_rank_mask = ((us_pieces.0 >> (r * 9)) & 0x1FF) as u16;
+        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+        let us_rank_mask = ((us_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
         let mut rank_attack_mask = RANK_TABLE[f].rook[rank_occ] & !us_rank_mask;
 
         while rank_attack_mask != 0 {
             let f_to = rank_attack_mask.trailing_zeros() as usize;
             rank_attack_mask &= rank_attack_mask - 1;
             let to_sq = Square::from_repr((r * 9 + f_to) as u8).unwrap();
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
 
         // 2. File attacks
-        let file_occ = gather_file_bits(occupied.0, f);
-        let us_file_mask = gather_file_bits(us_pieces.0, f) as u16;
+        let file_occ = gather_file_bits(occupied.raw(), f);
+        let us_file_mask = gather_file_bits(us_pieces.raw(), f) as u16;
         let mut file_attack_mask = FILE_TABLE[r].rook[file_occ] & !us_file_mask;
 
         while file_attack_mask != 0 {
             let r_to = file_attack_mask.trailing_zeros() as usize;
             file_attack_mask &= file_attack_mask - 1;
             let to_sq = Square::from_repr((r_to * 9 + f) as u8).unwrap();
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
     }
 }
 
-/// Generates horizontal and vertical moves/leap captures for Cannons in O(1) lookups.
-fn generate_cannon_moves<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-    count: &mut usize,
-) {
+/// Generates horizontal and vertical moves/leap captures for Cannons in O(1)
+/// lookups.
+fn generate_cannon_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Color::White } else { Color::Black };
     let them = us.opposite();
     let us_pieces = pos.bitboard_by_color(us);
@@ -201,11 +165,11 @@ fn generate_cannon_moves<const IS_WHITE: bool>(
         let r = from_idx / 9;
 
         // 1. Rank moves (horizontal quiet + leap captures)
-        let rank_occ = ((occupied.0 >> (r * 9)) & 0x1FF) as usize;
-        let them_rank_mask = ((them_pieces.0 >> (r * 9)) & 0x1FF) as u16;
+        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+        let them_rank_mask = ((them_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
 
         let rank_quiet_mask =
-            RANK_TABLE[f].rook[rank_occ] & !((occupied.0 >> (r * 9)) & 0x1FF) as u16;
+            RANK_TABLE[f].rook[rank_occ] & !((occupied.raw() >> (r * 9)) & 0x1FF) as u16;
         let rank_capture_mask = RANK_TABLE[f].cannon[rank_occ] & them_rank_mask;
 
         let mut rank_attack_mask = rank_quiet_mask | rank_capture_mask;
@@ -213,14 +177,13 @@ fn generate_cannon_moves<const IS_WHITE: bool>(
             let f_to = rank_attack_mask.trailing_zeros() as usize;
             rank_attack_mask &= rank_attack_mask - 1;
             let to_sq = Square::from_repr((r * 9 + f_to) as u8).unwrap();
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
 
         // 2. File moves (vertical quiet + leap captures)
-        let file_occ = gather_file_bits(occupied.0, f);
-        let them_file_mask = gather_file_bits(them_pieces.0, f) as u16;
-        let occ_file_mask = gather_file_bits(occupied.0, f) as u16;
+        let file_occ = gather_file_bits(occupied.raw(), f);
+        let them_file_mask = gather_file_bits(them_pieces.raw(), f) as u16;
+        let occ_file_mask = gather_file_bits(occupied.raw(), f) as u16;
 
         let file_quiet_mask = FILE_TABLE[r].rook[file_occ] & !occ_file_mask;
         let file_capture_mask = FILE_TABLE[r].cannon[file_occ] & them_file_mask;
@@ -230,49 +193,41 @@ fn generate_cannon_moves<const IS_WHITE: bool>(
             let r_to = file_attack_mask.trailing_zeros() as usize;
             file_attack_mask &= file_attack_mask - 1;
             let to_sq = Square::from_repr((r_to * 9 + f) as u8).unwrap();
-            moves[*count] = Move::new(from_sq, to_sq);
-            *count += 1;
+            moves.push(Move::new(from_sq, to_sq));
         }
     }
 }
 
-/// Orchestrates move generators for all piece types, returning the total pseudo-legal move count.
-fn generate_pseudo_legal<const IS_WHITE: bool>(
-    pos: &Position,
-    moves: &mut [Move; MAX_MOVES],
-) -> usize {
-    let mut count = 0;
-    generate_king_moves::<IS_WHITE>(pos, moves, &mut count);
-    generate_advisor_moves::<IS_WHITE>(pos, moves, &mut count);
-    generate_bishop_moves::<IS_WHITE>(pos, moves, &mut count);
-    generate_knight_moves::<IS_WHITE>(pos, moves, &mut count);
-    generate_pawn_moves::<IS_WHITE>(pos, moves, &mut count);
-    generate_rook_moves::<IS_WHITE>(pos, moves, &mut count);
-    generate_cannon_moves::<IS_WHITE>(pos, moves, &mut count);
-    count
+/// Orchestrates move generators for all piece types, returning the total
+/// pseudo-legal move count.
+fn generate_pseudo_legal<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
+    generate_king_moves::<IS_WHITE>(pos, moves);
+    generate_advisor_moves::<IS_WHITE>(pos, moves);
+    generate_bishop_moves::<IS_WHITE>(pos, moves);
+    generate_knight_moves::<IS_WHITE>(pos, moves);
+    generate_pawn_moves::<IS_WHITE>(pos, moves);
+    generate_rook_moves::<IS_WHITE>(pos, moves);
+    generate_cannon_moves::<IS_WHITE>(pos, moves);
 }
 
 /// The main entry point for move generation.
-/// Filters pseudo-legal moves into legal moves (e.g. by ensuring the King is not left in check)
-/// and respects the target `MoveGenType` request (Legal, PseudoLegal, Quiets, Captures, Evasions).
-pub fn generate_moves(
-    pos: &Position,
-    gen_type: MoveGenType,
-    moves: &mut [Move; MAX_MOVES],
-) -> usize {
+/// Filters pseudo-legal moves into legal moves (e.g. by ensuring the King is
+/// not left in check) and respects the target `MoveGenType` request (Legal,
+/// PseudoLegal, Quiets, Captures, Evasions).
+pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveList) {
     let color = pos.side_to_move();
-    let mut count = match color {
+    match color {
         Color::White => generate_pseudo_legal::<true>(pos, moves),
         Color::Black => generate_pseudo_legal::<false>(pos, moves),
     };
 
     if gen_type == MoveGenType::PseudoLegal {
-        return count;
+        return;
     }
 
-    let mut cur = 0;
-    while cur < count {
-        let m = moves[cur];
+    let mut write_idx = 0;
+    for read_idx in 0..moves.len() {
+        let m = moves[read_idx];
         let is_legal = pos.legal(m);
         let keep = if is_legal {
             match gen_type {
@@ -285,32 +240,31 @@ pub fn generate_moves(
             false
         };
 
-        if !keep {
-            count -= 1;
-            moves[cur] = moves[count]; // Swap with the last move in the list
-        } else {
-            cur += 1;
+        if keep {
+            moves[write_idx] = m;
+            write_idx += 1
         }
     }
 
-    count
+    moves.truncate(write_idx);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::position::Position;
-    use crate::core::types::{MAX_MOVES, Move, MoveGenType, Square};
+    use crate::core::types::{Move, MoveGenType, Square};
 
     fn count_moves(pos: &Position, gen_type: MoveGenType) -> usize {
-        let mut moves = [Move::none(); MAX_MOVES];
-        generate_moves(pos, gen_type, &mut moves)
+        let mut moves = MoveList::new();
+        generate_moves(pos, gen_type, &mut moves);
+        moves.len()
     }
 
     fn has_move(pos: &Position, gen_type: MoveGenType, m: Move) -> bool {
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(pos, gen_type, &mut moves);
-        moves[..count].contains(&m)
+        let mut moves = MoveList::new();
+        generate_moves(pos, gen_type, &mut moves);
+        moves.contains(&m)
     }
 
     #[test]
@@ -341,9 +295,9 @@ mod tests {
         pos.set("9/9/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
         // Advisor is on E1. Advisor moves: FD0, FF0.
         // Let's generate moves for E0
-        let mut moves = [Move::none(); MAX_MOVES];
-        let c = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let king_moves: Vec<Move> = moves[..c]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let king_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E0)
             .copied()
@@ -358,9 +312,9 @@ mod tests {
         let mut pos = Position::new();
         // Setup Advisor at center of Palace (E1)
         pos.set("9/9/9/9/9/9/9/9/4A4/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let adv_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let adv_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E1)
             .copied()
@@ -374,9 +328,9 @@ mod tests {
 
         // Corner Advisor (D0)
         pos.set("9/9/9/9/9/9/9/9/9/3A5 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let adv_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let adv_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::D0)
             .copied()
@@ -391,9 +345,9 @@ mod tests {
         let mut pos = Position::new();
         // Bishop (Elephant) at C0
         pos.set("9/9/9/9/9/9/9/9/9/2B6 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let bish_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let bish_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::C0)
             .copied()
@@ -405,9 +359,9 @@ mod tests {
 
         // Block with a piece on the Elephant eye (D1)
         pos.set("9/9/9/9/9/9/9/9/3p5/2B6 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let bish_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let bish_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::C0)
             .copied()
@@ -422,9 +376,9 @@ mod tests {
         let mut pos = Position::new();
         // Knight at E2
         pos.set("9/9/9/9/9/9/9/4H4/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let kn_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let kn_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E2)
             .copied()
@@ -434,9 +388,9 @@ mod tests {
 
         // Block with a piece on the Horse Leg (E3)
         pos.set("9/9/9/9/9/9/4p4/4H4/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let kn_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let kn_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E2)
             .copied()
@@ -452,9 +406,9 @@ mod tests {
         let mut pos = Position::new();
         // Unpromoted Pawn (C3)
         pos.set("9/9/9/9/9/9/2P6/9/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let pawn_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let pawn_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::C3)
             .copied()
@@ -465,9 +419,9 @@ mod tests {
 
         // Promoted Pawn (C6 - crossed river)
         pos.set("9/9/9/2P6/9/9/9/9/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let pawn_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let pawn_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::C6)
             .copied()
@@ -484,9 +438,9 @@ mod tests {
         let mut pos = Position::new();
         // Rook at E5
         pos.set("9/9/9/9/4R4/9/9/9/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let r_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let r_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E5)
             .copied()
@@ -496,16 +450,16 @@ mod tests {
 
         // Friendly blocker at E6, opponent at E3
         pos.set("9/9/9/4A4/4R4/9/4p4/9/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let r_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let r_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E5)
             .copied()
             .collect();
         // Upwards blocked at E6 (so no E6, E7, E8, E9).
-        // Downwards blocked by opponent at E3 (so E4 is quiet, E3 is capture, but no E2, E1, E0).
-        // Plus 8 horizontal moves.
+        // Downwards blocked by opponent at E3 (so E4 is quiet, E3 is capture, but no
+        // E2, E1, E0). Plus 8 horizontal moves.
         // File moves allowed: E4, E3. (2 moves)
         // Rank moves: A5, B5, C5, D5, F5, G5, H5, I5 (8 moves)
         // Total: 10 moves.
@@ -519,9 +473,9 @@ mod tests {
         let mut pos = Position::new();
         // Cannon at E5, empty board.
         pos.set("9/9/9/9/4C4/9/9/9/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let c_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let c_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E5)
             .copied()
@@ -531,9 +485,9 @@ mod tests {
 
         // Friendly screen at E6, opponent behind at E8
         pos.set("9/4r4/9/4A4/4C4/9/9/9/9/9 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let c_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let c_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E5)
             .copied()
@@ -552,15 +506,16 @@ mod tests {
         let mut pos = Position::new();
         // Kings facing each other on file E with only 1 friendly Rook in between (E3)
         pos.set("4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1").unwrap();
-        let mut moves = [Move::none(); MAX_MOVES];
-        let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
-        let r_moves: Vec<Move> = moves[..count]
+        let mut moves = MoveList::new();
+        generate_moves(&pos, MoveGenType::Legal, &mut moves);
+        let r_moves: Vec<Move> = moves
             .iter()
             .filter(|m| m.square_from() == Square::E3)
             .copied()
             .collect();
-        // Moving the Rook horizontally (off file E) is illegal because it exposes the Kings to face each other!
-        // So the Rook can only move vertically along file E (D3, F3, etc. are illegal).
+        // Moving the Rook horizontally (off file E) is illegal because it exposes the
+        // Kings to face each other! So the Rook can only move vertically along
+        // file E (D3, F3, etc. are illegal).
         for m in r_moves {
             assert_eq!(m.square_to() as u8 % 9, 4); // must stay on file E (index 4)
         }
@@ -570,7 +525,7 @@ mod tests {
         use crate::core::types::{Color, Piece, PieceType};
         use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
-        assert_eq!(a.zobrist_hash, b.zobrist_hash);
+        assert_eq!(a.zobrist_hash(), b.zobrist_hash());
         for sq_val in 0..90 {
             let sq = Square::from_repr(sq_val).unwrap();
             assert_eq!(a.piece_at(sq), b.piece_at(sq));
@@ -579,10 +534,10 @@ mod tests {
         for color in [Color::White, Color::Black] {
             assert_eq!(a.king_square(color), b.king_square(color));
             assert_eq!(a.is_in_check(color), b.is_in_check(color));
-            assert_eq!(a.bitboard_by_color(color).0, b.bitboard_by_color(color).0);
+            assert_eq!(a.bitboard_by_color(color), b.bitboard_by_color(color));
         }
         for pt in PieceType::iter() {
-            assert_eq!(a.bitboard_by_type(pt).0, b.bitboard_by_type(pt).0);
+            assert_eq!(a.bitboard_by_type(pt), b.bitboard_by_type(pt));
         }
         for piece in Piece::iter() {
             assert_eq!(a.piece_count(piece), b.piece_count(piece));
@@ -621,8 +576,8 @@ mod tests {
             for gen_type in gen_types {
                 let pos_before = pos.clone();
 
-                let mut moves = [Move::none(); MAX_MOVES];
-                let _count = generate_moves(&pos, gen_type, &mut moves);
+                let mut moves = MoveList::new();
+                generate_moves(&pos, gen_type, &mut moves);
 
                 // Ensure calling generate_moves did not modify/corrupt the position in any way
                 assert_positions_equal(&pos, &pos_before);

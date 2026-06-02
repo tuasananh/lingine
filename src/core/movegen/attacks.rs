@@ -3,8 +3,9 @@ use crate::core::{bitboard::Bitboard, types::Square};
 use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};
 
 /// Collects (gathers) the vertical file occupancy states into a 10-bit integer.
-/// Every 9th bit in our `u128` bitboard represents the same file on successive ranks (R0 to R9).
-/// Shifts, masks, and packs these bits dynamically in O(1) time without standard loops.
+/// Every 9th bit in our `u128` bitboard represents the same file on successive
+/// ranks (R0 to R9). Shifts, masks, and packs these bits dynamically in O(1)
+/// time without standard loops.
 #[inline(always)]
 pub fn gather_file_bits(bits: u128, f: usize) -> usize {
     let occ = bits >> f;
@@ -32,17 +33,17 @@ pub fn rook_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let r = from_idx / 9;
 
     // 1. Rank attacks: Mask the 9 bits of the current rank (offset `r * 9`)
-    let rank_occ = ((occupied.0 >> (r * 9)) & 0x1FF) as usize;
+    let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
     let rank_attack_mask = RANK_TABLE[f].rook[rank_occ];
-    let mut attack_bb = Bitboard((rank_attack_mask as u128) << (r * 9));
+    let mut attack_bb = Bitboard::from_raw((rank_attack_mask as u128) << (r * 9));
 
     // 2. File attacks: Gather the 10 bits of the current file
-    let file_occ = gather_file_bits(occupied.0, f);
+    let file_occ = gather_file_bits(occupied.raw(), f);
     let file_attack_mask = FILE_TABLE[r].rook[file_occ];
 
     let file_mask_bb = FILE_ATTACKS_BY_MASK[f][file_attack_mask as usize];
 
-    attack_bb.0 |= file_mask_bb.0;
+    attack_bb |= file_mask_bb;
     attack_bb
 }
 
@@ -54,17 +55,17 @@ pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let r = from_idx / 9;
 
     // 1. Rank attacks: Mask the 9 bits of the rank
-    let rank_occ = ((occupied.0 >> (r * 9)) & 0x1FF) as usize;
+    let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
     let rank_attack_mask = RANK_TABLE[f].cannon[rank_occ];
-    let mut attack_bb = Bitboard((rank_attack_mask as u128) << (r * 9));
+    let mut attack_bb = Bitboard::from_raw((rank_attack_mask as u128) << (r * 9));
 
     // 2. File attacks: Gather the 10 bits of the file
-    let file_occ = gather_file_bits(occupied.0, f);
+    let file_occ = gather_file_bits(occupied.raw(), f);
     let file_attack_mask = FILE_TABLE[r].cannon[file_occ];
 
     let file_mask_bb = FILE_ATTACKS_BY_MASK[f][file_attack_mask as usize];
 
-    attack_bb.0 |= file_mask_bb.0;
+    attack_bb |= file_mask_bb;
     attack_bb
 }
 
@@ -98,7 +99,7 @@ mod tests {
     #[test]
     fn test_rook_attacks() {
         // Rook at A0 on empty board
-        let empty = Bitboard(0);
+        let empty = Bitboard::from_raw(0);
         let att_a0 = rook_attacks(Square::A0, empty);
         // Should attack B0..I0 (files 1..8 on rank 0) and A1..A9 (file 0 on ranks 1..9)
         let mut expected_mask = 0u128;
@@ -108,28 +109,30 @@ mod tests {
         for r in 1..10 {
             expected_mask |= 1u128 << (r * 9);
         }
-        assert_eq!(att_a0.0, expected_mask);
+        assert_eq!(att_a0.raw(), expected_mask);
 
         // Rook at A0, blocked by a piece at A2 and B0
-        let blocked = Bitboard((1u128 << (2 * 9)) | (1u128 << 1));
+        let blocked = Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << 1));
         let att_a0_blocked = rook_attacks(Square::A0, blocked);
-        // Should attack B0 (the blocker on rank 0) and A1, A2 (the blocker on rank 2). No further.
+        // Should attack B0 (the blocker on rank 0) and A1, A2 (the blocker on rank 2).
+        // No further.
         let mut expected_blocked_mask = 0u128;
         expected_blocked_mask |= 1u128 << 1; // B0
         expected_blocked_mask |= 1u128 << 9; // A1
         expected_blocked_mask |= 1u128 << (2 * 9); // A2
-        assert_eq!(att_a0_blocked.0, expected_blocked_mask);
+        assert_eq!(att_a0_blocked.raw(), expected_blocked_mask);
     }
 
     #[test]
     fn test_cannon_attacks() {
-        // Cannon quiet attacks are 0 on an empty board (cannon_attacks only computes leap captures)
-        let empty = Bitboard(0);
+        // Cannon quiet attacks are 0 on an empty board (cannon_attacks only computes
+        // leap captures)
+        let empty = Bitboard::from_raw(0);
         let att_cannon_a0 = cannon_attacks(Square::A0, empty);
-        assert_eq!(att_cannon_a0.0, 0);
+        assert_eq!(att_cannon_a0.raw(), 0);
 
         // Cannon at A0, blocker (screen) at A2, and enemy at A5
-        let occupied = Bitboard((1u128 << (2 * 9)) | (1u128 << (5 * 9)));
+        let occupied = Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << (5 * 9)));
         let att_cannon_blocked = cannon_attacks(Square::A0, occupied);
         // Upwards file leap capture target behind screen A2: A5.
 
@@ -138,8 +141,8 @@ mod tests {
         expected |= 1u128 << 3; // D0
         expected |= 1u128 << 5; // F0
         expected |= 1u128 << (9 + 4); // E1
-        assert_eq!(att_cannon_blocked.0, 1u128 << (5 * 9));
-        assert_eq!(KING_ATTACKS[Square::E0 as usize].0, expected);
+        assert_eq!(att_cannon_blocked.raw(), 1u128 << (5 * 9));
+        assert_eq!(KING_ATTACKS[Square::E0 as usize].raw(), expected);
 
         // Advisor from center of Palace (E1)
         let advisor_e1 = ADVISOR_ATTACKS[Square::E1 as usize];
@@ -149,7 +152,7 @@ mod tests {
         expected_adv |= 1u128 << 5; // F0
         expected_adv |= 1u128 << (2 * 9 + 3); // D2
         expected_adv |= 1u128 << (2 * 9 + 5); // F2
-        assert_eq!(advisor_e1.0, expected_adv);
+        assert_eq!(advisor_e1.raw(), expected_adv);
     }
 
     #[test]
@@ -163,13 +166,14 @@ mod tests {
         let mut expected = 0u128;
         expected |= 1u128 << (2 * 9); // A2
         expected |= 1u128 << (2 * 9 + 4); // E2
-        assert_eq!(unblocked_attacks.0, expected);
+        assert_eq!(unblocked_attacks.raw(), expected);
 
-        // When blocked at D1 (which is index 0 in eyes, so occ_idx = 1), moves to E2 is blocked.
-        // C0 to A2 jumps over eye B1, which is index 2. So if only D1 is occupied (occ_idx = 1):
+        // When blocked at D1 (which is index 0 in eyes, so occ_idx = 1), moves to E2 is
+        // blocked. C0 to A2 jumps over eye B1, which is index 2. So if only D1
+        // is occupied (occ_idx = 1):
         let blocked_attacks = bishop_c0.attacks[1];
         let mut expected_blocked = 0u128;
         expected_blocked |= 1u128 << (2 * 9); // A2 is still valid
-        assert_eq!(blocked_attacks.0, expected_blocked);
+        assert_eq!(blocked_attacks.raw(), expected_blocked);
     }
 }

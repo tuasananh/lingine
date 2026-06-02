@@ -1,18 +1,13 @@
+use std::cmp::Reverse;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use crate::core::movegen::generate_moves;
-use crate::core::{
-    Position,
-    types::{Color, MAX_MOVES, Move, MoveGenType, Piece, PieceType},
-};
+use crate::core::{Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, generate_moves};
 use crate::eval::evaluate;
 
-pub mod transposition_table;
-pub use transposition_table::{
-    TranspositionTable, TranspositionTableEntry, TranspositionTableFlag,
-};
+mod transposition_table;
+pub use transposition_table::*;
 
 /// Represents the alpha-beta search window.
 #[derive(Copy, Clone, Debug)]
@@ -27,7 +22,8 @@ impl SearchWindow {
         Self { alpha, beta }
     }
 
-    /// Negates the window (reverses and negates bounds) for the next ply in Negamax.
+    /// Negates the window (reverses and negates bounds) for the next ply in
+    /// Negamax.
     pub fn negate(self) -> Self {
         Self {
             alpha: -self.beta,
@@ -36,7 +32,8 @@ impl SearchWindow {
     }
 }
 
-/// Tracks search extension and move exclusion parameters for the current branch.
+/// Tracks search extension and move exclusion parameters for the current
+/// branch.
 #[derive(Copy, Clone, Debug)]
 pub struct SearchExtension {
     pub extensions: i32,
@@ -99,75 +96,55 @@ fn get_piece_value_rank(p: Piece) -> i32 {
     }
 }
 
-/// Returns a heuristic move-ordering score. Captures are scored highly based
-/// on MVV-LVA. Quiet moves get score 0. The transposition table best move is
-/// prioritized at the very top.
-fn get_move_score(
-    pos: &Position,
-    m: Move,
-    tt_move: Move,
-    killers: &[[Move; 2]; 128],
-    history_table: &[[[i32; 90]; 90]; 2],
-    ply: i32,
-) -> i32 {
-    if m == tt_move && !m.is_none() {
-        return 20000; // Prioritize TT best move above all else
-    }
-    let to_piece = pos.piece_at(m.square_to());
-    if to_piece != Piece::None {
-        // Capture: 10000 + victim_rank * 100 - attacker_rank
-        let victim = get_piece_value_rank(to_piece);
-        let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
-        10000 + victim * 100 - attacker
-    } else {
-        // Quiet move
-        let ply_idx = ply as usize;
-        if ply_idx < 128 {
-            if m == killers[ply_idx][0] {
-                return 9000;
-            }
-            if m == killers[ply_idx][1] {
-                return 8000;
-            }
-        }
-        let side_idx = pos.side_to_move() as usize;
-        let from_idx = m.square_from() as usize;
-        let to_idx = m.square_to() as usize;
-        // History score capped at 7000
-        history_table[side_idx][from_idx][to_idx]
-    }
-}
-
-/// Sorts the first `count` moves in `moves` using a simple selection sort
-/// based on their heuristic scores, prioritizing the transposition table best move, killers, and history.
+/// Sorts the moves based on their heuristic scores, prioritizing the
+/// transposition table best move, killers, and history.
 fn sort_moves(
     pos: &Position,
     moves: &mut [Move],
-    count: usize,
     tt_move: Move,
     killers: &[[Move; 2]; 128],
     history_table: &[[[i32; 90]; 90]; 2],
     ply: i32,
 ) {
-    for i in 0..count {
-        let mut best_idx = i;
-        let mut best_val = get_move_score(pos, moves[i], tt_move, killers, history_table, ply);
-        for (j, mv) in moves.iter().enumerate().take(count).skip(i + 1) {
-            let val = get_move_score(pos, *mv, tt_move, killers, history_table, ply);
-            if val > best_val {
-                best_val = val;
-                best_idx = j;
+    moves.sort_by_cached_key(|&m| {
+        // Returns a heuristic move-ordering score. Captures are scored highly based
+        // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
+        // prioritized at the very top.
+        let move_score = if m == tt_move && !m.is_none() {
+            20000 // Prioritize TT best move above all else
+        } else {
+            let to_piece = pos.piece_at(m.square_to());
+            if to_piece != Piece::None {
+                // Capture: 10000 + victim_rank * 100 - attacker_rank
+                let victim = get_piece_value_rank(to_piece);
+                let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
+                10000 + victim * 100 - attacker
+            } else {
+                // Quiet move
+                let ply_idx = ply as usize;
+                if ply_idx < 128 && m == killers[ply_idx][0] {
+                    9000
+                } else if ply_idx < 128 && m == killers[ply_idx][1] {
+                    8000
+                } else {
+                    let side_idx = pos.side_to_move() as usize;
+                    let from_idx = m.square_from() as usize;
+                    let to_idx = m.square_to() as usize;
+                    // History score capped at 7000
+                    history_table[side_idx][from_idx][to_idx]
+                }
             }
-        }
-        if best_idx != i {
-            moves.swap(i, best_idx);
-        }
-    }
+        };
+
+        // Sort it in reverse since we want the best one
+        Reverse(move_score)
+    });
 }
 
 /// Implements Quiescence Search to evaluate tactical capture sequences.
 ///
-/// Prevents the horizon effect by searching captures only until a quiet position is reached.
+/// Prevents the horizon effect by searching captures only until a quiet
+/// position is reached.
 pub fn quiescence(
     pos: &mut Position,
     mut window: SearchWindow,
@@ -193,7 +170,8 @@ pub fn quiescence(
         }
     }
 
-    // Base case: to avoid infinite recursion and stack overflow from perpetual checks
+    // Base case: to avoid infinite recursion and stack overflow from perpetual
+    // checks
     if qdepth >= 12 {
         let stand_pat = evaluate(pos);
         return if pos.side_to_move() == Color::White {
@@ -222,17 +200,17 @@ pub fn quiescence(
         }
     }
 
-    // Generate moves: if in check, we must search all legal evasions to save the King.
-    // Otherwise, we only search capture moves.
-    let mut moves = [Move::none(); MAX_MOVES];
-    let count = if in_check {
+    // Generate moves: if in check, we must search all legal evasions to save the
+    // King. Otherwise, we only search capture moves.
+    let mut moves = MoveList::new();
+    if in_check {
         generate_moves(pos, MoveGenType::Legal, &mut moves)
     } else {
         generate_moves(pos, MoveGenType::Captures, &mut moves)
     };
 
     // Checkmate detection: in check with no legal moves = checkmate
-    if in_check && count == 0 {
+    if in_check && moves.is_empty() {
         return -MATE_VALUE + ply;
     }
 
@@ -240,14 +218,13 @@ pub fn quiescence(
     sort_moves(
         pos,
         &mut moves,
-        count,
         Move::none(),
         ctx.killers,
         ctx.history_table,
         ply,
     );
 
-    for m in moves.iter().copied().take(count) {
+    for m in moves {
         pos.do_move(m);
         let score = -quiescence(pos, window.negate(), ply + 1, qdepth + 1, ctx);
         pos.undo_move(m);
@@ -300,7 +277,8 @@ pub fn negamax(
         }
     }
 
-    // Game over / rule evaluations (60-move rule, insufficient material, repetitions, perpetual checks)
+    // Game over / rule evaluations (60-move rule, insufficient material,
+    // repetitions, perpetual checks)
     if let Some(rule_score) = pos.rule_judge(ply) {
         return rule_score;
     }
@@ -320,7 +298,7 @@ pub fn negamax(
     let mut tt_flag = TranspositionTableFlag::Alpha;
     let mut tt_entry_exists = false;
 
-    if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash) {
+    if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash()) {
         tt_move = entry.best_move;
         tt_depth = entry.depth as i32;
         tt_flag = entry.flag;
@@ -375,31 +353,31 @@ pub fn negamax(
         return quiescence(pos, window, ply, 0, ctx);
     }
 
-    let mut moves = [Move::none(); MAX_MOVES];
-    let count = generate_moves(pos, MoveGenType::Legal, &mut moves);
+    let mut moves = MoveList::new();
+    generate_moves(pos, MoveGenType::Legal, &mut moves);
 
     // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
-    if count == 0 {
+    if moves.is_empty() {
         return -MATE_VALUE + ply;
     }
 
     // One-Reply Extensions
-    if count == 1 && ext_control.excluded_move.is_none() && ext_control.extensions < 6 {
+    if moves.len() == 1 && ext_control.excluded_move.is_none() && ext_control.extensions < 6 {
         depth += 1;
         ext_control.extensions += 1;
     }
 
     // Validate that the TT move is actually legal in the current position.
     // A stale or collided TT entry may reference a move that is not valid here.
-    if !tt_move.is_none() && !moves[..count].contains(&tt_move) {
+    if !tt_move.is_none() && !moves.contains(&tt_move) {
         tt_move = Move::none();
     }
 
-    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move prioritized first, killers, and history
+    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
+    // prioritized first, killers, and history
     sort_moves(
         pos,
         &mut moves,
-        count,
         tt_move,
         ctx.killers,
         ctx.history_table,
@@ -409,7 +387,7 @@ pub fn negamax(
     let mut best_score = -INFINITY;
     let mut best_move = Move::none();
 
-    for m in moves.iter().copied().take(count) {
+    for m in moves {
         if m == ext_control.excluded_move {
             continue;
         }
@@ -469,7 +447,7 @@ pub fn negamax(
             TranspositionTableFlag::Exact
         };
         ctx.transposition_table.store(
-            pos.zobrist_hash,
+            pos.zobrist_hash(),
             depth as i16,
             TranspositionTable::score_to_transposition(best_score, ply),
             flag,
@@ -484,8 +462,8 @@ pub fn negamax(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::position::Position;
-    use crate::core::types::{Color, Move, Square};
+    use crate::core::Position;
+    use crate::core::{Color, Move, Square};
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::time::Instant;
@@ -493,7 +471,8 @@ mod tests {
     #[test]
     fn test_repetition_draw_repetition() {
         let mut pos = Position::new();
-        // Setup a simple position with files D and E blocked by pawns to avoid King-facing checks
+        // Setup a simple position with files D and E blocked by pawns to avoid
+        // King-facing checks
         pos.set("4k4/9/9/9/3PP4/9/9/9/9/4K4 w - - 0 1").unwrap();
         // Setup moves to repeat: King moves back and forth
         let w_move1 = Move::new(Square::E0, Square::D0);
@@ -579,7 +558,8 @@ mod tests {
         // 5. White checks again with Rook to D8 (repetition + check!)
         pos.do_move(r_check3);
 
-        // Now Black turn to move. White just gave the repeating check on all turns in the loop.
+        // Now Black turn to move. White just gave the repeating check on all turns in
+        // the loop.
         assert_eq!(pos.rule_judge(5), Some(100_000 - 5));
         assert!(pos.is_in_check(Color::Black));
 

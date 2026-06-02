@@ -1,10 +1,6 @@
 use anyhow::Result;
 
-use crate::core::{
-    movegen::generate_moves,
-    position::Position,
-    types::{MAX_MOVES, Move, MoveGenType},
-};
+use crate::core::{MoveGenType, MoveList, Position, generate_moves};
 
 #[derive(Debug)]
 pub struct Perft {
@@ -43,8 +39,8 @@ impl Perft {
         let mut cnt;
         let mut sub_nodes = 0;
 
-        let mut moves = [Move::none(); MAX_MOVES];
-        let moves_count = generate_moves(pos, MoveGenType::Legal, &mut moves);
+        let mut moves = MoveList::new();
+        generate_moves(pos, MoveGenType::Legal, &mut moves);
 
         let start_timepoint = if ROOT {
             Some(std::time::Instant::now())
@@ -54,7 +50,7 @@ impl Perft {
 
         let leaf = depth == 2;
 
-        for m in moves.iter().copied().take(moves_count) {
+        for m in moves {
             if ROOT && depth <= 1 {
                 cnt = 1;
                 self.nodes += 1;
@@ -70,13 +66,13 @@ impl Perft {
                 pos.do_move(m);
 
                 if leaf {
-                    let mut next_moves = [Move::none(); MAX_MOVES];
-                    let next_count = generate_moves(pos, MoveGenType::Legal, &mut next_moves);
+                    let mut next_moves = MoveList::new();
+                    generate_moves(pos, MoveGenType::Legal, &mut next_moves);
 
-                    cnt = next_count as u64;
+                    cnt = next_moves.len() as u64;
 
-                    if cnt > 0 {
-                        for nm in next_moves.iter().copied().take(next_count) {
+                    if !next_moves.is_empty() {
+                        for nm in next_moves {
                             if !pos.is_empty(nm.square_to()) {
                                 self.captures += 1;
                             }

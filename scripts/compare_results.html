@@ -394,8 +394,15 @@
             margin-bottom: 2rem;
         }
 
+        .layout-row-equal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
         @media (max-width: 1024px) {
-            .layout-row {
+            .layout-row, .layout-row-equal {
                 grid-template-columns: 1fr;
             }
         }
@@ -629,6 +636,10 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                 1v1 Head-to-Head Matches
             </button>
+            <button class="tab-btn" onclick="switchTab('historical')">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Historical Versions
+            </button>
         </div>
 
         <div id="comparison-content">
@@ -705,19 +716,198 @@
                     <!-- Javascript populated match cards -->
                 </div>
             </div>
+
+            <!-- Historical Version Specific View -->
+            <div id="historical-view" style="display: none;">
+                <!-- Line Chart for Elo Progression -->
+                <div class="card" style="margin-bottom: 2rem; padding: 2rem;">
+                    <h2 class="section-title">Historical Elo Progression Curve</h2>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                        Track the growth of Lingine's ELO rating across chronological development stages.
+                    </p>
+                    <div style="height: 350px; width: 100%; position: relative;">
+                        <canvas id="historicalEloChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Two columns: Upgrades vs Base and Incremental Upgrades -->
+                <div class="layout-row-equal" style="margin-bottom: 2rem;">
+                    <!-- Table: Progress vs Base 1.0.0 -->
+                    <div class="card" style="padding: 1.5rem 0;">
+                        <div style="padding: 0 1.5rem 1rem 1.5rem;">
+                            <h2 class="section-title" style="margin-bottom: 0;">Progression Relative to Base (v1.0.0)</h2>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Version Stage</th>
+                                        <th>Elo Delta vs Base</th>
+                                        <th>W / D / L</th>
+                                        <th>Score Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historical-base-tbody">
+                                    <!-- Javascript populated rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Table: Incremental Upgrades -->
+                    <div class="card" style="padding: 1.5rem 0;">
+                        <div style="padding: 0 1.5rem 1rem 1.5rem;">
+                            <h2 class="section-title" style="margin-bottom: 0;">Incremental Upgrade Gains</h2>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Upgrade Path</th>
+                                        <th>Incremental Gain</th>
+                                        <th>W / D / L</th>
+                                        <th>Score Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historical-neighbor-tbody">
+                                    <!-- Javascript populated rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table: Historical Gauntlets Leaderboard -->
+                <div class="card" style="padding: 1.5rem 0;">
+                    <div style="padding: 0 1.5rem 1rem 1.5rem;">
+                        <h2 class="section-title" style="margin-bottom: 0;">Historical Gauntlet Rankings</h2>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Release Version</th>
+                                    <th>Global MLE Elo</th>
+                                    <th>Confidence Interval</th>
+                                    <th>W / D / L</th>
+                                    <th>Win Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historical-gauntlet-tbody">
+                                <!-- Javascript populated rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <footer>
             Parsed and Rendered Client-Side in Browser • Antigravity AI Coding Assistant
         </footer>
     </div>
-
     <!-- Client-Side Parsing Script -->
     <script>
         let gauntletData = [];
         let matchData = [];
+        
+        // Historical release arrays
+        let historicalGauntletData = [];
+        let historicalBaseMatches = [];
+        let historicalNeighborMatches = [];
+
         let chartInstance = null;
+        let historicalChartInstance = null;
         let activeTab = 'gauntlet';
+
+        // Version Extraction and Chronological Sorting Helpers
+        function extractVersion(name) {
+            const m = name.match(/(\d+\.\d+\.\d+[a-z]?)/);
+            return m ? m[1] : "";
+        }
+
+        function compareVersions(a, b) {
+            const va = extractVersion(a);
+            const vb = extractVersion(b);
+            
+            if (!va) return 1;
+            if (!vb) return -1;
+            
+            const partsA = va.split('.');
+            const partsB = vb.split('.');
+            
+            for (let i = 0; i < 3; i++) {
+                const numA = parseInt(partsA[i] || '0', 10);
+                const numB = parseInt(partsB[i] || '0', 10);
+                if (numA !== numB) return numA - numB;
+            }
+            
+            // Compare version suffixes like 'a', 'b', 'c'
+            const suffixA = partsA[2] ? partsA[2].replace(/^\d+/, '') : '';
+            const suffixB = partsB[2] ? partsB[2].replace(/^\d+/, '') : '';
+            return suffixA.localeCompare(suffixB);
+        }
+
+        // Perspective Normalization for 1v1 Matches (Chronological / Upgraded Perspective)
+        function normalizeMatchPerspective(match) {
+            if (!match.engine1 || !match.engine2) return;
+            if (compareVersions(match.engine1, match.engine2) < 0) {
+                // Invert perspective: engine1 should be the newer, upgraded engine
+                const tempEngine = match.engine1;
+                match.engine1 = match.engine2;
+                match.engine2 = tempEngine;
+
+                const tempWins = match.e1_wins;
+                match.e1_wins = match.e1_losses;
+                match.e1_losses = tempWins;
+
+                match.score_pct = 100.0 - match.score_pct;
+                match.elo_diff = -match.elo_diff;
+
+                if (match.ci_low !== undefined && match.ci_high !== undefined) {
+                    const tempCiLow = match.ci_low;
+                    match.ci_low = -match.ci_high;
+                    match.ci_high = -tempCiLow;
+                }
+            }
+        }
+
+        // Reusable client-side index crawler
+        async function fetchSubfolders(path) {
+            try {
+                const response = await fetch(path);
+                if (!response.ok) return [];
+                const htmlText = await response.text();
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = htmlText;
+                const links = tempDiv.getElementsByTagName("a");
+                const subfolders = [];
+                
+                for (let link of links) {
+                    const href = link.getAttribute("href");
+                    if (href && href !== "../" && href !== "/") {
+                        const isDirectory = href.endsWith("/");
+                        let folderName = href;
+                        if (folderName.endsWith("/")) {
+                            folderName = folderName.slice(0, -1);
+                        }
+                        
+                        const lastSegment = folderName.split("/").pop();
+                        const hasFileExtension = /\.[a-zA-Z0-9]{2,4}$/.test(lastSegment);
+                        
+                        if (lastSegment && !subfolders.includes(lastSegment)) {
+                            if (isDirectory || !hasFileExtension) {
+                                subfolders.push(lastSegment);
+                            }
+                        }
+                    }
+                }
+                return subfolders;
+            } catch (err) {
+                console.warn(`Skipped subdirectory index fetch at: ${path}`, err);
+                return [];
+            }
+        }
 
         // Tab Switcher function
         function switchTab(tab) {
@@ -725,20 +915,31 @@
             const tabButtons = document.querySelectorAll('.tab-btn');
             const gauntletView = document.getElementById('gauntlet-view');
             const matchView = document.getElementById('match-view');
+            const historicalView = document.getElementById('historical-view');
             const titleEl = document.getElementById('dashboard-title');
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
 
             if (tab === 'gauntlet') {
                 tabButtons[0].classList.add('active');
-                tabButtons[1].classList.remove('active');
                 gauntletView.style.display = 'block';
                 matchView.style.display = 'none';
+                historicalView.style.display = 'none';
                 titleEl.textContent = 'Gauntlet Elo Leaderboard';
-            } else {
-                tabButtons[0].classList.remove('active');
+            } else if (tab === 'match') {
                 tabButtons[1].classList.add('active');
                 gauntletView.style.display = 'none';
                 matchView.style.display = 'block';
+                historicalView.style.display = 'none';
                 titleEl.textContent = '1v1 Match Comparison';
+            } else {
+                tabButtons[2].classList.add('active');
+                gauntletView.style.display = 'none';
+                matchView.style.display = 'none';
+                historicalView.style.display = 'block';
+                titleEl.textContent = 'Historical Version Progression';
+                // Build the progression line chart when the historical view becomes visible
+                buildHistoricalEloChart();
             }
         }
 
@@ -811,8 +1012,19 @@
             }
 
             // 8. Color Stats
-            const redMatch = content.match(/\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/);
-            if (redMatch) {
+            const redMatch = content.match(/\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+/);
+            if (!redMatch) {
+                const fallbackRed = content.match(/\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/);
+                if (fallbackRed) {
+                    stats.color_stats.red = {
+                        games: parseInt(fallbackRed[1], 10),
+                        wins: parseInt(fallbackRed[2], 10),
+                        draws: parseInt(fallbackRed[3], 10),
+                        losses: parseInt(fallbackRed[4], 10),
+                        score_pct: parseFloat(fallbackRed[5])
+                    };
+                }
+            } else {
                 stats.color_stats.red = {
                     games: parseInt(redMatch[1], 10),
                     wins: parseInt(redMatch[2], 10),
@@ -821,8 +1033,20 @@
                     score_pct: parseFloat(redMatch[5])
                 };
             }
-            const blackMatch = content.match(/\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/);
-            if (blackMatch) {
+            
+            const blackMatch = content.match(/\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+/);
+            if (!blackMatch) {
+                const fallbackBlack = content.match(/\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/);
+                if (fallbackBlack) {
+                    stats.color_stats.black = {
+                        games: parseInt(fallbackBlack[1], 10),
+                        wins: parseInt(fallbackBlack[2], 10),
+                        draws: parseInt(fallbackBlack[3], 10),
+                        losses: parseInt(fallbackBlack[4], 10),
+                        score_pct: parseFloat(fallbackBlack[5])
+                    };
+                }
+            } else {
                 stats.color_stats.black = {
                     games: parseInt(blackMatch[1], 10),
                     wins: parseInt(blackMatch[2], 10),
@@ -977,57 +1201,21 @@
             }
 
             try {
-                // Fetch the directories in the matches folder
-                // Under a local server, fetching the directory path returns the HTTP directory index
-                const matchesResponse = await fetch("../matches/");
-                if (!matchesResponse.ok) {
-                    throw new Error("HTTP request failed: Could not fetch 'matches/' directory listing.");
-                }
-                const htmlText = await matchesResponse.text();
+                // Fetch the active directories in matches/
+                const activeFolders = await fetchSubfolders("../matches/");
 
-                // Parse the directory listing links
-                const tempDiv = document.createElement("div");
-                tempDiv.innerHTML = htmlText;
-                const links = tempDiv.getElementsByTagName("a");
-                const folders = [];
-
-                for (let link of links) {
-                    const href = link.getAttribute("href");
-                    // Identify directory paths (typically ending with / or containing folder patterns)
-                    if (href && href !== "../" && href !== "/") {
-                        const isDirectory = href.endsWith("/");
-                        
-                        let folderName = href;
-                        if (folderName.endsWith("/")) {
-                            folderName = folderName.slice(0, -1);
-                        }
-                        
-                        // Extract last segment to check for file extensions (to filter out index files)
-                        const lastSegment = folderName.split("/").pop();
-                        const hasFileExtension = /\.[a-zA-Z0-9]{2,4}$/.test(lastSegment);
-                        
-                        // A valid folder name:
-                        // 1. Should be non-empty
-                        // 2. Should not be in our folders list yet
-                        // 3. Must either end with a slash originally, OR if it doesn't end with a slash, 
-                        //    its last segment shouldn't look like a file with a 2-4 letter extension (like .html, .pgn, .md, .json, etc.).
-                        if (folderName && !folders.includes(folderName)) {
-                            if (isDirectory || !hasFileExtension) {
-                                folders.push(folderName);
-                            }
-                        }
-                    }
-                }
-
-                if (folders.length === 0) {
+                if (activeFolders.length === 0) {
                     renderEmptyState();
                     return;
                 }
 
-                // Process folders concurrently
+                // Process active folders concurrently
                 gauntletData = [];
                 matchData = [];
-                for (let folder of folders) {
+                for (let folder of activeFolders) {
+                    // Ignore 'historical' subdirectory from active matches
+                    if (folder === "historical") continue;
+
                     try {
                         const summaryResponse = await fetch(`../matches/${folder}/summary.md`);
                         if (summaryResponse.ok) {
@@ -1045,11 +1233,73 @@
                             }
                         }
                     } catch (err) {
-                        console.warn(`Bypassed summary.md read for: ${folder}`);
+                        console.warn(`Bypassed summary.md read for active run: ${folder}`);
                     }
                 }
 
-                if (gauntletData.length === 0 && matchData.length === 0) {
+                // Crawl Historical version folders in matches/historical/ subdirectories
+                historicalGauntletData = [];
+                historicalBaseMatches = [];
+                historicalNeighborMatches = [];
+
+                try {
+                    // 1. Crawl Historical Gauntlets
+                    const histGauntletFolders = await fetchSubfolders("../matches/historical/gauntlets/");
+                    for (let f of histGauntletFolders) {
+                        try {
+                            const res = await fetch(`../matches/historical/gauntlets/${f}/summary.md`);
+                            if (res.ok) {
+                                const text = await res.text();
+                                const parsed = parseSummaryMd(text, f);
+                                if (parsed && parsed.total_games > 0) {
+                                    historicalGauntletData.push(parsed);
+                                }
+                            }
+                        } catch (err) {
+                            console.warn(`Bypassed hist gauntlet: ${f}`);
+                        }
+                    }
+
+                    // 2. Crawl Base comparison matches
+                    const histBaseFolders = await fetchSubfolders("../matches/historical/base_matches/");
+                    for (let f of histBaseFolders) {
+                        try {
+                            const res = await fetch(`../matches/historical/base_matches/${f}/summary.md`);
+                            if (res.ok) {
+                                const text = await res.text();
+                                const parsed = parseMatchSummaryMd(text, f);
+                                if (parsed && parsed.total_games > 0) {
+                                    normalizeMatchPerspective(parsed);
+                                    historicalBaseMatches.push(parsed);
+                                }
+                            }
+                        } catch (err) {
+                            console.warn(`Bypassed hist base match: ${f}`);
+                        }
+                    }
+
+                    // 3. Crawl Consecutive Upgrade comparisons
+                    const histNeighborFolders = await fetchSubfolders("../matches/historical/neighbor_matches/");
+                    for (let f of histNeighborFolders) {
+                        try {
+                            const res = await fetch(`../matches/historical/neighbor_matches/${f}/summary.md`);
+                            if (res.ok) {
+                                const text = await res.text();
+                                const parsed = parseMatchSummaryMd(text, f);
+                                if (parsed && parsed.total_games > 0) {
+                                    normalizeMatchPerspective(parsed);
+                                    historicalNeighborMatches.push(parsed);
+                                }
+                            }
+                        } catch (err) {
+                            console.warn(`Bypassed hist neighbor match: ${f}`);
+                        }
+                    }
+                } catch (histErr) {
+                    console.warn("Historical subdirectory crawl encountered errors:", histErr);
+                }
+
+                if (gauntletData.length === 0 && matchData.length === 0 && historicalGauntletData.length === 0) {
                     renderEmptyState();
                     return;
                 }
@@ -1145,9 +1395,23 @@
             // Build Match View if we have data
             buildMatchDashboard();
 
+            // Build Historical progression view if we have data
+            if (historicalGauntletData.length > 0) {
+                buildHistoricalDashboard();
+            } else {
+                document.getElementById('historical-view').innerHTML = `
+                    <div class="card card-accent-purple" style="text-align: center; padding: 3rem; margin-bottom: 2rem;">
+                        <h3 style="font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 0.5rem; color: #ffffff;">No Historical Version Data Found</h3>
+                        <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.5rem;">Save your version comparisons under the <code>matches/historical/</code> subfolders to display progress curves here.</p>
+                    </div>
+                `;
+            }
+
             // Set default tab based on data availability
             if (gauntletData.length === 0 && matchData.length > 0) {
                 switchTab('match');
+            } else if (gauntletData.length === 0 && matchData.length === 0 && historicalGauntletData.length > 0) {
+                switchTab('historical');
             } else {
                 switchTab('gauntlet');
             }
@@ -1555,6 +1819,251 @@
                     </div>
                 `;
                 container.appendChild(card);
+            });
+        }
+
+        // ─── Historical Progression Populators ──────────────────────────────
+
+        function buildHistoricalDashboard() {
+            buildHistoricalBaseTable();
+            buildHistoricalNeighborTable();
+            buildHistoricalGauntletTable();
+        }
+
+        function buildHistoricalBaseTable() {
+            const tbody = document.getElementById('historical-base-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            // Sort matches chronologically
+            historicalBaseMatches.sort((a, b) => compareVersions(a.engine1, b.engine1));
+
+            historicalBaseMatches.forEach(match => {
+                const ver = extractVersion(match.engine1);
+                const stage = match.engine1.replace(/^(lingine-)?\d+\.\d+\.\d+[a-z]?-?/, '');
+                const cleanStage = stage.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                const displayVer = ver ? `v${ver} (${cleanStage})` : match.engine1;
+
+                const row = document.createElement('tr');
+                const sign = match.elo_diff >= 0 ? '+' : '';
+                const color = match.elo_diff >= 0 ? 'var(--emerald)' : 'var(--rose)';
+
+                row.innerHTML = `
+                    <td style="font-weight: 600; white-space: nowrap;">${displayVer}</td>
+                    <td><span class="badge" style="background: rgba(99,102,241,0.08); color: ${color}; border: 1px solid rgba(255,255,255,0.05); font-weight: 700; font-size: 0.9rem;">${sign}${match.elo_diff.toFixed(1)} Elo</span></td>
+                    <td style="font-family: monospace; font-size: 0.9rem; white-space: nowrap;">
+                        <span style="color: var(--emerald); font-weight: 600;">${match.e1_wins}W</span> / 
+                        <span style="color: var(--amber); font-weight: 600;">${match.e1_draws}D</span> / 
+                        <span style="color: var(--rose); font-weight: 600;">${match.e1_losses}L</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 100px;">
+                            <span style="font-weight: 600; font-size: 0.85rem; width: 45px; text-align: right;">${match.score_pct.toFixed(1)}%</span>
+                            <div class="bar-container" style="flex-grow: 1; margin: 0; height: 6px;">
+                                <div class="bar-fill" style="width: ${match.score_pct}%; background: linear-gradient(90deg, ${color}, #818cf8);"></div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function buildHistoricalNeighborTable() {
+            const tbody = document.getElementById('historical-neighbor-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            // Sort Neighbor matches chronologically
+            historicalNeighborMatches.sort((a, b) => compareVersions(a.engine1, b.engine1));
+
+            historicalNeighborMatches.forEach(match => {
+                const ver1 = extractVersion(match.engine1);
+                const ver2 = extractVersion(match.engine2);
+                
+                const displayPath = `v${ver2} ➔ v${ver1}`;
+
+                const row = document.createElement('tr');
+                const sign = match.elo_diff >= 0 ? '+' : '';
+                const color = match.elo_diff >= 0 ? 'var(--emerald)' : 'var(--rose)';
+
+                row.innerHTML = `
+                    <td style="font-weight: 600; white-space: nowrap;">${displayPath}</td>
+                    <td><span class="badge" style="background: rgba(16,185,129,0.08); color: ${color}; border: 1px solid rgba(255,255,255,0.05); font-weight: 700; font-size: 0.9rem;">${sign}${match.elo_diff.toFixed(1)} Elo</span></td>
+                    <td style="font-family: monospace; font-size: 0.9rem; white-space: nowrap;">
+                        <span style="color: var(--emerald); font-weight: 600;">${match.e1_wins}W</span> / 
+                        <span style="color: var(--amber); font-weight: 600;">${match.e1_draws}D</span> / 
+                        <span style="color: var(--rose); font-weight: 600;">${match.e1_losses}L</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 100px;">
+                            <span style="font-weight: 600; font-size: 0.85rem; width: 45px; text-align: right;">${match.score_pct.toFixed(1)}%</span>
+                            <div class="bar-container" style="flex-grow: 1; margin: 0; height: 6px;">
+                                <div class="bar-fill" style="width: ${match.score_pct}%; background: linear-gradient(90deg, ${color}, #818cf8);"></div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function buildHistoricalGauntletTable() {
+            const tbody = document.getElementById('historical-gauntlet-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            // Sort gauntlets by Elo descending (leaderboard)
+            const sortedHistGauntlets = [...historicalGauntletData].sort((a, b) => b.global_elo - a.global_elo);
+
+            sortedHistGauntlets.forEach((bot, index) => {
+                const row = document.createElement('tr');
+                
+                let rankBadge = '';
+                if (index === 0) rankBadge = '🏆 ';
+                else if (index === 1) rankBadge = '🥈 ';
+                else if (index === 2) rankBadge = '🥉 ';
+
+                const ver = extractVersion(bot.bot_name);
+                const stage = bot.bot_name.replace(/^(lingine-)?\d+\.\d+\.\d+[a-z]?-?/, '');
+                const cleanStage = stage.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                const displayVer = ver ? `v${ver} (${cleanStage})` : bot.bot_name;
+
+                row.innerHTML = `
+                    <td style="font-weight: 600; white-space: nowrap;">${rankBadge}${displayVer}</td>
+                    <td><span class="badge badge-accent" style="font-size: 0.95rem;">${bot.global_elo} ELO</span></td>
+                    <td style="color: var(--text-muted); font-size: 0.9rem;">
+                        ${bot.ci_low} - ${bot.ci_high} ELO <span style="font-size: 0.8rem; color: #818cf8;">(±${bot.standard_error.toFixed(1)})</span>
+                    </td>
+                    <td style="font-family: monospace; font-size: 0.9rem; white-space: nowrap;">
+                        <span style="color: var(--emerald); font-weight: 600;">${bot.wins}W</span> / 
+                        <span style="color: var(--amber); font-weight: 600;">${bot.draws}D</span> / 
+                        <span style="color: var(--rose); font-weight: 600;">${bot.losses}L</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 120px;">
+                            <span style="font-weight: 600; font-size: 0.85rem; width: 45px; text-align: right;">${bot.win_rate.toFixed(1)}%</span>
+                            <div class="bar-container" style="flex-grow: 1; margin: 0;">
+                                <div class="bar-fill" style="width: ${bot.win_rate}%;"></div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function buildHistoricalEloChart() {
+            const canvas = document.getElementById('historicalEloChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            // Sort gauntlets chronologically for progression plotting
+            historicalGauntletData.sort((a, b) => compareVersions(a.bot_name, b.bot_name));
+
+            const labels = historicalGauntletData.map(bot => {
+                const ver = extractVersion(bot.bot_name);
+                const stage = bot.bot_name.replace(/^(lingine-)?\d+\.\d+\.\d+[a-z]?-?/, '');
+                const cleanStage = stage.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                return ver ? `v${ver} (${cleanStage || 'Base'})` : bot.bot_name;
+            });
+            
+            const elos = historicalGauntletData.map(bot => bot.global_elo);
+            const ciLows = historicalGauntletData.map(bot => bot.ci_low);
+            const ciHighs = historicalGauntletData.map(bot => bot.ci_high);
+
+            const validCiLows = ciLows.filter(val => typeof val === 'number' && !isNaN(val));
+            const validCiHighs = ciHighs.filter(val => typeof val === 'number' && !isNaN(val));
+            let yMin = undefined;
+            let yMax = undefined;
+            if (validCiLows.length > 0 && validCiHighs.length > 0) {
+                const minCI = Math.min(...validCiLows);
+                const maxCI = Math.max(...validCiHighs);
+                yMin = Math.floor((minCI - 20) / 10) * 10;
+                yMax = Math.ceil((maxCI + 20) / 10) * 10;
+            }
+
+            const errorBarPlugin = {
+                id: 'historicalErrorBars',
+                afterDatasetsDraw(chart) {
+                    const { ctx, scales: { x, y } } = chart;
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(165, 180, 252, 0.4)';
+                    ctx.lineWidth = 2;
+                    
+                    chart.getDatasetMeta(0).data.forEach((point, index) => {
+                        const xPos = point.x;
+                        const yLow = y.getPixelForValue(ciLows[index]);
+                        const yHigh = y.getPixelForValue(ciHighs[index]);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(xPos, yLow);
+                        ctx.lineTo(xPos, yHigh);
+                        ctx.stroke();
+                        
+                        const capWidth = 6;
+                        ctx.beginPath();
+                        ctx.moveTo(xPos - capWidth, yLow);
+                        ctx.lineTo(xPos + capWidth, yLow);
+                        ctx.moveTo(xPos - capWidth, yHigh);
+                        ctx.lineTo(xPos + capWidth, yHigh);
+                        ctx.stroke();
+                    });
+                    ctx.restore();
+                }
+            };
+
+            if (historicalChartInstance) {
+                historicalChartInstance.destroy();
+            }
+
+            historicalChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: ' Bradley-Terry MLE Elo',
+                        data: elos,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#818cf8',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        tension: 0.25,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: yMin,
+                            max: yMax,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans' } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af', font: { family: 'Plus Jakarta Sans', weight: '600' } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const bot = historicalGauntletData[context.dataIndex];
+                                    return ` MLE Elo: ${bot.global_elo} (95% CI: ${bot.ci_low} - ${bot.ci_high})`;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [errorBarPlugin]
             });
         }
 

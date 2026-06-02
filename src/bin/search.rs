@@ -1,5 +1,5 @@
 use clap::Parser;
-use lingine::core::{Position, types::Move};
+use lingine::core::{Move, Position};
 use lingine::search::{
     INFINITY, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
 };

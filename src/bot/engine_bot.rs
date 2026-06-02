@@ -4,10 +4,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 
-use crate::core::movegen::generate_moves;
 use crate::core::{
-    Position,
-    types::{Color, File, MAX_MOVES, Move, MoveGenType, Rank, Square},
+    Color, File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
 };
 use crate::search::{
     INFINITY, MATE_VALUE, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
@@ -17,21 +15,8 @@ use crate::uci::{
     UciOption, UciPosition, UciScore, UciScoreBound,
 };
 
-/// Helper to format an internal `Move` to its UCI algebraic string format (e.g., `"a0b1"`).
-fn format_move(m: Move) -> String {
-    if m.is_none() {
-        return "0000".to_string();
-    }
-    let from = m.square_from();
-    let to = m.square_to();
-    let from_file = (b'a' + from.file() as u8) as char;
-    let from_rank = (b'0' + from.rank() as u8) as char;
-    let to_file = (b'a' + to.file() as u8) as char;
-    let to_rank = (b'0' + to.rank() as u8) as char;
-    format!("{}{}{}{}", from_file, from_rank, to_file, to_rank)
-}
-
-/// A real, functional [`Engine`] implementation mapping to our search and evaluation.
+/// A real, functional [`Engine`] implementation mapping to our search and
+/// evaluation.
 pub struct EngineBot {
     /// Internal board state tracker.
     position: Position,
@@ -81,12 +66,13 @@ impl EngineBot {
             // Basic allocation: time_left / divisor + inc / 2
             let allocated = time / divisor as u32 + inc_val / 2;
 
-            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is smaller,
-            // to account for process/communication latency.
+            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is
+            // smaller, to account for process/communication latency.
             let buffer = Duration::from_millis(50).min(time / 10);
             let limit = time.saturating_sub(buffer);
 
-            // Ensure we allocate at least 10ms (or the remaining limit if it's even smaller)
+            // Ensure we allocate at least 10ms (or the remaining limit if it's even
+            // smaller)
             let min_time = Duration::from_millis(10).min(limit);
 
             Some(allocated.min(limit).max(min_time))
@@ -159,11 +145,12 @@ impl Engine for EngineBot {
                 continue;
             }
 
-            // Find matching move inside our generated legal moves list to guarantee validity
-            let mut moves = [Move::none(); MAX_MOVES];
-            let count = generate_moves(&self.position, MoveGenType::Legal, &mut moves);
+            // Find matching move inside our generated legal moves list to guarantee
+            // validity
+            let mut moves = MoveList::new();
+            generate_moves(&self.position, MoveGenType::Legal, &mut moves);
 
-            let matched = moves[..count].iter().find(|m| {
+            let matched = moves.iter().find(|m| {
                 let from = m.square_from();
                 let to = m.square_to();
                 from.file() as u8 == uci_mv.src_file()
@@ -177,7 +164,7 @@ impl Engine for EngineBot {
             } else {
                 return Err(anyhow!(
                     "Illegal move sequence requested in position command: {:?}",
-                    format_move(Move::new(
+                    Move::new(
                         Square::from_file_rank(
                             File::from_repr(uci_mv.src_file()).unwrap(),
                             Rank::from_repr(uci_mv.src_rank()).unwrap(),
@@ -186,7 +173,8 @@ impl Engine for EngineBot {
                             File::from_repr(uci_mv.dst_file()).unwrap(),
                             Rank::from_repr(uci_mv.dst_rank()).unwrap(),
                         ),
-                    ))
+                    )
+                    .to_uci_string()
                 ));
             }
         }
@@ -216,39 +204,23 @@ impl Engine for EngineBot {
                 break;
             }
 
-            // Check if we have spent >50% of the allowed time to avoid timing out in next ply
+            // Check if we have spent >50% of the allowed time to avoid timing out in next
+            // ply
             if let Some(limit) = time_limit
                 && start_time.elapsed() > limit / 2
             {
                 break;
             }
 
-            let mut moves = [Move::none(); MAX_MOVES];
-            let count = generate_moves(&pos, MoveGenType::Legal, &mut moves);
+            let mut moves = MoveList::new();
+            generate_moves(&pos, MoveGenType::Legal, &mut moves);
 
-            if count == 0 {
+            if moves.is_empty() {
                 break;
             }
 
             // Sort root moves to maximize alpha-beta pruning (captures first)
-            for i in 0..count {
-                let mut best_idx = i;
-                let mut best_val = if !pos.is_empty(moves[i].square_to()) {
-                    1
-                } else {
-                    0
-                };
-                for (j, mv) in moves.iter().enumerate().take(count).skip(i + 1) {
-                    let val = if !pos.is_empty(mv.square_to()) { 1 } else { 0 };
-                    if val > best_val {
-                        best_val = val;
-                        best_idx = j;
-                    }
-                }
-                if best_idx != i {
-                    moves.swap(i, best_idx);
-                }
-            }
+            moves.sort_by_key(|mv| pos.is_empty(mv.square_to()));
 
             let mut best_score;
             let mut depth_best_move;
@@ -282,7 +254,7 @@ impl Engine for EngineBot {
                 best_score = -INFINITY;
                 depth_best_move = Move::none();
 
-                for m in moves.iter().copied().take(count) {
+                for m in moves.iter().copied() {
                     if params.stop.load(Ordering::Relaxed) {
                         break;
                     }
@@ -351,7 +323,7 @@ impl Engine for EngineBot {
                 let pv_vec = if best_move.is_none() {
                     None
                 } else {
-                    Some(vec![format_move(best_move)])
+                    Some(vec![best_move.to_uci_string()])
                 };
                 let time_elapsed = start_time.elapsed();
                 let nps = if time_elapsed.as_secs_f64() > 0.001 {
@@ -392,26 +364,20 @@ impl Engine for EngineBot {
         // Safety check: validate best_move is legal in the current position.
         // This guards against rare TT corruption, hash collisions, or search bugs
         // that could otherwise cause the engine to output an illegal move.
-        let mut legal_moves = [Move::none(); MAX_MOVES];
-        let legal_count = generate_moves(&self.position, MoveGenType::Legal, &mut legal_moves);
+        let mut legal_moves = MoveList::new();
+        generate_moves(&self.position, MoveGenType::Legal, &mut legal_moves);
 
-        let best_move_str = if best_move.is_none()
-            || !legal_moves[..legal_count].contains(&best_move)
-        {
+        let best_move_str = if best_move.is_none() || !legal_moves.contains(&best_move) {
             if !best_move.is_none() {
                 log::warn!(
                     "bestmove {} is not legal in current position — falling back to first legal move",
-                    format_move(best_move)
+                    best_move.to_uci_string()
                 );
             }
             // Pick first legal move as fallback
-            if legal_count > 0 {
-                format_move(legal_moves[0])
-            } else {
-                "0000".to_string()
-            }
+            legal_moves.first().unwrap_or(&Move::none()).to_uci_string()
         } else {
-            format_move(best_move)
+            best_move.to_uci_string()
         };
 
         Ok(BestMove {

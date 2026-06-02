@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    ops::{Index, IndexMut},
-};
+use std::fmt::Display;
 
 use arrayvec::ArrayVec;
 use strum::{EnumCount, EnumIter, FromRepr};
@@ -68,7 +65,8 @@ pub enum Square {
 
 impl Square {
     /// Constructs a `Square` from its corresponding `File` and `Rank`.
-    /// Maps using `rank_index * 9 + file_index` because each rank spans 9 vertical files.
+    /// Maps using `rank_index * 9 + file_index` because each rank spans 9
+    /// vertical files.
     #[inline(always)]
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
         let file_index = file as u8;
@@ -107,7 +105,7 @@ pub enum PieceType {
 pub enum Piece {
     None,
     WhiteRook,     WhiteAdvisor, WhiteCannon, WhitePawn, WhiteKnight, WhiteBishop, WhiteKing, 
-    BlackRook = 9, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
+    BlackRook, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
 }
 
 impl Piece {
@@ -153,53 +151,14 @@ pub enum MoveGenType {
     Legal,
 }
 
-const BLOOM_FILTER_SIZE: usize = 1 << 14;
-
-/// A simple bit/value filter used in transposition structures.
-#[derive(Clone)]
-pub struct BloomFilter {
-    table: [u8; BLOOM_FILTER_SIZE],
-}
-
-impl Default for BloomFilter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BloomFilter {
-    pub fn new() -> Self {
-        Self {
-            table: [0; BLOOM_FILTER_SIZE],
-        }
-    }
-}
-
-impl Index<Key> for BloomFilter {
-    type Output = u8;
-
-    #[inline(always)]
-    fn index(&self, key: Key) -> &Self::Output {
-        let index = (key as usize) % BLOOM_FILTER_SIZE;
-        &self.table[index]
-    }
-}
-
-impl IndexMut<Key> for BloomFilter {
-    #[inline(always)]
-    fn index_mut(&mut self, key: Key) -> &mut Self::Output {
-        let index = (key as usize) % BLOOM_FILTER_SIZE;
-        &mut self.table[index]
-    }
-}
-
 /// A compact 16-bit move representation designed for performance:
 ///
-/// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since $2^7=128$).
+/// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since
+///   $2^7=128$).
 /// * **Bits 7 - 13**: Origin square (0 to 89, fits in 7 bits).
 /// * **Bits 14 - 15**: Move flags (Quiet, Capture, Check, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Move(pub u16);
+pub struct Move(u16);
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -208,7 +167,8 @@ impl Display for Move {
 }
 
 impl Move {
-    /// Constructs a basic quiet or capture move from an origin and destination square.
+    /// Constructs a basic quiet or capture move from an origin and destination
+    /// square.
     #[inline(always)]
     pub fn new(from: Square, to: Square) -> Self {
         Self((to as u16) | ((from as u16) << 7))
@@ -220,7 +180,8 @@ impl Move {
         Self((to as u16) | ((from as u16) << 7) | ((flags & 3) << 14))
     }
 
-    /// Extracts the starting square index by shifting past the destination bits.
+    /// Extracts the starting square index by shifting past the destination
+    /// bits.
     #[inline(always)]
     pub fn square_from(&self) -> Square {
         Square::from_repr(((self.0 >> 7) & 0x7F) as u8).unwrap()
@@ -249,12 +210,28 @@ impl Move {
     pub fn is_none(&self) -> bool {
         self.0 == 0
     }
+
+    /// Converts the move into its UCI string format
+    pub fn to_uci_string(&self) -> String {
+        if self.is_none() {
+            return "none".to_string();
+        }
+        let from = self.square_from();
+        let to = self.square_to();
+        let from_file = (b'a' + from.file() as u8) as char;
+        let from_rank = (b'0' + from.rank() as u8) as char;
+        let to_file = (b'a' + to.file() as u8) as char;
+        let to_rank = (b'0' + to.rank() as u8) as char;
+        format!("{}{}{}{}", from_file, from_rank, to_file, to_rank)
+    }
 }
 
-/// The maximum number of pseudo-legal moves in any given Xiangqi position (typically <= 120).
-pub const MAX_MOVES: usize = 128;
+/// The maximum number of pseudo-legal moves in any given Xiangqi position
+/// (typically <= 120).
+const MAX_MOVES: usize = 128;
 
-/// A stack-allocated array vector that holds up to `MAX_MOVES` without heap allocation.
+/// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
+/// allocation.
 pub type MoveList = ArrayVec<Move, MAX_MOVES>;
 
 #[cfg(test)]
@@ -311,21 +288,6 @@ mod tests {
 
         assert_eq!(Piece::WhiteBishop.color(), Some(Color::White));
         assert_eq!(Piece::WhiteBishop.piece_type(), PieceType::Bishop);
-    }
-
-    #[test]
-    fn test_bloom_filter() {
-        let mut filter = BloomFilter::new();
-        // By default, should be all 0s
-        assert_eq!(filter[0], 0);
-        assert_eq!(filter[12345], 0);
-
-        filter[12345] = 42;
-        assert_eq!(filter[12345], 42);
-
-        // Test implementation of Default trait
-        let filter_default = BloomFilter::default();
-        assert_eq!(filter_default[12345], 0);
     }
 
     #[test]
