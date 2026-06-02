@@ -1,11 +1,17 @@
-use crate::core::{Color, Piece, PieceType, Square};
+use crate::core::{Color, Piece, PieceType, Square, Value};
+
+macro_rules! values {
+    ($($x:expr),* $(,)?) => {
+        [$(Value::from_raw($x)),*]
+    };
+}
 
 // Positional piece-square tables from White's (Red's) perspective on the
 // 90-square board. Square indices are 0 to 89, rank-major order (rank * 9 +
 // file).
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_KING: [i32; 90] = [
+const PIECE_SQUARE_TABLE_KING: [Value; 90] = values![
     // Rank 0
     0, 0, 0,  -3,   0,  -3, 0, 0, 0,
     // Rank 1
@@ -23,7 +29,7 @@ const PIECE_SQUARE_TABLE_KING: [i32; 90] = [
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_ADVISOR: [i32; 90] = [
+const PIECE_SQUARE_TABLE_ADVISOR: [Value; 90] = values![
     // Rank 0
     0, 0, 0,   0,   0,   0, 0, 0, 0,
     // Rank 1
@@ -41,7 +47,7 @@ const PIECE_SQUARE_TABLE_ADVISOR: [i32; 90] = [
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_BISHOP: [i32; 90] = [
+const PIECE_SQUARE_TABLE_BISHOP: [Value; 90] = values![
     // Rank 0
     0, 0,   0, 0, 0, 0,   0, 0, 0, // C0, G0 are files 2, 6
     // Rank 1
@@ -61,7 +67,7 @@ const PIECE_SQUARE_TABLE_BISHOP: [i32; 90] = [
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_KNIGHT: [i32; 90] = [
+const PIECE_SQUARE_TABLE_KNIGHT: [Value; 90] = values![
     // Rank 0 (starting rank)
     -10, -10,  -5,  -5,  -5,  -5,  -5, -10, -10,
     // Rank 1
@@ -85,7 +91,7 @@ const PIECE_SQUARE_TABLE_KNIGHT: [i32; 90] = [
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_ROOK: [i32; 90] = [
+const PIECE_SQUARE_TABLE_ROOK: [Value; 90] = values![
     // Rank 0 (starting rank)
     -5,   0,   2,   5,   5,   5,   2,   0,  -5,
     // Rank 1
@@ -109,7 +115,7 @@ const PIECE_SQUARE_TABLE_ROOK: [i32; 90] = [
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_CANNON: [i32; 90] = [
+const PIECE_SQUARE_TABLE_CANNON: [Value; 90] = values![
     // Rank 0
     -5,   0,   0,   0,   0,   0,   0,   0,  -5,
     // Rank 1
@@ -133,7 +139,7 @@ const PIECE_SQUARE_TABLE_CANNON: [i32; 90] = [
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_PAWN: [i32; 90] = [
+const PIECE_SQUARE_TABLE_PAWN: [Value; 90] = values![
     // Ranks 0, 1, 2 (deep in own side)
     0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -157,8 +163,8 @@ const PIECE_SQUARE_TABLE_PAWN: [i32; 90] = [
 /// Returns the Piece-Square Table (PST) positional value for a given piece type
 /// and color on a specific square. For Black pieces, the position is
 /// automatically mirrored vertically.
-#[inline(always)]
-pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square) -> i32 {
+#[inline]
+pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square) -> Value {
     let index = if color == Color::White {
         sq as usize
     } else {
@@ -169,7 +175,6 @@ pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square)
         let mirrored_file = 8 - file;
         mirrored_rank * 9 + mirrored_file
     };
-
     match piece_type {
         PieceType::King => PIECE_SQUARE_TABLE_KING[index],
         PieceType::Advisor => PIECE_SQUARE_TABLE_ADVISOR[index],
@@ -178,15 +183,15 @@ pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square)
         PieceType::Rook => PIECE_SQUARE_TABLE_ROOK[index],
         PieceType::Cannon => PIECE_SQUARE_TABLE_CANNON[index],
         PieceType::Pawn => PIECE_SQUARE_TABLE_PAWN[index],
-        _ => 0,
+        _ => panic!("Invalid piece type for PST evaluation"),
     }
 }
 
 /// Returns a piece's base material value, dynamically adjusting Pawn values
 /// based on whether they have crossed the river.
-#[inline(always)]
-pub fn piece_material_value(piece: Piece, sq: Square) -> i32 {
-    match piece {
+#[inline]
+pub fn piece_material_value(piece: Piece, sq: Square) -> Value {
+    let val = match piece {
         Piece::None => 0,
         Piece::WhiteRook | Piece::BlackRook => 600,
         Piece::WhiteCannon | Piece::BlackCannon => 285,
@@ -209,5 +214,7 @@ pub fn piece_material_value(piece: Piece, sq: Square) -> i32 {
         }
         Piece::WhiteKing | Piece::BlackKing => 0, /* Treated as 0 for incremental score (kings
                                                    * never captured) */
-    }
+    };
+
+    Value::from_raw(val)
 }

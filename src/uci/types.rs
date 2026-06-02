@@ -2,6 +2,8 @@ use std::{fmt, num::NonZeroU32, slice::Iter, sync::Arc, sync::atomic::AtomicBool
 
 use anyhow::{Error, Result, anyhow, ensure};
 
+use crate::core::Value;
+
 // ===========================================================================
 // Move
 // ===========================================================================
@@ -543,7 +545,7 @@ pub enum Bound {
 /// The type of score the engine reports.
 pub enum UciScore {
     /// Score in centipawns from the engine's point of view.
-    Centipawns(i32),
+    Centipawns(Value),
     /// Forced mate: positive = engine mates in N moves, negative = engine gets
     /// mated in N.
     Mate(i32),
@@ -707,6 +709,8 @@ impl fmt::Display for BestMove {
 
 #[cfg(test)]
 mod tests {
+    use crate::value;
+
     use super::*;
 
     #[test]
@@ -1169,7 +1173,7 @@ mod tests {
     #[test]
     fn score_cp_format() {
         let s = UciScoreBound {
-            score: UciScore::Centipawns(214),
+            score: UciScore::Centipawns(value!(214)),
             bound: None,
         };
         assert_eq!(s.to_string(), "score cp 214");
@@ -1202,7 +1206,7 @@ mod tests {
             nodes: Some(123456),
             nps: Some(100000),
             score: Some(UciScoreBound {
-                score: UciScore::Centipawns(214),
+                score: UciScore::Centipawns(value!(214)),
                 bound: None,
             }),
             pv: Some(vec!["e2e4".into(), "e7e5".into(), "g1f3".into()]),

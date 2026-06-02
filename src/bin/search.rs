@@ -1,8 +1,6 @@
 use clap::Parser;
-use lingine::core::{Move, Position};
-use lingine::search::{
-    INFINITY, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
-};
+use lingine::core::{Move, Position, Value};
+use lingine::search::{SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
@@ -43,7 +41,7 @@ fn main() -> anyhow::Result<()> {
     println!("Searching...\n");
 
     let start = Instant::now();
-    let mut killers = [[Move::none(); 2]; 128];
+    let mut killers = [[Move::null(); 2]; 128];
     let mut history_table = [[[0; 90]; 90]; 2];
     let mut ctx = SearchContext {
         stop: &stop,
@@ -58,9 +56,9 @@ fn main() -> anyhow::Result<()> {
 
     let score = negamax(
         &mut pos,
-        args.depth,
+        args.depth as u8,
         1,
-        SearchWindow::new(-INFINITY, INFINITY),
+        SearchWindow::new(-Value::INFINITY, Value::INFINITY),
         SearchExtension::default(),
         &mut ctx,
     );

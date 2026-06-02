@@ -5,15 +5,15 @@ use std::time::{Duration, Instant};
 use anyhow::{Result, anyhow};
 
 use crate::core::{
-    Color, File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
+    Color, File, MAX_DEPTH, MAX_PLY, Move, MoveGenType, MoveList, Position, Rank, Square, Value,
+    generate_moves,
 };
-use crate::search::{
-    INFINITY, MATE_VALUE, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
-};
+use crate::search::{SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
     UciId, UciInfo, UciOption, UciScore, UciScoreBound,
 };
+use crate::value;
 
 /// A real, functional [`Engine`] implementation mapping to our search and
 /// evaluation.
@@ -187,16 +187,16 @@ impl Engine for Lingine {
         let start_time = Instant::now();
         let mut nodes = 0u64;
 
-        let max_depth = params.depth.unwrap_or(100) as i32;
+        let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as u8;
         let time_limit = self.calculate_search_time(&params, pos.side_to_move());
 
         // Increment the age generation at the start of a search session
         self.age = self.age.wrapping_add(1);
 
-        let mut best_move = Move::none();
-        let mut last_depth_score = -INFINITY;
+        let mut best_move = Move::null();
+        let mut last_depth_score = -Value::INFINITY;
 
-        let mut killers = [[Move::none(); 2]; 128];
+        let mut killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
 
         for depth in 1..=max_depth {
@@ -226,18 +226,18 @@ impl Engine for Lingine {
             let mut depth_best_move;
 
             // Aspiration Windows Setup
-            let mut alpha = -INFINITY;
-            let mut beta = INFINITY;
-            let mut delta = 25; // aspiration window size in centipawns
+            let mut alpha = -Value::INFINITY;
+            let mut beta = Value::INFINITY;
+            let mut delta: Value = value!(25); // aspiration window size in centipawns
 
-            if depth >= 5 && last_depth_score.abs() < MATE_VALUE - 1000 {
+            if depth >= 5 && !last_depth_score.abs().is_winning() {
                 alpha = last_depth_score - delta;
                 beta = last_depth_score + delta;
             }
 
             loop {
-                let search_alpha = alpha.max(-INFINITY);
-                let search_beta = beta.min(INFINITY);
+                let search_alpha = alpha.max(-Value::INFINITY);
+                let search_beta = beta.min(-Value::INFINITY);
 
                 let mut ctx = SearchContext {
                     stop: &params.stop,
@@ -251,8 +251,8 @@ impl Engine for Lingine {
                 };
 
                 let mut curr_alpha = search_alpha;
-                best_score = -INFINITY;
-                depth_best_move = Move::none();
+                best_score = -Value::INFINITY;
+                depth_best_move = Move::null();
 
                 for m in moves.iter().copied() {
                     if params.stop.load(Ordering::Relaxed) {
@@ -287,7 +287,7 @@ impl Engine for Lingine {
                 }
 
                 // If window was already full (-INFINITY, INFINITY), we stop, no re-search.
-                if search_alpha == -INFINITY && search_beta == INFINITY {
+                if search_alpha == -Value::INFINITY && search_beta == Value::INFINITY {
                     break;
                 }
 
@@ -296,12 +296,12 @@ impl Engine for Lingine {
                     // Fail low: score worse or equal to alpha. Widen alpha.
                     alpha -= delta;
                     beta = best_score + delta;
-                    delta = delta.saturating_mul(2);
+                    delta *= 2;
                 } else if best_score >= search_beta {
                     // Fail high: score better or equal to beta. Widen beta.
                     beta += delta;
                     alpha = best_score - delta;
-                    delta = delta.saturating_mul(2);
+                    delta *= 2;
                 } else {
                     // Stable score inside window!
                     break;
@@ -332,12 +332,11 @@ impl Engine for Lingine {
                     None
                 };
 
-                let uci_score = if best_score.abs() > MATE_VALUE - 100 {
-                    let mate_plies = MATE_VALUE - best_score.abs();
-                    let mate_moves = (mate_plies + 1) / 2;
-                    let sign = if best_score > 0 { 1 } else { -1 };
+                let uci_score = if let Some(mate_plies) = best_score.ply_to_mate() {
+                    let mate_moves = mate_plies.div_ceil(2);
+                    let sign: i32 = if best_score.raw() > 0 { 1 } else { -1 };
                     UciScoreBound {
-                        score: UciScore::Mate(sign * mate_moves),
+                        score: UciScore::Mate(sign * mate_moves as i32),
                         bound: None,
                     }
                 } else {
@@ -375,7 +374,7 @@ impl Engine for Lingine {
                 );
             }
             // Pick first legal move as fallback
-            legal_moves.first().unwrap_or(&Move::none()).to_uci_string()
+            legal_moves.first().unwrap_or(&Move::null()).to_uci_string()
         } else {
             best_move.to_uci_string()
         };

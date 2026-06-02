@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use crate::{
     core::{
+        Value,
         bitboard::Bitboard,
         movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
         types::{Color, File, Move, Piece, PieceType, Rank, Square},
@@ -84,10 +85,10 @@ pub struct StateInfo {
     /// Whether each color [White, Black] was in check in this position state.
     pub in_check: [bool; Color::COUNT],
     /// Precalculated incremental material score (from White's perspective)
-    pub material_score: i32,
+    pub material_score: Value,
     /// Precalculated incremental piece-square table positional score (from
     /// White's perspective)
-    pub piece_square_table_score: i32,
+    pub piece_square_table_score: Value,
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn
@@ -147,40 +148,43 @@ impl Position {
         };
         // Setup initial empty history state
         pos.history.push(StateInfo {
-            last_move: Move::none(),
+            last_move: Move::null(),
             captured_piece: Piece::None,
             old_zobrist: 0,
             rule60: 0,
             in_check: [false, false],
-            material_score: 0,
-            piece_square_table_score: 0,
+            material_score: Value::ZERO,
+            piece_square_table_score: Value::ZERO,
         });
         pos
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn zobrist_hash(&self) -> u64 {
         self.zobrist_hash
     }
 
-    #[inline(always)]
-    pub fn material_score(&self) -> i32 {
-        self.history.last().map(|s| s.material_score).unwrap_or(0)
+    #[inline]
+    pub fn material_score(&self) -> Value {
+        self.history
+            .last()
+            .map(|s| s.material_score)
+            .unwrap_or(Value::ZERO)
     }
 
-    #[inline(always)]
-    pub fn piece_square_table_score(&self) -> i32 {
+    #[inline]
+    pub fn piece_square_table_score(&self) -> Value {
         self.history
             .last()
             .map(|s| s.piece_square_table_score)
-            .unwrap_or(0)
+            .unwrap_or(Value::ZERO)
     }
 
     /// Computes the complete material and Piece-Square Table scores from
     /// scratch.
-    pub fn compute_evaluation_scores(&self) -> (i32, i32) {
-        let mut material_score = 0;
-        let mut piece_square_table_score = 0;
+    pub fn compute_evaluation_scores(&self) -> (Value, Value) {
+        let mut material_score = Value::ZERO;
+        let mut piece_square_table_score = Value::ZERO;
         for sq_idx in 0..Square::COUNT {
             let sq = Square::from_repr(sq_idx as u8).unwrap();
             let piece = self.board[sq_idx];
@@ -200,27 +204,27 @@ impl Position {
         (material_score, piece_square_table_score)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn side_to_move(&self) -> Color {
         self.side_to_move
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn piece_at(&self, square: Square) -> Piece {
         self.board[square as usize]
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn piece_count(&self, piece: Piece) -> u8 {
         self.piece_count[piece as usize]
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn bitboard_by_type(&self, pt: PieceType) -> Bitboard {
         self.bitboard_by_type[pt as usize]
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn bitboard_by_color(&self, color: Color) -> Bitboard {
         self.bitboard_by_color[color as usize]
     }
@@ -382,7 +386,7 @@ impl Position {
         ];
         let (material_score, piece_square_table_score) = self.compute_evaluation_scores();
         self.history.push(StateInfo {
-            last_move: Move::none(),
+            last_move: Move::null(),
             captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
             rule60,
@@ -501,12 +505,12 @@ impl Position {
         self.game_ply -= 1;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
         self.board[square as usize] == Piece::None
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn king_square(&self, color: Color) -> Square {
         self.king_squares[color as usize]
     }
@@ -529,7 +533,7 @@ impl Position {
     ///    intervening pieces; this direct face is treated as a Rook check.
     /// 4. **Cannon Scanner**: Traces split rank/file leap capture paths using
     ///    precomputed Cannon tables.
-    #[inline(always)]
+    #[inline]
     fn checkers_to(&self, square: Square, occupied: Bitboard, attacker: Color) -> Bitboard {
         // --- Isolate attacker's piece bitboards by intersecting piece-type and color
         // masks --- Each variable holds bits only for attacker-colored pieces
@@ -609,7 +613,7 @@ impl Position {
     /// Evaluates backward checkers attacking `square` after simulating a
     /// specific piece move. Overrides positions without modifying active
     /// board structures.
-    #[inline(always)]
+    #[inline]
     fn checkers_to_after_move(
         &self,
         square: Square,
@@ -701,7 +705,7 @@ impl Position {
     /// Evaluates if playing the move `m` places the opponent's General in
     /// check. Runs a simulation update of `occupied` bitboards and
     /// calculates checkers pointing to the General.
-    #[inline(always)]
+    #[inline]
     pub fn gives_check(&self, m: Move) -> bool {
         let us = self.side_to_move;
         let them = us.opposite();
@@ -721,12 +725,12 @@ impl Position {
     }
 
     /// Checks if the given player's King is currently in check.
-    #[inline(always)]
+    #[inline]
     pub fn is_in_check(&self, color: Color) -> bool {
         self.is_square_attacked(self.king_square(color), color.opposite())
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn last_captured_piece(&self) -> Piece {
         self.history
             .last()
@@ -736,7 +740,7 @@ impl Position {
 
     /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is
     /// not left in check).
-    #[inline(always)]
+    #[inline]
     pub fn legal(&self, m: Move) -> bool {
         let us = self.side_to_move;
         let from = m.square_from();
@@ -758,14 +762,14 @@ impl Position {
             .is_empty()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_square_attacked(&self, square: Square, attacker: Color) -> bool {
         let occupied = self.bitboard_by_color[Color::White as usize]
             | self.bitboard_by_color[Color::Black as usize];
         !self.checkers_to(square, occupied, attacker).is_empty()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_square_attacked_after_move(
         &self,
         square: Square,
@@ -955,10 +959,10 @@ impl Position {
 
     /// Detects chases from state st - d to state st on a rollback clone of
     /// self.
-    pub fn detect_chases(&mut self, d: usize, ply: i32) -> i32 {
+    pub fn detect_chases(&mut self, d: usize, ply: u8) -> Value {
         let n = self.history.len();
         if n < d {
-            return 0; // Draw
+            return Value::ZERO; // Draw
         }
 
         // Grant each piece on board a unique ID for each side
@@ -998,7 +1002,7 @@ impl Position {
             // chase or is a draw.
             let side_to_move_idx = self.side_to_move as usize;
             if state.in_check[side_to_move_idx] {
-                return 0; // Draw
+                return Value::DRAW; // Draw
             }
 
             let opposing_chase_mask = chase[self.side_to_move.opposite() as usize];
@@ -1023,26 +1027,20 @@ impl Position {
         let them_chasing = chase[opponent as usize] != 0;
 
         if us_chasing && them_chasing {
-            0 // Mutual chase -> draw
+            Value::DRAW // Mutual chase -> draw
         } else if us_chasing {
-            -100_000 + ply // We perpetually chase -> we lose
+            Value::mated_in(ply) // We perpetually chase -> we lose
         } else if them_chasing {
-            100_000 - ply // Opponent perpetually chases -> we win
+            Value::mate_in(ply) // Opponent perpetually chases -> we win
         } else {
-            0 // Normal draw
+            Value::DRAW // Normal draw
         }
     }
 
     /// Evaluates if the game has ended due to 60-move rule, insufficient
     /// material, or loops (normal draws, perpetual checking, or perpetual
     /// chasing).
-    ///
-    /// Returns:
-    /// - `Some(0)` for a draw.
-    /// - `Some(-100_000 + ply)` if the side to move is penalized (loses).
-    /// - `Some(100_000 - ply)` if the opposing side is penalized (loses).
-    /// - `None` if the game continues.
-    pub fn rule_judge(&self, ply: i32) -> Option<i32> {
+    pub fn rule_judge(&self, ply: u8) -> Option<Value> {
         let n = self.history.len();
         if n == 0 {
             return None;
@@ -1050,8 +1048,9 @@ impl Position {
 
         // 1. 60-Move Rule (120 Plies since last pawn advance or capture)
         let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
-        if rule60 >= 120 {
-            return Some(0);
+        const RULE60_PLIES_THRESHOLD: u16 = 120;
+        if rule60 >= RULE60_PLIES_THRESHOLD {
+            return Some(Value::DRAW);
         }
 
         // 2. Insufficient Material Draw
@@ -1067,7 +1066,7 @@ impl Position {
 
             if white_majors == 0 && black_majors == 0 {
                 // No Rooks, Cannons, or Knights remain on either side -> direct draw
-                return Some(0);
+                return Some(Value::DRAW);
             }
 
             // Exactly one Cannon left on the entire board, and no Advisors left
@@ -1079,7 +1078,7 @@ impl Position {
                 && total_cannons == 1
                 && total_advisors == 0
             {
-                return Some(0);
+                return Some(Value::DRAW);
             }
         }
 
@@ -1125,11 +1124,11 @@ impl Position {
 
                 if us_perpetual_check || them_perpetual_check {
                     if us_perpetual_check && them_perpetual_check {
-                        return Some(0); // Both check perpetually -> draw
+                        return Some(Value::DRAW); // Both check perpetually -> draw
                     } else if us_perpetual_check {
-                        return Some(-100_000 + ply); // We check perpetually -> we lose
+                        return Some(-Value::mate_in(ply)); // We check perpetually -> we lose
                     } else {
-                        return Some(100_000 - ply); // Opponent checks perpetually -> they lose
+                        return Some(Value::mate_in(ply)); // Opponent checks perpetually -> they lose
                     }
                 } else {
                     // No perpetual check, check perpetual chase
@@ -1169,16 +1168,16 @@ mod tests {
         let mut pos = Position::new();
         // 1. Bare Kings
         pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.rule_judge(0), Some(0));
+        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
 
         // 2. Kings + Bishops & Advisors (no attacking pieces)
         pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1")
             .unwrap();
-        assert_eq!(pos.rule_judge(0), Some(0));
+        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
 
         // 3. Kings + 1 Cannon, no Advisors/Bishops
         pos.set("4k4/9/9/9/9/9/9/9/3C5/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.rule_judge(0), Some(0));
+        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
     }
 
     #[test]
@@ -1201,6 +1200,6 @@ mod tests {
 
         // rule60 counter should be exactly 120
         assert_eq!(pos.history.last().unwrap().rule60, 120);
-        assert_eq!(pos.rule_judge(0), Some(0));
+        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
     }
 }
