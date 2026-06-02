@@ -17,7 +17,7 @@ use anyhow::{Error, Result, anyhow, ensure};
 /// A null move is encoded as `0x00000000` (the string `"0000"`).
 ///
 /// Xiangqi has no promotion, so no promotion piece field is encoded.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Move(u32);
 
 impl Move {
@@ -46,14 +46,6 @@ impl Move {
         self.0 == 0
     }
 }
-
-impl PartialEq for Move {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for Move {}
 
 impl TryFrom<&str> for Move {
     type Error = Error;
