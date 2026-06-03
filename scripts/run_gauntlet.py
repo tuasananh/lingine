@@ -83,9 +83,7 @@ def run_tournament(args):
     print("\n[2/3] Launching ELO Gauntlet tournament...")
     print(f"  -> Parallel matches (concurrency): {concurrency_msg}")
     print(f"  -> Opponent ELO benchmarks: {', '.join(map(str, elo_list))}")
-    print(
-        f"  -> Games per opponent tier: {args.games} (Total: {total_games} games)"
-    )
+    print(f"  -> Games per opponent tier: {args.games} (Total: {total_games} games)")
     print(f"  -> Time Control configuration: {args.tc}")
     print(f"  -> Opening book depth: {args.depth} plies")
     print(f"  -> Output PGN records file: {args.pgnout}")
@@ -141,7 +139,9 @@ def run_tournament(args):
         print("=> Gauntlet tournament completed successfully!")
     except subprocess.CalledProcessError as e:
         print_header("SYLVAN-CLI EXECUTION ERROR")
-        print(f"Sylvan-CLI encountered an issue running the tournament. Exit code: {e.returncode}")
+        print(
+            f"Sylvan-CLI encountered an issue running the tournament. Exit code: {e.returncode}"
+        )
         sys.exit(1)
 
 
@@ -178,9 +178,7 @@ def calculate_and_display_elo(args):
     games = parse_pgn(args.pgnout)
 
     if not games:
-        print(
-            f"Error: No match records found in '{args.pgnout}' for ELO analysis."
-        )
+        print(f"Error: No match records found in '{args.pgnout}' for ELO analysis.")
         sys.exit(1)
 
     # Parse configured opponent ELOs
@@ -222,7 +220,9 @@ def calculate_and_display_elo(args):
             stats[opponent]["draws"] += 1
 
     print("\n" + "=" * 70)
-    print(f"           ELO PERFORMANCE ANALYSIS REPORT - {args.name.upper()}             ")
+    print(
+        f"           ELO PERFORMANCE ANALYSIS REPORT - {args.name.upper()}             "
+    )
     print("=" * 70)
     print(
         f"{'Opponent':<15}{'Games':<8}{'Wins':<8}{'Draws':<8}{'Losses':<8}{'Score %':<12}{'Est. ELO':<15}"
@@ -418,7 +418,9 @@ def main():
     if not args.skip_build and args.engine == "./target/release/lingine":
         build_engine()
     else:
-        print(f"\n[1/3] Skipped engine compilation (Main engine path: '{args.engine}').")
+        print(
+            f"\n[1/3] Skipped engine compilation (Main engine path: '{args.engine}')."
+        )
 
     run_tournament(args)
     calculate_and_display_elo(args)

@@ -1,3 +1,12 @@
+//! Bitboard representation of the 9x10 Xiangqi board.
+//!
+//! The board has 90 squares, represented by the first 90 bits (0..89) of a
+//! `u128`. Bit indices are mapped in rank-major order using `rank_index * 9 +
+//! file_index`. Bits 90 to 127 are unused.
+//!
+//! High performance is achieved by utilizing bitwise operations for move
+//! generation, board occupancy tracking, and attack calculations.
+
 use std::fmt::Display;
 
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
@@ -32,46 +41,50 @@ impl Default for Bitboard {
 
 impl Bitboard {
     /// Creates a new, completely empty bitboard (all bits set to 0).
-    #[inline(always)]
+    #[inline]
     pub const fn new() -> Self {
         Self(0)
     }
 
-    #[inline(always)]
+    /// Make a bitboard directly from a raw `u128` value.
+    #[inline]
     pub const fn from_raw(bitboard: u128) -> Self {
         Self(bitboard)
     }
 
-    #[inline(always)]
+    /// Retrieves the raw `u128` value of the bitboard, useful for low-level
+    /// operations or debugging.
+    #[inline]
     pub const fn raw(&self) -> u128 {
         self.0
     }
 
-    #[inline(always)]
+    /// Checks if the bitboard is completely empty (no active squares).
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.0 == 0
     }
 
     /// Verifies if a given square bit is active (set to 1) in the bitboard.
-    #[inline(always)]
+    #[inline]
     pub fn is_occupied(&self, square: Square) -> bool {
         (self.0 & (1u128 << (square as u8))) != 0
     }
 
     /// Activates (sets to 1) the bit corresponding to the given square.
-    #[inline(always)]
+    #[inline]
     pub fn set_bit(&mut self, square: Square) {
         self.0 |= 1u128 << (square as u8);
     }
 
     /// Deactivates (clears to 0) the bit corresponding to the given square.
-    #[inline(always)]
+    #[inline]
     pub fn clear_bit(&mut self, square: Square) {
         self.0 &= !(1u128 << (square as u8));
     }
 
     /// Returns the number of active squares (bits set to 1) in the bitboard.
-    #[inline(always)]
+    #[inline]
     pub fn count_ones(&self) -> u32 {
         self.0.count_ones()
     }
@@ -80,7 +93,7 @@ impl Bitboard {
     /// bitboard, returning the corresponding `Square`. Returns `None` if
     /// the bitboard is empty. Used for rapid, zero-overhead sequence
     /// generation and iterator-like popping of pieces.
-    #[inline(always)]
+    #[inline]
     pub fn pop_lsb(&mut self) -> Option<Square> {
         if self.0 == 0 {
             None
@@ -91,15 +104,16 @@ impl Bitboard {
         }
     }
 
-    /// A const-compatible bitwise OR operator for building compile-time static
-    /// lookup tables.
-    #[inline(always)]
+    /// A const-compatible bitwise OR operator for building compile-time
+    /// constants lookup tables.
+    #[inline]
     pub const fn const_or(&self, b: Self) -> Self {
         Self(self.0 | b.0)
     }
 
-    /// A const-compatible bitwise AND operator for compile-time filtering.
-    #[inline(always)]
+    /// A const-compatible bitwise AND operator for building compile-time
+    /// constants
+    #[inline]
     pub const fn const_and(&self, b: Self) -> Self {
         Self(self.0 & b.0)
     }
@@ -194,21 +208,21 @@ impl Bitboard {
 }
 
 impl From<Square> for Bitboard {
-    #[inline(always)]
+    #[inline]
     fn from(square: Square) -> Self {
         Bitboard(1u128 << (square as u8))
     }
 }
 
 impl From<File> for Bitboard {
-    #[inline(always)]
+    #[inline]
     fn from(file: File) -> Self {
         Self::file(file)
     }
 }
 
 impl From<Rank> for Bitboard {
-    #[inline(always)]
+    #[inline]
     fn from(rank: Rank) -> Self {
         Self::rank(rank)
     }

@@ -1,4 +1,6 @@
-use crate::core::{bitboard::Bitboard, types::Square};
+use strum::EnumCount;
+
+use crate::core::{Bitboard, File, Rank, Square};
 
 /// Represents precomputed diagonal attack targets for a Bishop (Elephant).
 /// In Xiangqi, Bishops move exactly 2 steps diagonally, and their jump is
@@ -674,15 +676,15 @@ const fn init_knight_to_table() -> [KnightToEntry; 90] {
 // Precomputed static lookup tables dissolved at compile-time to eliminate
 // thread checks, lock contention, and atomic operations during perft search
 // loops.
-pub static KING_ATTACKS: [Bitboard; 90] = init_king_attacks();
-pub static ADVISOR_ATTACKS: [Bitboard; 90] = init_advisor_attacks();
-pub static PAWN_ATTACKS: [[Bitboard; 90]; 2] = init_pawn_attacks();
-pub static PAWN_ATTACKS_TO: [[Bitboard; 90]; 2] = init_pawn_attacks_to();
-pub static BISHOP_TABLE: [BishopEntry; 90] = init_bishop_table();
-pub static KNIGHT_TABLE: [KnightEntry; 90] = init_knight_table();
-pub static RANK_TABLE: [RankEntry; 9] = init_rank_table();
-pub static FILE_TABLE: [FileEntry; 10] = init_file_table();
-pub static KNIGHT_TO_TABLE: [KnightToEntry; 90] = init_knight_to_table();
+pub static KING_ATTACKS: [Bitboard; Square::COUNT] = init_king_attacks();
+pub static ADVISOR_ATTACKS: [Bitboard; Square::COUNT] = init_advisor_attacks();
+pub static PAWN_ATTACKS: [[Bitboard; Square::COUNT]; 2] = init_pawn_attacks();
+pub static PAWN_ATTACKS_TO: [[Bitboard; Square::COUNT]; 2] = init_pawn_attacks_to();
+pub static BISHOP_TABLE: [BishopEntry; Square::COUNT] = init_bishop_table();
+pub static KNIGHT_TABLE: [KnightEntry; Square::COUNT] = init_knight_table();
+pub static RANK_TABLE: [RankEntry; File::COUNT] = init_rank_table();
+pub static FILE_TABLE: [FileEntry; Rank::COUNT] = init_file_table();
+pub static KNIGHT_TO_TABLE: [KnightToEntry; Square::COUNT] = init_knight_to_table();
 
 const fn init_file_attacks_by_mask() -> [[Bitboard; 1024]; 9] {
     let mut table = [[Bitboard::from_raw(0); 1024]; 9];

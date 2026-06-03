@@ -1,8 +1,7 @@
 use clap::Parser;
-use lingine::core::{Move, Position};
-use lingine::search::{
-    INFINITY, SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax,
-};
+use lingine::core::Position;
+use lingine::search::{TranspositionTable, search};
+use lingine::uci::GoParameters;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
@@ -35,35 +34,21 @@ fn main() -> anyhow::Result<()> {
 
     let mut transposition_table = TranspositionTable::new(args.hash);
     let stop = Arc::new(AtomicBool::new(false));
-    let mut nodes = 0u64;
 
     println!("Board FEN:    {}", args.fen);
     println!("Search Depth: {}", args.depth);
     println!("Table Size:   {} MB", args.hash);
     println!("Searching...\n");
 
-    let start = Instant::now();
-    let mut killers = [[Move::none(); 2]; 128];
-    let mut history_table = [[[0; 90]; 90]; 2];
-    let mut ctx = SearchContext {
-        stop: &stop,
-        nodes: &mut nodes,
-        start_time: start,
-        time_limit: None,
-        transposition_table: &mut transposition_table,
-        age: 1,
-        killers: &mut killers,
-        history_table: &mut history_table,
+    let (tx, _rx) = std::sync::mpsc::channel();
+    let params = GoParameters {
+        depth: Some(args.depth as u32),
+        stop: stop.clone(),
+        ..Default::default()
     };
 
-    let score = negamax(
-        &mut pos,
-        args.depth,
-        1,
-        SearchWindow::new(-INFINITY, INFINITY),
-        SearchExtension::default(),
-        &mut ctx,
-    );
+    let start = Instant::now();
+    let (best_move, score, nodes) = search(pos, params, &mut transposition_table, 1, tx, None);
     let duration = start.elapsed();
 
     let nps = if duration.as_secs_f64() > 0.0001 {
@@ -75,6 +60,7 @@ fn main() -> anyhow::Result<()> {
     println!("========================================");
     println!("   SEARCH RESULTS                       ");
     println!("========================================");
+    println!("Best Move: {}", best_move.to_uci_string());
     println!("Score:     {} cp", score);
     println!("Nodes:     {}", nodes);
     println!("Time:      {:.3} s", duration.as_secs_f64());

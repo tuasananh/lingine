@@ -1,13 +1,143 @@
+//! Core domain types for the Lingine Xiangqi engine.
+//!
+//! This module defines the fundamental types used throughout the chess engine,
+//! including representations for players (`Color`), board coordinates
+//! (`Square`, `File`, `Rank`), chess pieces (`Piece`, `PieceType`), search
+//! scores (`Value`), and a highly optimized 16-bit compact representation for
+//! moves (`Move`).
+
 use std::fmt::Display;
 
 use arrayvec::ArrayVec;
+use derive_more::{Add, AddAssign, Display, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use strum::{EnumCount, EnumIter, FromRepr};
 
+use crate::search::TranspositionTableFlag;
+
 /// Represents the hash key for Zobrist position hashing.
-pub type Key = u64;
+pub type TranspositionTableKey = u64;
+
+/// Represents the score of a move, typically used in move ordering heuristics.
+pub type MoveScore = i32;
 
 /// Represents evaluation values or search scores.
-pub type Value = i32;
+#[derive(
+    Display,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Neg,
+    Sub,
+    SubAssign,
+    Add,
+    AddAssign,
+    Div,
+    DivAssign,
+    Mul,
+    MulAssign,
+    Default,
+)]
+pub struct Value(i32);
+
+#[macro_export]
+macro_rules! value {
+    ($expr:expr) => {
+        Value::from_raw($expr)
+    };
+}
+
+impl Value {
+    pub const ZERO: Value = Value(0);
+    pub const DRAW: Value = Value(0);
+    pub const MATE: Value = Value(100_000);
+    pub const INFINITY: Value = Value(10_000_000);
+    pub const MATE_IN_MAX_PLY: Value = Value(Self::MATE.0 - MAX_PLY as i32);
+    pub const MATED_IN_MAX_PLY: Value = Value(-Self::MATE.0 + MAX_PLY as i32);
+
+    /// Checks whether the score is winning (mate in some plies)
+    #[inline]
+    pub const fn is_winning(&self) -> bool {
+        self.0 >= Self::MATE_IN_MAX_PLY.0
+    }
+
+    /// Checks whether the score is losing (mated mate in some plies)
+    #[inline]
+    pub const fn is_losing(&self) -> bool {
+        self.0 <= Self::MATED_IN_MAX_PLY.0
+    }
+
+    /// Get a score that is ply independent, useful for
+    /// [`crate::search::TranspositionTable::store`]
+    #[inline]
+    pub const fn ply_independent(&self, ply: u8) -> Self {
+        if self.is_winning() {
+            Self(self.0 + ply as i32)
+        } else if self.is_losing() {
+            Self(self.0 - ply as i32)
+        } else {
+            *self
+        }
+    }
+
+    /// Get a score that is ply independent, useful for
+    /// [`crate::search::TranspositionTable::probe`]
+    #[inline]
+    pub const fn ply_dependent(self, ply: u8) -> Self {
+        if self.is_winning() {
+            Self(self.0 - ply as i32)
+        } else if self.is_losing() {
+            Self(self.0 + ply as i32)
+        } else {
+            self
+        }
+    }
+
+    /// Gets the number of ply until we have a mate or get mated
+    #[inline]
+    pub const fn ply_to_mate_or_mated(&self) -> Option<u8> {
+        if self.is_winning() {
+            Some((Self::MATE.0 - self.0) as u8)
+        } else if self.is_losing() {
+            Some((self.0 + Self::MATE.0) as u8)
+        } else {
+            None
+        }
+    }
+
+    /// Value for mate in some ply
+    #[inline]
+    pub const fn mate_in(ply: u8) -> Self {
+        Value(Self::MATE.0 - ply as i32)
+    }
+
+    /// Value for mated in some ply
+    #[inline]
+    pub const fn mated_in(ply: u8) -> Self {
+        Value(-Self::MATE.0 + ply as i32)
+    }
+
+    /// Gets the value from a raw [`i32`]
+    #[inline]
+    pub const fn from_raw(val: i32) -> Self {
+        Value(val)
+    }
+
+    /// Turns into a i32
+    #[inline]
+    pub const fn raw(&self) -> i32 {
+        self.0
+    }
+
+    /// Gets the value from the perspective of Red
+    #[inline]
+    pub const fn abs(self) -> Self {
+        Value(self.0.abs())
+    }
+}
 
 /// Represents the two players in a Xiangqi game: White (Red) or Black.
 #[rustfmt::skip]
@@ -20,7 +150,7 @@ pub enum Color {
 
 impl Color {
     /// Returns the opposing player's color.
-    #[inline(always)]
+    #[inline]
     pub const fn opposite(&self) -> Self {
         match self {
             Color::White => Color::Black,
@@ -67,7 +197,7 @@ impl Square {
     /// Constructs a `Square` from its corresponding `File` and `Rank`.
     /// Maps using `rank_index * 9 + file_index` because each rank spans 9
     /// vertical files.
-    #[inline(always)]
+    #[inline]
     pub fn from_file_rank(file: File, rank: Rank) -> Self {
         let file_index = file as u8;
         let rank_index = rank as u8;
@@ -76,13 +206,13 @@ impl Square {
     }
 
     /// Extracts the vertical column (`File`) of the square.
-    #[inline(always)]
+    #[inline]
     pub fn file(&self) -> File {
         File::from_repr((*self as u8) % 9).unwrap()
     }
 
     /// Extracts the horizontal row (`Rank`) of the square.
-    #[inline(always)]
+    #[inline]
     pub fn rank(&self) -> Rank {
         Rank::from_repr((*self as u8) / 9).unwrap()
     }
@@ -94,7 +224,7 @@ impl Square {
 #[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum PieceType {
-    None, Rook, Advisor, Cannon, Pawn, Knight, Bishop, King, KnightTo, PawnTo
+    None, Rook, Advisor, Cannon, Pawn, Knight, Bishop, King
 }
 
 /// Represents standard Xiangqi pieces, categorized by color and piece type.
@@ -110,8 +240,8 @@ pub enum Piece {
 
 impl Piece {
     /// Extracts the `Color` of the piece, or returns `None` if it is `None`.
-    #[inline(always)]
-    pub fn color(&self) -> Option<Color> {
+    #[inline]
+    pub const fn color(&self) -> Option<Color> {
         match *self {
             Piece::None => None,
             Piece::WhiteRook
@@ -126,8 +256,8 @@ impl Piece {
     }
 
     /// Extracts the `PieceType` of the piece.
-    #[inline(always)]
-    pub fn piece_type(&self) -> PieceType {
+    #[inline]
+    pub const fn piece_type(&self) -> PieceType {
         match *self {
             Piece::None => PieceType::None,
             Piece::WhiteRook | Piece::BlackRook => PieceType::Rook,
@@ -156,8 +286,12 @@ pub enum MoveGenType {
 /// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since
 ///   $2^7=128$).
 /// * **Bits 7 - 13**: Origin square (0 to 89, fits in 7 bits).
-/// * **Bits 14 - 15**: Move flags (Quiet, Capture, Check, etc.).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// * **Bits 14 - 15**: Transposition Table flags:
+///  * `00` = Null Entry
+///  * `01` = Exact
+///  * `10` = Alpha
+///  * `11` = Beta
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Move(u16);
 
 impl Display for Move {
@@ -169,52 +303,68 @@ impl Display for Move {
 impl Move {
     /// Constructs a basic quiet or capture move from an origin and destination
     /// square.
-    #[inline(always)]
+    #[inline]
     pub fn new(from: Square, to: Square) -> Self {
         Self((to as u16) | ((from as u16) << 7))
     }
 
     /// Constructs a move with extra flags (e.g. check/promotion).
-    #[inline(always)]
-    pub fn new_with_flags(from: Square, to: Square, flags: u16) -> Self {
-        Self((to as u16) | ((from as u16) << 7) | ((flags & 3) << 14))
+    #[inline]
+    pub fn new_with_flag(from: Square, to: Square, flag: TranspositionTableFlag) -> Self {
+        Self((to as u16) | ((from as u16) << 7) | ((flag as u16) << 14))
     }
 
     /// Extracts the starting square index by shifting past the destination
     /// bits.
-    #[inline(always)]
+    #[inline]
     pub fn square_from(&self) -> Square {
         Square::from_repr(((self.0 >> 7) & 0x7F) as u8).unwrap()
     }
 
     /// Extracts the target square index by masking the lower 7 bits.
-    #[inline(always)]
+    #[inline]
     pub fn square_to(&self) -> Square {
         Square::from_repr((self.0 & 0x7F) as u8).unwrap()
     }
 
-    /// Extracts the move type flags.
-    #[inline(always)]
-    pub fn flags(&self) -> u16 {
-        self.0 >> 14
+    /// Extracts the transposition table flags from the upper 2 bits of the move
+    /// encoding.
+    #[inline]
+    pub const fn flag(&self) -> TranspositionTableFlag {
+        TranspositionTableFlag::from_repr((self.0 >> 14) as u8).unwrap()
+    }
+
+    #[inline]
+    pub const fn store_flag(&mut self, flag: TranspositionTableFlag) {
+        self.0 = (self.0 & 0x3FFF) | ((flag as u16) << 14);
+    }
+
+    #[inline]
+    pub const fn with_flag(&self, flag: TranspositionTableFlag) -> Self {
+        Self((self.0 & 0x3FFF) | ((flag as u16) << 14))
+    }
+
+    #[inline]
+    pub const fn no_flag(&self) -> Self {
+        Self(self.0 & 0x3FFF)
     }
 
     /// Represents an empty/non-existent move.
-    #[inline(always)]
-    pub const fn none() -> Self {
+    #[inline]
+    pub const fn null() -> Self {
         Self(0)
     }
 
-    /// Checks if the move is empty.
-    #[inline(always)]
-    pub fn is_none(&self) -> bool {
+    /// Checks if the move is null.
+    #[inline]
+    pub fn is_null(&self) -> bool {
         self.0 == 0
     }
 
     /// Converts the move into its UCI string format
     pub fn to_uci_string(&self) -> String {
-        if self.is_none() {
-            return "none".to_string();
+        if self.is_null() {
+            return "null".to_string();
         }
         let from = self.square_from();
         let to = self.square_to();
@@ -229,6 +379,8 @@ impl Move {
 /// The maximum number of pseudo-legal moves in any given Xiangqi position
 /// (typically <= 120).
 const MAX_MOVES: usize = 128;
+pub const MAX_PLY: usize = 128;
+pub const MAX_DEPTH: usize = 64;
 
 /// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
 /// allocation.
@@ -295,18 +447,26 @@ mod tests {
         let m_quiet = Move::new(Square::A0, Square::I9);
         assert_eq!(m_quiet.square_from(), Square::A0);
         assert_eq!(m_quiet.square_to(), Square::I9);
-        assert_eq!(m_quiet.flags(), 0);
-        assert!(!m_quiet.is_none());
+        assert_eq!(m_quiet.flag(), TranspositionTableFlag::Empty);
+        assert!(!m_quiet.is_null());
 
-        let m_flags = Move::new_with_flags(Square::E4, Square::E5, 3);
+        let m_flags = Move::new_with_flag(Square::E4, Square::E5, TranspositionTableFlag::Beta);
         assert_eq!(m_flags.square_from(), Square::E4);
         assert_eq!(m_flags.square_to(), Square::E5);
-        assert_eq!(m_flags.flags(), 3);
-        assert!(!m_flags.is_none());
+        assert_eq!(m_flags.flag(), TranspositionTableFlag::Beta);
+        assert!(!m_flags.is_null());
 
-        let m_none = Move::none();
-        assert!(m_none.is_none());
+        let m_none = Move::null();
+        assert!(m_none.is_null());
 
         assert_eq!(format!("{}", m_quiet), "A0 to I9");
+    }
+
+    #[test]
+    fn test_value_display_as_i32() {
+        let v = Value(12345);
+        assert_eq!(v.to_string(), "12345");
+        let v = Value(-67890);
+        assert_eq!(v.to_string(), "-67890");
     }
 }

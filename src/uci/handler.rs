@@ -1,3 +1,21 @@
+//! Multi-threaded concurrency coordinator for the UCI chess engine protocol.
+//!
+//! This module implements the main asynchronous execution loop for the
+//! Universal Chess Interface (UCI). To satisfy the protocol's real-time
+//! responsiveness and non-blocking interruption guarantees (e.g. interrupting a
+//! deep search via a standard `stop` or `quit` command), the handler
+//! orchestrates three distinct persistent threads:
+//!
+//! 1. **Thread A (Stdin Reader)**: Runs on the calling thread. Listens to
+//!    stdin, parses commands, sets atomic stop flags instantly on
+//!    `stop`/`quit`, and sends them to the command channel.
+//! 2. **Thread B (Engine Actor)**: Persistent spawned worker thread. Owns the
+//!    engine state, receives commands, executes searches (`go`), and handles
+//!    options.
+//! 3. **Thread C (Output Printer)**: Sole stdout writer thread. Collects log
+//!    messages, search info, and bestmove outputs and prints them sequentially
+//!    to avoid race conditions.
+
 use std::io::BufRead;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
@@ -28,11 +46,11 @@ use super::output::EngineOutput;
 /// ## Thread C — Output printer (spawned)
 /// Drains the output channel and calls `println!` for every message. Owning
 /// all output in a single thread prevents any stdout races.
-pub struct UCIHandler<T: Engine> {
+pub struct Handler<T: Engine> {
     engine: T,
 }
 
-impl<T: Engine + 'static> UCIHandler<T> {
+impl<T: Engine + 'static> Handler<T> {
     pub fn new(engine: T) -> Self {
         Self { engine }
     }

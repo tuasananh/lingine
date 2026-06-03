@@ -1,3 +1,18 @@
+//! Dynamic bit-gathering and O(1) sliding ray attack calculations.
+//!
+//! This module contains highly optimized logic to calculate attacks
+//! dynamically. Rather than using slow, conditional ray-scanning loops, we
+//! gather file or rank occupancy into compact index keys and query precomputed
+//! tables (`RANK_TABLE` and `FILE_TABLE`).
+//!
+//! Key elements:
+//! 1. **Vertical File Packing (`gather_file_bits`)**: Packs 10 file bits spaced
+//!    exactly 9 bits apart in the 128-bit integer into a contiguous 10-bit
+//!    lookup key in O(1) time using magic multiplication.
+//! 2. **Rook and Cannon Attacks**: Combine horizontal rank tables and vertical
+//!    file tables to yield exact sliding paths and Cannon leap capture targets
+//!    instantly.
+
 use crate::core::{bitboard::Bitboard, types::Square};
 
 use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};
@@ -6,7 +21,7 @@ use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};
 /// Every 9th bit in our `u128` bitboard represents the same file on successive
 /// ranks (R0 to R9). Shifts, masks, and packs these bits dynamically in O(1)
 /// time without standard loops.
-#[inline(always)]
+#[inline]
 pub fn gather_file_bits(bits: u128, f: usize) -> usize {
     let occ = bits >> f;
     let low = occ as u64;
@@ -26,7 +41,7 @@ pub fn gather_file_bits(bits: u128, f: usize) -> usize {
 
 /// Computes horizontal and vertical attack/move targets for a Rook (Chariot).
 /// Combines precomputed `RANK_TABLE` and `FILE_TABLE` lookup masks.
-#[inline(always)]
+#[inline]
 pub fn rook_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let from_idx = square as usize;
     let f = from_idx % 9;
@@ -48,7 +63,7 @@ pub fn rook_attacks(square: Square, occupied: Bitboard) -> Bitboard {
 }
 
 /// Computes horizontal and vertical quiet/leap capture masks for a Cannon.
-#[inline(always)]
+#[inline]
 pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let from_idx = square as usize;
     let f = from_idx % 9;

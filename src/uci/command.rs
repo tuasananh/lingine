@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::uci::{GoParameters, RegisterParameters, SetOptionParameters, UciPosition};
+use crate::uci::{GoParameters, PositionParameters, RegisterParameters, SetOptionParameters};
 
 /// A parsed UCI command received from the GUI on stdin.
 ///
@@ -32,7 +32,7 @@ pub enum EngineCommand {
     NewGame,
     /// `position startpos|fen <fen> [moves <mv>…]` — set the current board
     /// position.
-    Position(UciPosition),
+    Position(PositionParameters),
     /// `go <params>` — start searching the current position.
     ///
     /// The `stop` field of [`GoParameters`] is left at its `Default` value
@@ -93,7 +93,9 @@ impl EngineCommand {
                 &mut iter,
             )?))),
             Some("ucinewgame") => Ok(Some(Self::NewGame)),
-            Some("position") => Ok(Some(Self::Position(UciPosition::try_from(&mut iter)?))),
+            Some("position") => Ok(Some(Self::Position(PositionParameters::try_from(
+                &mut iter,
+            )?))),
             Some("go") => Ok(Some(Self::Go(GoParameters::try_from(&mut iter)?))),
             Some("stop") => Ok(Some(Self::Stop)),
             Some("ponderhit") => Ok(Some(Self::PonderHit)),

@@ -16,6 +16,7 @@ Usage:
     python scripts/analyze_gauntlet.py gauntlet.pgn -m gauntlet_report.md
     python scripts/analyze_gauntlet.py gauntlet.pgn --bot Lingine --smoothing
 """
+
 import os
 import sys
 import re
@@ -24,51 +25,61 @@ import argparse
 import json
 from datetime import datetime
 
+
 # Term color helper functions
 def color(text, code):
     return f"\033[{code}m{text}\033[0m"
 
+
 def bold(text):
     return color(text, "1")
+
 
 def green(text):
     return color(text, "32")
 
+
 def red(text):
     return color(text, "31")
+
 
 def yellow(text):
     return color(text, "33")
 
+
 def blue(text):
     return color(text, "34")
+
 
 def cyan(text):
     return color(text, "36")
 
+
 def gray(text):
     return color(text, "90")
+
 
 def print_header(title):
     print("=" * 80)
     print(f"   {bold(title.upper())}   ")
     print("=" * 80)
 
+
 def parse_pgn(pgn_path):
     if not os.path.exists(pgn_path):
         return []
-    
+
     with open(pgn_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     # Split by PGN tag [Event to robustly parse separate games
-    games_raw = re.split(r'\[Event\s+', content)
+    games_raw = re.split(r"\[Event\s+", content)
     results = []
 
     for game in games_raw:
         if not game.strip():
             continue
-        
+
         # Parse standard PGN tags (handling Red/White/Black)
         white_match = re.search(r'\[(?:White|Red)\s+"([^"]+)"\]', game)
         black_match = re.search(r'\[Black\s+"([^"]+)"\]', game)
@@ -78,15 +89,18 @@ def parse_pgn(pgn_path):
         tc_match = re.search(r'\[TimeControl\s+"([^"]+)"\]', game)
 
         if white_match and black_match and result_match:
-            results.append({
-                "white": white_match.group(1),
-                "black": black_match.group(1),
-                "result": result_match.group(1),
-                "round": round_match.group(1) if round_match else "?",
-                "date": date_match.group(1) if date_match else "?",
-                "tc": tc_match.group(1) if tc_match else "unknown",
-            })
+            results.append(
+                {
+                    "white": white_match.group(1),
+                    "black": black_match.group(1),
+                    "result": result_match.group(1),
+                    "round": round_match.group(1) if round_match else "?",
+                    "date": date_match.group(1) if date_match else "?",
+                    "tc": tc_match.group(1) if tc_match else "unknown",
+                }
+            )
     return results
+
 
 def detect_bot_name(games):
     """Finds the most frequent player name in the tournament as the default bot."""
@@ -94,35 +108,39 @@ def detect_bot_name(games):
     for g in games:
         for p in [g["white"], g["black"]]:
             player_counts[p] = player_counts.get(p, 0) + 1
-    
+
     if not player_counts:
         return "Lingine"
-    
+
     # Sort by frequency
     sorted_players = sorted(player_counts.items(), key=lambda x: x[1], reverse=True)
     return sorted_players[0][0]
+
 
 def extract_elo_from_name(name, custom_map=None):
     """Tries to extract Elo rating from player name using digits, or uses a custom map."""
     if custom_map and name in custom_map:
         return custom_map[name]
-    
+
     # Check if name contains a number (e.g. FS-1200 or Bot_1800)
-    match = re.search(r'\d+', name)
+    match = re.search(r"\d+", name)
     if match:
         return int(match.group(0))
     return None
 
-def calculate_opponent_stats(games, bot_name, custom_map=None, default_opp_elo=1500, smoothing=False):
+
+def calculate_opponent_stats(
+    games, bot_name, custom_map=None, default_opp_elo=1500, smoothing=False
+):
     stats = {}
     skipped_count = 0
 
     for game in games:
         w, b, res = game["white"], game["black"], game["result"]
-        
+
         if w == bot_name:
             opponent = b
-            bot_color = "white" # Red/White
+            bot_color = "white"  # Red/White
         elif b == bot_name:
             opponent = w
             bot_color = "black"
@@ -136,7 +154,7 @@ def calculate_opponent_stats(games, bot_name, custom_map=None, default_opp_elo=1
             if opp_base_elo is None:
                 opp_base_elo = default_opp_elo
                 is_estimated_opp_elo = True
-                
+
             stats[opponent] = {
                 "name": opponent,
                 "opponent_elo": opp_base_elo,
@@ -150,7 +168,7 @@ def calculate_opponent_stats(games, bot_name, custom_map=None, default_opp_elo=1
                 "bot_as_white_draws": 0,
                 "bot_as_black_wins": 0,
                 "bot_as_black_losses": 0,
-                "bot_as_black_draws": 0
+                "bot_as_black_draws": 0,
             }
 
         s = stats[opponent]
@@ -185,9 +203,9 @@ def calculate_opponent_stats(games, bot_name, custom_map=None, default_opp_elo=1
                 s["bot_as_black_draws"] += 1
 
     # Post-process point stats and per-opponent Elo
-    for opp, s in stats.items():
-        wins, draws, losses, n = s["wins"], s["draws"], s["losses"], s["games"]
-        
+    for _opp, s in stats.items():
+        wins, draws, _losses, n = s["wins"], s["draws"], s["losses"], s["games"]
+
         # Laplace Smoothing: add virtual 0.5 win and 0.5 loss
         if smoothing:
             s["points"] = wins + 0.5 * draws + 0.5
@@ -206,13 +224,14 @@ def calculate_opponent_stats(games, bot_name, custom_map=None, default_opp_elo=1
             adjusted_score = 0.5 / n if n > 0 else 0.001
         else:
             adjusted_score = score_pct
-            
+
         delta_elo = 400.0 * math.log10(adjusted_score / (1.0 - adjusted_score))
-            
+
         s["delta_elo"] = delta_elo
         s["estimated_elo"] = s["opponent_elo"] + delta_elo
 
     return stats, skipped_count
+
 
 def estimate_global_elo(opponents_stats_list):
     """
@@ -222,10 +241,10 @@ def estimate_global_elo(opponents_stats_list):
     """
     total_games = sum(s["games"] for s in opponents_stats_list)
     total_points = sum(s["wins"] + 0.5 * s["draws"] for s in opponents_stats_list)
-    
+
     if total_games == 0:
         return None, None, None
-        
+
     # Edge Cases: All wins or All losses
     if total_points == 0:
         min_opp = min(s["opponent_elo"] for s in opponents_stats_list)
@@ -233,10 +252,10 @@ def estimate_global_elo(opponents_stats_list):
     if total_points == total_games:
         max_opp = max(s["opponent_elo"] for s in opponents_stats_list)
         return max_opp + 400.0, None, None
-        
+
     # Start with weighted average of opponent Elos as guess
     r = sum(s["opponent_elo"] * s["games"] for s in opponents_stats_list) / total_games
-    
+
     # Newton-Raphson iteration
     for _ in range(100):
         f_val = 0.0
@@ -244,7 +263,7 @@ def estimate_global_elo(opponents_stats_list):
         for s in opponents_stats_list:
             opp_elo = s["opponent_elo"]
             n = s["games"]
-            
+
             # expected score
             diff = (r - opp_elo) / 400.0
             if diff < -100:
@@ -252,23 +271,23 @@ def estimate_global_elo(opponents_stats_list):
             elif diff > 100:
                 expected = 1.0
             else:
-                expected = 1.0 / (1.0 + 10.0**(-diff))
-                
+                expected = 1.0 / (1.0 + 10.0 ** (-diff))
+
             f_val += n * expected
             f_prime += n * expected * (1.0 - expected) * (math.log(10.0) / 400.0)
-            
+
         f_val -= total_points
-        
+
         if abs(f_val) < 1e-6 or f_prime == 0:
             break
-            
+
         r_new = r - f_val / f_prime
         # Cap change per step to ensure convergence stability
         if abs(r_new - r) > 100:
             r += 100.0 if r_new > r else -100.0
         else:
             r = r_new
-            
+
     # Calculate Standard Error (SE) using Fisher Information
     sum_terms = 0.0
     for s in opponents_stats_list:
@@ -276,20 +295,25 @@ def estimate_global_elo(opponents_stats_list):
         n = s["games"]
         diff = (r - opp_elo) / 400.0
         if -100 <= diff <= 100:
-            expected = 1.0 / (1.0 + 10.0**(-diff))
+            expected = 1.0 / (1.0 + 10.0 ** (-diff))
             sum_terms += n * expected * (1.0 - expected)
-            
-    se = 1.0 / ((math.log(10.0) / 400.0) * math.sqrt(sum_terms)) if sum_terms > 0 else None
-    
+
+    se = (
+        1.0 / ((math.log(10.0) / 400.0) * math.sqrt(sum_terms))
+        if sum_terms > 0
+        else None
+    )
+
     # 95% Confidence Interval
     ci = (r - 1.96 * se, r + 1.96 * se) if se else (None, None)
-    
+
     return r, se, ci
+
 
 def generate_html_report(filepath, bot_name, games_count, stats, global_elo, se, ci):
     """Generates a premium responsive HTML dashboard visual report."""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Overall summary stats
     tot_wins = sum(s["wins"] for s in stats.values())
     tot_draws = sum(s["draws"] for s in stats.values())
@@ -297,20 +321,20 @@ def generate_html_report(filepath, bot_name, games_count, stats, global_elo, se,
     tot_games = sum(s["games"] for s in stats.values())
     tot_pts = tot_wins + 0.5 * tot_draws
     win_rate = (tot_pts / tot_games) * 100 if tot_games > 0 else 0
-    
+
     ci_str = f"{int(round(ci[0]))} - {int(round(ci[1]))} ELO" if ci[0] else "N/A"
     se_str = f"± {int(round(se * 1.96))} ELO (95% CI)" if se else "N/A"
-    
+
     # Generate opponent table rows
     table_rows = ""
     sorted_opponents = sorted(stats.values(), key=lambda x: x["opponent_elo"])
-    
+
     for s in sorted_opponents:
         points = s["wins"] + 0.5 * s["draws"]
         raw_pct = (points / s["games"]) * 100 if s["games"] > 0 else 0
         diff_color = "#10b981" if s["delta_elo"] >= 0 else "#ef4444"
         diff_sign = "+" if s["delta_elo"] >= 0 else ""
-        
+
         table_rows += f"""
         <tr>
             <td style="font-weight: 600;">{s["name"]}</td>
@@ -324,7 +348,7 @@ def generate_html_report(filepath, bot_name, games_count, stats, global_elo, se,
             <td><span class="badge badge-accent" style="background-color: {diff_color}15; color: {diff_color}; border: 1px solid {diff_color}30;">{int(round(s["estimated_elo"]))} ELO</span></td>
         </tr>
         """
-        
+
     # Generate charts & tables in beautiful glassmorphism-themed page
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -743,7 +767,7 @@ def generate_html_report(filepath, bot_name, games_count, stats, global_elo, se,
                                 <td style="border: none; padding: 0.5rem 0; font-weight: 600; color: var(--amber);">{sum(s["bot_as_white_draws"] for s in stats.values())}</td>
                                 <td style="border: none; padding: 0.5rem 0; font-weight: 600; color: var(--rose);">{sum(s["bot_as_white_losses"] for s in stats.values())}</td>
                                 <td style="border: none; padding: 0.5rem 0; font-weight: 600;">
-                                    {((sum(s["bot_as_white_wins"] for s in stats.values()) + 0.5*sum(s["bot_as_white_draws"] for s in stats.values())) / max(1, sum(s["bot_as_white_wins"]+s["bot_as_white_draws"]+s["bot_as_white_losses"] for s in stats.values())) * 100):.1f}%
+                                    {((sum(s["bot_as_white_wins"] for s in stats.values()) + 0.5 * sum(s["bot_as_white_draws"] for s in stats.values())) / max(1, sum(s["bot_as_white_wins"] + s["bot_as_white_draws"] + s["bot_as_white_losses"] for s in stats.values())) * 100):.1f}%
                                 </td>
                             </tr>
                             <tr>
@@ -752,7 +776,7 @@ def generate_html_report(filepath, bot_name, games_count, stats, global_elo, se,
                                 <td style="border: none; padding: 0.5rem 0; font-weight: 600; color: var(--amber);">{sum(s["bot_as_black_draws"] for s in stats.values())}</td>
                                 <td style="border: none; padding: 0.5rem 0; font-weight: 600; color: var(--rose);">{sum(s["bot_as_black_losses"] for s in stats.values())}</td>
                                 <td style="border: none; padding: 0.5rem 0; font-weight: 600;">
-                                    {((sum(s["bot_as_black_wins"] for s in stats.values()) + 0.5*sum(s["bot_as_black_draws"] for s in stats.values())) / max(1, sum(s["bot_as_black_wins"]+s["bot_as_black_draws"]+s["bot_as_black_losses"] for s in stats.values())) * 100):.1f}%
+                                    {((sum(s["bot_as_black_wins"] for s in stats.values()) + 0.5 * sum(s["bot_as_black_draws"] for s in stats.values())) / max(1, sum(s["bot_as_black_wins"] + s["bot_as_black_draws"] + s["bot_as_black_losses"] for s in stats.values())) * 100):.1f}%
                                 </td>
                             </tr>
                         </tbody>
@@ -772,25 +796,33 @@ def generate_html_report(filepath, bot_name, games_count, stats, global_elo, se,
         f.write(html_content)
 
 
-def generate_markdown_report(filepath, bot_name, games_count, stats, global_elo, se, ci):
+def generate_markdown_report(
+    filepath, bot_name, games_count, stats, global_elo, se, ci
+):
     """Generates a clean, beautiful Markdown report for the gauntlet results."""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     tot_wins = sum(s["wins"] for s in stats.values())
     tot_draws = sum(s["draws"] for s in stats.values())
     tot_losses = sum(s["losses"] for s in stats.values())
     tot_games = sum(s["games"] for s in stats.values())
     tot_pts = tot_wins + 0.5 * tot_draws
     win_rate = (tot_pts / tot_games) * 100 if tot_games > 0 else 0
-    
-    ci_str = f"{int(round(ci[0]))} - {int(round(ci[1]))} ELO" if (ci and ci[0] is not None) else "N/A"
+
+    ci_str = (
+        f"{int(round(ci[0]))} - {int(round(ci[1]))} ELO"
+        if (ci and ci[0] is not None)
+        else "N/A"
+    )
     se_str = f"± {se:.1f} ELO" if se is not None else "N/A"
-    global_elo_str = f"{int(round(global_elo))} ELO" if global_elo is not None else "N/A"
-    
+    global_elo_str = (
+        f"{int(round(global_elo))} ELO" if global_elo is not None else "N/A"
+    )
+
     # Opponents sorted by Elo
     opponents_rows = []
     sorted_opponents = sorted(stats.values(), key=lambda x: x["opponent_elo"])
-    
+
     for s in sorted_opponents:
         wins, draws, losses, n = s["wins"], s["draws"], s["losses"], s["games"]
         points = wins + 0.5 * draws
@@ -801,21 +833,21 @@ def generate_markdown_report(filepath, bot_name, games_count, stats, global_elo,
         opponents_rows.append(
             f"| {s['name']} | {s['opponent_elo']} | {n} | {wins} | {draws} | {losses} | {raw_pct:.1f}% | {diff_str} | **{est_elo_val} ELO** |"
         )
-    
+
     opponents_table = "\n".join(opponents_rows)
-    
+
     # Color performance
     white_wins = sum(s["bot_as_white_wins"] for s in stats.values())
     white_draws = sum(s["bot_as_white_draws"] for s in stats.values())
     white_losses = sum(s["bot_as_white_losses"] for s in stats.values())
     white_games = white_wins + white_draws + white_losses
-    white_pct = ((white_wins + 0.5 * white_draws) / max(1, white_games) * 100)
-    
+    white_pct = (white_wins + 0.5 * white_draws) / max(1, white_games) * 100
+
     black_wins = sum(s["bot_as_black_wins"] for s in stats.values())
     black_draws = sum(s["bot_as_black_draws"] for s in stats.values())
     black_losses = sum(s["bot_as_black_losses"] for s in stats.values())
     black_games = black_wins + black_draws + black_losses
-    black_pct = ((black_wins + 0.5 * black_draws) / max(1, black_games) * 100)
+    black_pct = (black_wins + 0.5 * black_draws) / max(1, black_games) * 100
 
     md_content = f"""# Gauntlet Report: {bot_name}
 
@@ -845,6 +877,7 @@ Total Games Played: **{tot_games}**
 """
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(md_content)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -909,11 +942,11 @@ def main():
 
     print(f"Reading and parsing PGN file: {cyan(args.pgn_file)} ...")
     games = parse_pgn(args.pgn_file)
-    
+
     if not games:
         print(red("Error: No valid games parsed from PGN. Verify file structure."))
         sys.exit(1)
-        
+
     print(f"Successfully parsed {green(len(games))} games from tournament.")
 
     # Determine bot name
@@ -936,16 +969,18 @@ def main():
 
     # Process stats
     stats, skipped = calculate_opponent_stats(
-        games, 
-        bot_name, 
-        custom_map=custom_map, 
+        games,
+        bot_name,
+        custom_map=custom_map,
         default_opp_elo=args.default_opp_elo,
-        smoothing=args.smoothing
+        smoothing=args.smoothing,
     )
 
     if not stats:
         print(red(f"Error: No games found where bot '{bot_name}' played!"))
-        print(f"Available players in PGN: {gray(list(set(g['white'] for g in games) | set(g['black'] for g in games)))}")
+        print(
+            f"Available players in PGN: {gray(list(set(g['white'] for g in games) | set(g['black'] for g in games)))}"
+        )
         sys.exit(1)
 
     if skipped > 0:
@@ -957,9 +992,13 @@ def main():
 
     # Console display formatting
     print("\n" + "=" * 85)
-    print(f"           {bold('PERFORMANCE SUMMARY FOR ' + bot_name.upper())}             ")
+    print(
+        f"           {bold('PERFORMANCE SUMMARY FOR ' + bot_name.upper())}             "
+    )
     print("=" * 85)
-    print(f"{'Opponent':<15}{'Base ELO':<10}{'Games':<8}{'Wins':<7}{'Draws':<7}{'Losses':<7}{'Score %':<10}{'ELO Diff':<11}{'Est. ELO':<10}")
+    print(
+        f"{'Opponent':<15}{'Base ELO':<10}{'Games':<8}{'Wins':<7}{'Draws':<7}{'Losses':<7}{'Score %':<10}{'ELO Diff':<11}{'Est. ELO':<10}"
+    )
     print("-" * 85)
 
     tot_wins = 0
@@ -976,16 +1015,16 @@ def main():
         tot_draws += draws
         tot_losses += losses
         tot_games += n
-        
+
         points = wins + 0.5 * draws
         raw_pct = (points / n) * 100 if n > 0 else 0
-        
+
         diff_val = int(round(s["delta_elo"]))
         diff_str = f"+{diff_val}" if diff_val >= 0 else f"{diff_val}"
         diff_color_func = green if diff_val >= 0 else red
-        
+
         est_elo_val = int(round(s["estimated_elo"]))
-        
+
         pct_str = f"{raw_pct:.1f}%"
         opp_rating_str = f"{s['opponent_elo']}"
         if s["is_estimated_opp_elo"]:
@@ -1006,7 +1045,7 @@ def main():
     print("-" * 85)
     total_pts = tot_wins + 0.5 * tot_draws
     overall_win_rate = (total_pts / tot_games) * 100 if tot_games > 0 else 0
-    
+
     print(
         f"{bold('OVERALL TOTAL'):<15}"
         f"{'-':<10}"
@@ -1022,13 +1061,25 @@ def main():
 
     # Global ratings display
     if global_elo is not None:
-        print(f"\n=> {bold('GLOBAL MLE ELO RATING')}: {green(f'{int(round(global_elo))} ELO')}")
-        if se is not None and ci[0] is not None:
+        print(
+            f"\n=> {bold('GLOBAL MLE ELO RATING')}: {green(f'{int(round(global_elo))} ELO')}"
+        )
+        if se is not None and ci is not None and ci[0] is not None:
             print(f"   -> Standard Error: {cyan(f'± {se:.1f} ELO')}")
-            print(f"   -> 95% Confidence Interval: {cyan(f'{int(round(ci[0]))} - {int(round(ci[1]))} ELO')}")
-            print(gray("      (Reflects statistical uncertainty based on match volume & scores)"))
+            print(
+                f"   -> 95% Confidence Interval: {cyan(f'{int(round(ci[0]))} - {int(round(ci[1]))} ELO')}"
+            )
+            print(
+                gray(
+                    "      (Reflects statistical uncertainty based on match volume & scores)"
+                )
+            )
         else:
-            print(yellow("   -> Standard error / Confidence Interval could not be calculated (perfect or extreme score)."))
+            print(
+                yellow(
+                    "   -> Standard error / Confidence Interval could not be calculated (perfect or extreme score)."
+                )
+            )
     else:
         print(red("\nCould not estimate global ELO due to invalid stats."))
 
@@ -1036,7 +1087,9 @@ def main():
     print("\n" + "=" * 85)
     print(f"      {bold('COPY-PASTEABLE MARKDOWN TABLE FOR RELEASE')}      ")
     print("=" * 85)
-    print("| Opponent | Base ELO | Games | Wins | Draws | Losses | Score % | ELO Diff | Est. Performance |")
+    print(
+        "| Opponent | Base ELO | Games | Wins | Draws | Losses | Score % | ELO Diff | Est. Performance |"
+    )
     print("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
     for s in sorted_opponents:
         wins, draws, losses, n = s["wins"], s["draws"], s["losses"], s["games"]
@@ -1045,23 +1098,48 @@ def main():
         diff_val = int(round(s["delta_elo"]))
         diff_str = f"+{diff_val}" if diff_val >= 0 else f"{diff_val}"
         est_elo_val = int(round(s["estimated_elo"]))
-        print(f"| {s['name']} | {s['opponent_elo']} | {n} | {wins} | {draws} | {losses} | {raw_pct:.1f}% | {diff_str} | **{est_elo_val} ELO** |")
-    print(f"| **OVERALL TOTAL** | — | **{tot_games}** | **{tot_wins}** | **{tot_draws}** | **{tot_losses}** | **{overall_win_rate:.1f}%** | — | **{int(round(global_elo))} ELO** |")
+        print(
+            f"| {s['name']} | {s['opponent_elo']} | {n} | {wins} | {draws} | {losses} | {raw_pct:.1f}% | {diff_str} | **{est_elo_val} ELO** |"
+        )
+    assert global_elo is not None, (
+        "Global ELO should have been calculated successfully."
+    )
+    print(
+        f"| **OVERALL TOTAL** | — | **{tot_games}** | **{tot_wins}** | **{tot_draws}** | **{tot_losses}** | **{overall_win_rate:.1f}%** | — | **{int(round(global_elo))} ELO** |"
+    )
     print("=" * 85)
 
     # Print notes
     print("\n" + gray("Notes:"))
-    print(gray(" * Base ELOs ending in '*' are fallbacks because no digits were found in their name."))
-    print(gray(" * Global MLE uses the FIDE / Bradley-Terry standard system to optimize ratings globally."))
+    print(
+        gray(
+            " * Base ELOs ending in '*' are fallbacks because no digits were found in their name."
+        )
+    )
+    print(
+        gray(
+            " * Global MLE uses the FIDE / Bradley-Terry standard system to optimize ratings globally."
+        )
+    )
     if args.smoothing:
-        print(gray(" * Laplace smoothing is ENABLED (+0.5 wins/losses applied to each opponent's pool)."))
+        print(
+            gray(
+                " * Laplace smoothing is ENABLED (+0.5 wins/losses applied to each opponent's pool)."
+            )
+        )
     else:
-        print(gray(" * Run with '-s' or '--smoothing' to handle infinity bounds on 100% or 0% score pools."))
+        print(
+            gray(
+                " * Run with '-s' or '--smoothing' to handle infinity bounds on 100% or 0% score pools."
+            )
+        )
 
     # Generate HTML if requested
     if args.html:
         try:
-            generate_html_report(args.html, bot_name, len(games), stats, global_elo, se, ci)
+            generate_html_report(
+                args.html, bot_name, len(games), stats, global_elo, se, ci
+            )
             print(f"\n=> {green('Beautiful HTML Report Generated')}: {bold(args.html)}")
         except Exception as e:
             print(red(f"Error generating HTML report: {e}"))
@@ -1069,12 +1147,15 @@ def main():
     # Generate Markdown if requested
     if args.markdown:
         try:
-            generate_markdown_report(args.markdown, bot_name, len(games), stats, global_elo, se, ci)
+            generate_markdown_report(
+                args.markdown, bot_name, len(games), stats, global_elo, se, ci
+            )
             print(f"\n=> {green('Markdown Report Generated')}: {bold(args.markdown)}")
         except Exception as e:
             print(red(f"Error generating Markdown report: {e}"))
 
     print()
+
 
 if __name__ == "__main__":
     main()

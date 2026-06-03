@@ -2,8 +2,10 @@ use std::{fmt, num::NonZeroU32, slice::Iter, sync::Arc, sync::atomic::AtomicBool
 
 use anyhow::{Error, Result, anyhow, ensure};
 
+use crate::core::Value;
+
 // ===========================================================================
-// UciMove
+// Move
 // ===========================================================================
 
 /// A chess move as represented in the UCI protocol.
@@ -17,10 +19,10 @@ use anyhow::{Error, Result, anyhow, ensure};
 /// A null move is encoded as `0x00000000` (the string `"0000"`).
 ///
 /// Xiangqi has no promotion, so no promotion piece field is encoded.
-#[derive(Clone, Debug)]
-pub struct UciMove(u32);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Move(u32);
 
-impl UciMove {
+impl Move {
     /// Source file index (0 = 'a', …, 8 = 'i').
     pub fn src_file(&self) -> u8 {
         (self.0 & 0xFF) as u8
@@ -47,15 +49,7 @@ impl UciMove {
     }
 }
 
-impl PartialEq for UciMove {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for UciMove {}
-
-impl TryFrom<&str> for UciMove {
+impl TryFrom<&str> for Move {
     type Error = Error;
     fn try_from(value: &str) -> Result<Self> {
         let value = value.as_bytes();
@@ -109,7 +103,7 @@ impl TryFrom<&str> for UciMove {
 #[derive(Clone, Debug, Default)]
 pub struct GoParameters {
     /// Restrict search to these moves only at the root.
-    pub searchmoves: Option<Vec<UciMove>>,
+    pub searchmoves: Option<Vec<Move>>,
     /// If `true`, search in pondering mode (opponent's turn on the clock).
     pub ponder: bool,
     /// Time remaining for White.
@@ -387,7 +381,7 @@ impl TryFrom<&mut Iter<'_, &str>> for RegisterParameters {
 }
 
 // ===========================================================================
-// UciPosition
+// PositionParameters
 // ===========================================================================
 
 /// The starting FEN for a standard Xiangqi game.
@@ -395,14 +389,14 @@ pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/R
 
 /// The board position sent by the GUI via the `position` command.
 #[derive(Clone, Debug)]
-pub struct UciPosition {
+pub struct PositionParameters {
     /// The starting position in Forsyth-Edwards Notation.
     pub fen: String,
     /// Moves applied after the FEN position, in order.
-    pub moves: Vec<UciMove>,
+    pub moves: Vec<Move>,
 }
 
-impl Default for UciPosition {
+impl Default for PositionParameters {
     fn default() -> Self {
         Self {
             fen: START_FEN.to_string(),
@@ -411,7 +405,7 @@ impl Default for UciPosition {
     }
 }
 
-impl TryFrom<&mut Iter<'_, &str>> for UciPosition {
+impl TryFrom<&mut Iter<'_, &str>> for PositionParameters {
     type Error = Error;
     fn try_from(value: &mut Iter<'_, &str>) -> Result<Self> {
         let next_token = value.next();
@@ -449,7 +443,7 @@ impl TryFrom<&mut Iter<'_, &str>> for UciPosition {
         };
 
         let moves = value
-            .map(|tok| UciMove::try_from(*tok))
+            .map(|tok| Move::try_from(*tok))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self { fen, moves })
@@ -551,7 +545,7 @@ pub enum Bound {
 /// The type of score the engine reports.
 pub enum UciScore {
     /// Score in centipawns from the engine's point of view.
-    Centipawns(i32),
+    Centipawns(Value),
     /// Forced mate: positive = engine mates in N moves, negative = engine gets
     /// mated in N.
     Mate(i32),
@@ -693,7 +687,7 @@ impl BestMove {
     /// A null move (`0000`), used as a fallback when `go` returns an error.
     pub fn null() -> Self {
         Self {
-            mv: "0000".into(),
+            mv: "null".into(),
             ponder: None,
         }
     }
@@ -715,11 +709,13 @@ impl fmt::Display for BestMove {
 
 #[cfg(test)]
 mod tests {
+    use crate::value;
+
     use super::*;
 
     #[test]
     fn test_valid_move_parsing() {
-        let m = UciMove::try_from("a0b1").expect("Should parse valid move");
+        let m = Move::try_from("a0b1").expect("Should parse valid move");
         // from: file 'a' = 0, rank '0' = 0
         // to:   file 'b' = 1, rank '1' = 1
         assert_eq!(m.src_file(), 0);
@@ -730,7 +726,7 @@ mod tests {
 
     #[test]
     fn test_boundary_moves() {
-        let m = UciMove::try_from("i9i9").expect("Should parse boundary move");
+        let m = Move::try_from("i9i9").expect("Should parse boundary move");
         assert_eq!(m.src_file(), 8); // 'i' - 'a' = 8
         assert_eq!(m.src_rank(), 9); // '9' - '0' = 9
         assert_eq!(m.dst_file(), 8);
@@ -739,28 +735,28 @@ mod tests {
 
     #[test]
     fn test_null_move() {
-        let m = UciMove::try_from("0000").expect("Should parse null move");
+        let m = Move::try_from("0000").expect("Should parse null move");
         assert!(m.is_null());
     }
 
     #[test]
     fn test_invalid_length() {
-        assert!(UciMove::try_from("a0b").is_err()); // Too short
-        assert!(UciMove::try_from("a0b1c").is_err()); // Too long
+        assert!(Move::try_from("a0b").is_err()); // Too short
+        assert!(Move::try_from("a0b1c").is_err()); // Too long
     }
 
     #[test]
     fn test_invalid_characters() {
-        assert!(UciMove::try_from("j0b1").is_err()); // Source file out of range
-        assert!(UciMove::try_from("a:b1").is_err()); // Source rank out of range
-        assert!(UciMove::try_from("????").is_err()); // Completely wrong
+        assert!(Move::try_from("j0b1").is_err()); // Source file out of range
+        assert!(Move::try_from("a:b1").is_err()); // Source rank out of range
+        assert!(Move::try_from("????").is_err()); // Completely wrong
     }
 
     #[test]
     fn test_equality() {
-        let m1 = UciMove::try_from("a1c3").unwrap();
-        let m2 = UciMove::try_from("a1c3").unwrap();
-        let m3 = UciMove::try_from("c3a1").unwrap();
+        let m1 = Move::try_from("a1c3").unwrap();
+        let m2 = Move::try_from("a1c3").unwrap();
+        let m3 = Move::try_from("c3a1").unwrap();
 
         assert_eq!(m1, m2);
         assert_ne!(m1, m3);
@@ -1038,7 +1034,7 @@ mod tests {
         let tokens = "startpos".split_whitespace().collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UciPosition::try_from(&mut iter).unwrap();
+        let parsed = PositionParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, START_FEN);
         assert!(parsed.moves.is_empty());
@@ -1051,7 +1047,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UciPosition::try_from(&mut iter).unwrap();
+        let parsed = PositionParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, START_FEN);
         assert_eq!(parsed.moves.len(), 2);
@@ -1064,7 +1060,7 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UciPosition::try_from(&mut iter).unwrap();
+        let parsed = PositionParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 w");
         assert!(parsed.moves.is_empty());
@@ -1077,15 +1073,15 @@ mod tests {
             .collect::<Vec<&str>>();
         let mut iter = tokens.iter();
 
-        let parsed = UciPosition::try_from(&mut iter).unwrap();
+        let parsed = PositionParameters::try_from(&mut iter).unwrap();
 
         assert_eq!(parsed.fen, "9/9/9/9/9/9/9/9/9/9 b");
-        assert_eq!(parsed.moves, &[UciMove::try_from("a0a1").unwrap()]);
+        assert_eq!(parsed.moves, &[Move::try_from("a0a1").unwrap()]);
     }
 
     #[test]
     fn encodes_move_bytes_consistently() {
-        let mv = UciMove::try_from("b2c3").unwrap();
+        let mv = Move::try_from("b2c3").unwrap();
         // from: file 'b' = 1, rank '2' = 2
         // to:   file 'c' = 2, rank '3' = 3
         assert_eq!(mv.src_file(), 1);
@@ -1177,7 +1173,7 @@ mod tests {
     #[test]
     fn score_cp_format() {
         let s = UciScoreBound {
-            score: UciScore::Centipawns(214),
+            score: UciScore::Centipawns(value!(214)),
             bound: None,
         };
         assert_eq!(s.to_string(), "score cp 214");
@@ -1210,7 +1206,7 @@ mod tests {
             nodes: Some(123456),
             nps: Some(100000),
             score: Some(UciScoreBound {
-                score: UciScore::Centipawns(214),
+                score: UciScore::Centipawns(value!(214)),
                 bound: None,
             }),
             pv: Some(vec!["e2e4".into(), "e7e5".into(), "g1f3".into()]),

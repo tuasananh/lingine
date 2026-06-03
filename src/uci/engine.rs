@@ -3,8 +3,8 @@ use std::sync::mpsc::Sender;
 use anyhow::Result;
 
 use crate::uci::{
-    BestMove, GoParameters, RegisterParameters, SetOptionParameters, UciId, UciInfo, UciOption,
-    UciPosition,
+    BestMove, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters, UciId,
+    UciInfo, UciOption,
 };
 
 /// The interface every engine implementation must satisfy.
@@ -52,7 +52,7 @@ pub trait Engine: Send {
     /// Set the current board position from a FEN string and a list of moves.
     ///
     /// Returns an error if the FEN string is malformed or any move is illegal.
-    fn position(&mut self, position: UciPosition) -> Result<()>;
+    fn position(&mut self, position: PositionParameters) -> Result<()>;
 
     /// Start searching the current position.
     ///
