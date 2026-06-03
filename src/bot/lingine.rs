@@ -1,17 +1,3 @@
-//! Standard `Engine` implementation wrapping Lingine's search and evaluation.
-//!
-//! This module coordinates the UCI command inputs to drive the engine:
-//! 1. **Time Management (`calculate_search_time`)**: Allocates time budgets
-//!    based on remaining time, increments, remaining plies, and leaves a safe
-//!    time-buffer (to avoid timeouts from GUI latency).
-//! 2. **Iterative Deepening Search Loop (`go`)**: Coordinates iterative
-//!    deepening from depth 1 upwards, updating aspiration windows, sorting
-//!    moves at the root, checking stop flags, and sending real-time progress
-//!    info (`UciInfo`) back via mpsc channels.
-//! 3. **Search Fallbacks**: Ensures only legal moves are played and falls back
-//!    to first-available legal move in case of emergency search errors or hash
-//!    collisions.
-
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -32,8 +18,12 @@ pub struct Lingine {
     /// Internal board state tracker.
     position: Position,
     /// Transposition table to cache evaluated search nodes.
+    ///
+    /// Find out more: https://www.chessprogramming.org/Transposition_Table
     transposition_table: TranspositionTable,
-    /// Generational sequence age to track outdated transposition table entries.
+    /// Generational sequence age to track outdated transposition table entries,
+    /// used in [`crate::search::TranspositionTable::store`] to determine
+    /// whether to replace an existing entry.
     age: u8,
 }
 
@@ -52,6 +42,7 @@ impl Lingine {
     pub fn new() -> Self {
         Self::default()
     }
+
     /// Determines the time limit budget for a given search color/increments.
     fn calculate_search_time(params: &GoParameters, side: Color) -> Option<Duration> {
         if let Some(movetime) = params.movetime {
@@ -112,7 +103,9 @@ impl Engine for Lingine {
     }
 
     fn isready(&self) {
-        // Nothing to prepare yet
+        // Nothing to do here
+        // The UCI Handler will send "readyok" response after this method
+        // returns
     }
 
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
@@ -196,6 +189,9 @@ impl Engine for Lingine {
         // Increment the age generation at the start of a search session
         self.age = self.age.wrapping_add(1);
 
+        // Calculate time limit for this search based on the provided parameters and the
+        // side to move. This will help us determine how long to search before returning
+        // a best move.
         let time_limit = Self::calculate_search_time(&params, self.position.side_to_move());
 
         let (best_move, _score, _nodes) = search(
@@ -207,6 +203,8 @@ impl Engine for Lingine {
             time_limit,
         );
 
+        // Returns the best move found in UCI format. Pondering is not implemented in
+        // this version, so we return `None` for the ponder move.
         Ok(BestMove {
             mv: best_move.to_uci_string(),
             ponder: None,

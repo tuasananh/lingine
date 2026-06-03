@@ -58,16 +58,19 @@ impl Value {
     pub const MATE_IN_MAX_PLY: Value = Value(Self::MATE.0 - MAX_PLY as i32);
     pub const MATED_IN_MAX_PLY: Value = Value(-Self::MATE.0 + MAX_PLY as i32);
 
+    /// Checks whether the score is winning (mate in some plies)
     #[inline]
     pub const fn is_winning(&self) -> bool {
         self.0 >= Self::MATE_IN_MAX_PLY.0
     }
 
+    /// Checks whether the score is losing (mated mate in some plies)
     #[inline]
     pub const fn is_losing(&self) -> bool {
         self.0 <= Self::MATED_IN_MAX_PLY.0
     }
 
+    /// Get a score that is ply independent, useful for [`crate::search::TranspositionTable::store`]
     #[inline]
     pub const fn ply_independent(&self, ply: u8) -> Self {
         if self.is_winning() {
@@ -79,6 +82,7 @@ impl Value {
         }
     }
 
+    /// Get a score that is ply independent, useful for [`crate::search::TranspositionTable::probe`]
     #[inline]
     pub const fn ply_dependent(self, ply: u8) -> Self {
         if self.is_winning() {
@@ -90,8 +94,9 @@ impl Value {
         }
     }
 
+    /// Gets the number of ply until we have a mate or get mated
     #[inline]
-    pub const fn ply_to_mate(&self) -> Option<u8> {
+    pub const fn ply_to_mate_or_mated(&self) -> Option<u8> {
         if self.is_winning() {
             Some((Self::MATE.0 - self.0) as u8)
         } else if self.is_losing() {
@@ -101,24 +106,31 @@ impl Value {
         }
     }
 
+    /// Value for mate in some ply
     #[inline]
     pub const fn mate_in(ply: u8) -> Self {
         Value(Self::MATE.0 - ply as i32)
     }
 
+    /// Value for mated in some ply
     #[inline]
     pub const fn mated_in(ply: u8) -> Self {
         Value(-Self::MATE.0 + ply as i32)
     }
 
+    /// Gets the value from a raw [`i32`]
     #[inline]
     pub const fn from_raw(val: i32) -> Self {
         Value(val)
     }
+
+    /// Turns into a i32
     #[inline]
     pub const fn raw(&self) -> i32 {
         self.0
     }
+
+    /// Gets the value from the perspective of Red
     #[inline]
     pub const fn abs(self) -> Self {
         Value(self.0.abs())

@@ -46,16 +46,20 @@ impl Bitboard {
         Self(0)
     }
 
+    /// Make a bitboard directly from a raw `u128` value.
     #[inline]
     pub const fn from_raw(bitboard: u128) -> Self {
         Self(bitboard)
     }
 
+    /// Retrieves the raw `u128` value of the bitboard, useful for low-level
+    /// operations or debugging.
     #[inline]
     pub const fn raw(&self) -> u128 {
         self.0
     }
 
+    /// Checks if the bitboard is completely empty (no active squares).
     #[inline]
     pub const fn is_empty(&self) -> bool {
         self.0 == 0
@@ -100,14 +104,15 @@ impl Bitboard {
         }
     }
 
-    /// A const-compatible bitwise OR operator for building compile-time static
-    /// lookup tables.
+    /// A const-compatible bitwise OR operator for building compile-time
+    /// constants lookup tables.
     #[inline]
     pub const fn const_or(&self, b: Self) -> Self {
         Self(self.0 | b.0)
     }
 
-    /// A const-compatible bitwise AND operator for compile-time filtering.
+    /// A const-compatible bitwise AND operator for building compile-time
+    /// constants
     #[inline]
     pub const fn const_and(&self, b: Self) -> Self {
         Self(self.0 & b.0)

@@ -168,6 +168,7 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
     });
 }
 
+/// Starts a search from the current position
 pub fn search(
     mut pos: Position,
     params: GoParameters,
@@ -323,7 +324,7 @@ pub fn search(
                 None
             };
 
-            let uci_score = if let Some(mate_plies) = best_score.ply_to_mate() {
+            let uci_score = if let Some(mate_plies) = best_score.ply_to_mate_or_mated() {
                 let mate_moves = mate_plies.div_ceil(2);
                 let sign: i32 = if best_score.raw() > 0 { 1 } else { -1 };
                 UciScoreBound {

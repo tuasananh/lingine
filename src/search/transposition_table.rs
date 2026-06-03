@@ -37,7 +37,7 @@ pub enum TranspositionTableFlag {
 
 /// Represents an entry inside the Transposition Table.
 #[derive(Clone, Debug, Default)]
-pub struct TranspositionTableEntry {
+struct TranspositionTableEntry {
     /// Zobrist board hash key.
     pub key: TranspositionTableKey,
     /// The evaluation score (may be relative to mate).
@@ -171,12 +171,6 @@ impl TranspositionTable {
         key: TranspositionTableKey,
         ply: u8,
         value: TranspositionTableEntryValue,
-        // depth: u8,
-        // ply: u8,
-        // score: Value,
-        // flag: TranspositionTableFlag,
-        // best_move: Move,
-        // age: u8,
     ) {
         if self.table.is_empty() {
             return;

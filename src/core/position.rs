@@ -179,11 +179,13 @@ impl Position {
         pos
     }
 
+    /// Get the Zobrish Hash of the current position
     #[inline]
     pub fn zobrist_hash(&self) -> u64 {
         self.zobrist_hash
     }
 
+    /// Get the on-the-fly calculated material score
     #[inline]
     pub fn material_score(&self) -> Value {
         self.history
@@ -192,6 +194,9 @@ impl Position {
             .unwrap_or(Value::ZERO)
     }
 
+    /// Get the on-the-fly calculated Piece Square Table score
+    ///
+    /// Find out more: https://www.chessprogramming.org/Piece-Square_Tables
     #[inline]
     pub fn piece_square_table_score(&self) -> Value {
         self.history
@@ -224,26 +229,33 @@ impl Position {
         (material_score, piece_square_table_score)
     }
 
+    /// Get the current side to make a move
     #[inline]
     pub fn side_to_move(&self) -> Color {
         self.side_to_move
     }
 
+    /// Get the piece currently at [`square`]
     #[inline]
     pub fn piece_at(&self, square: Square) -> Piece {
         self.board[square as usize]
     }
 
+    /// Get the number of [`piece`] currently in the board
     #[inline]
     pub fn piece_count(&self, piece: Piece) -> u8 {
         self.piece_count[piece as usize]
     }
 
+    /// Get the bitboard of the [`piece_type`], which represents the pieces of
+    /// that type currently on the board
     #[inline]
-    pub fn bitboard_by_type(&self, pt: PieceType) -> Bitboard {
-        self.bitboard_by_type[pt as usize]
+    pub fn bitboard_by_type(&self, piece_type: PieceType) -> Bitboard {
+        self.bitboard_by_type[piece_type as usize]
     }
 
+    /// Get the bitboard of the side [`color`], which represents the pieces
+    /// owned by [`color`] currently on the board
     #[inline]
     pub fn bitboard_by_color(&self, color: Color) -> Bitboard {
         self.bitboard_by_color[color as usize]
@@ -252,6 +264,7 @@ impl Position {
     /// Safely introduces a piece onto a board square, updating the type/color
     /// bitboards, King Palace trackers, and XORing its random signature
     /// into the Zobrist hash.
+    #[inline]
     pub fn put_piece(&mut self, piece: Piece, square: Square) {
         self.board[square as usize] = piece;
         if piece != Piece::None {
@@ -271,6 +284,7 @@ impl Position {
 
     /// Removes a piece from a board square, cleaning up placement bitboards,
     /// Zobrist position signatures, and returning the removed piece.
+    #[inline]
     pub fn remove_piece(&mut self, square: Square) -> Piece {
         let piece = self.board[square as usize];
         if piece != Piece::None {
@@ -287,6 +301,7 @@ impl Position {
 
     /// Maps standard algebraic piece FEN notation characters to their Piece
     /// enums.
+    #[inline]
     pub fn piece_from_char(c: char) -> Option<Piece> {
         match c {
             'R' => Some(Piece::WhiteRook),
@@ -420,6 +435,7 @@ impl Position {
 
     /// Plays a move on the board, saving prior ply parameter states onto the
     /// stack to support fast undo restores, and toggles active side.
+    #[inline]
     pub fn do_move(&mut self, m: Move) {
         let from = m.square_from();
         let to = m.square_to();
@@ -507,6 +523,7 @@ impl Position {
 
     /// Restores the position to the exact state before the last move was
     /// played, popping details off the stack and re-toggling side to move.
+    #[inline]
     pub fn undo_move(&mut self, m: Move) {
         let from = m.square_from();
         let to = m.square_to();
@@ -525,11 +542,13 @@ impl Position {
         self.game_ply -= 1;
     }
 
+    /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
         self.board[square as usize] == Piece::None
     }
 
+    /// Get the square where the king of side [`color`] is currently at
     #[inline]
     pub fn king_square(&self, color: Color) -> Square {
         self.king_squares[color as usize]
@@ -750,6 +769,8 @@ impl Position {
         self.is_square_attacked(self.king_square(color), color.opposite())
     }
 
+    /// Finds the last piece that was captured, or None if last move is not a
+    /// capture move
     #[inline]
     pub fn last_captured_piece(&self) -> Piece {
         self.history
@@ -782,6 +803,7 @@ impl Position {
             .is_empty()
     }
 
+    /// Checks whether a [`square`] is currently being attacked by [`attacker`]
     #[inline]
     pub fn is_square_attacked(&self, square: Square, attacker: Color) -> bool {
         let occupied = self.bitboard_by_color[Color::White as usize]
@@ -789,6 +811,8 @@ impl Position {
         !self.checkers_to(square, occupied, attacker).is_empty()
     }
 
+    /// Checks whether a [`square`] is currently being attacked by [`attacker`] after doing
+    /// a move
     #[inline]
     pub fn is_square_attacked_after_move(
         &self,

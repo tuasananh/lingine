@@ -244,6 +244,7 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
         return;
     }
 
+    // Filter legal moves depending on the generation type
     let mut write_idx = 0;
     for read_idx in 0..moves.len() {
         let m = moves[read_idx];
