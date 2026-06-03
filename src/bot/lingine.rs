@@ -12,22 +12,16 @@
 //!    to first-available legal move in case of emergency search errors or hash
 //!    collisions.
 
-use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
-use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
 
-use crate::core::{
-    Color, File, MAX_DEPTH, MAX_PLY, Move, MoveGenType, MoveList, Position, Rank, Square, Value,
-    generate_moves,
-};
-use crate::search::{SearchContext, SearchExtension, SearchWindow, TranspositionTable, negamax};
+use crate::core::{File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves};
+use crate::search::{TranspositionTable, search};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
-    UciId, UciInfo, UciOption, UciScore, UciScoreBound,
+    UciId, UciInfo, UciOption,
 };
-use crate::value;
 
 /// A real, functional [`Engine`] implementation mapping to our search and
 /// evaluation.
@@ -54,45 +48,6 @@ impl Lingine {
     /// Creates a new EngineBot instance.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Determines the time limit budget for a given search color/increments.
-    fn calculate_search_time(&self, params: &GoParameters, side: Color) -> Option<Duration> {
-        if let Some(movetime) = params.movetime {
-            return Some(movetime.saturating_sub(Duration::from_millis(10)));
-        }
-
-        let (time_left, inc) = match side {
-            Color::White => (params.wtime, params.winc),
-            Color::Black => (params.btime, params.binc),
-        };
-
-        if let Some(time) = time_left {
-            let inc_val = inc.unwrap_or(Duration::ZERO);
-
-            // Determine divisor based on movestogo, default to 20
-            let divisor = if let Some(movestogo) = params.movestogo {
-                movestogo.get() as u64
-            } else {
-                20
-            };
-
-            // Basic allocation: time_left / divisor + inc / 2
-            let allocated = time / divisor as u32 + inc_val / 2;
-
-            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is
-            // smaller, to account for process/communication latency.
-            let buffer = Duration::from_millis(50).min(time / 10);
-            let limit = time.saturating_sub(buffer);
-
-            // Ensure we allocate at least 10ms (or the remaining limit if it's even
-            // smaller)
-            let min_time = Duration::from_millis(10).min(limit);
-
-            Some(allocated.min(limit).max(min_time))
-        } else {
-            None
-        }
     }
 }
 
@@ -197,204 +152,19 @@ impl Engine for Lingine {
     }
 
     fn go(&mut self, params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove> {
-        let mut pos = self.position.clone();
-        let start_time = Instant::now();
-        let mut nodes = 0u64;
-
-        let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as u8;
-        let time_limit = self.calculate_search_time(&params, pos.side_to_move());
-
         // Increment the age generation at the start of a search session
         self.age = self.age.wrapping_add(1);
 
-        let mut best_move = Move::null();
-        let mut last_depth_score = -Value::INFINITY;
-
-        let mut killers = [[Move::null(); 2]; MAX_PLY];
-        let mut history_table = [[[0; 90]; 90]; 2];
-
-        for depth in 1..=max_depth {
-            if params.stop.load(Ordering::Relaxed) {
-                break;
-            }
-
-            // Check if we have spent >50% of the allowed time to avoid timing out in next
-            // ply
-            if let Some(limit) = time_limit
-                && start_time.elapsed() > limit / 2
-            {
-                break;
-            }
-
-            let mut moves = MoveList::new();
-            generate_moves(&pos, MoveGenType::Legal, &mut moves);
-
-            if moves.is_empty() {
-                break;
-            }
-
-            // Sort root moves to maximize alpha-beta pruning (captures first)
-            moves.sort_by_key(|mv| pos.is_empty(mv.square_to()));
-
-            let mut best_score;
-            let mut depth_best_move;
-
-            // Aspiration Windows Setup
-            let mut alpha = -Value::INFINITY;
-            let mut beta = Value::INFINITY;
-            let mut delta: Value = value!(25); // aspiration window size in centipawns
-
-            if depth >= 5 && !last_depth_score.abs().is_winning() {
-                alpha = last_depth_score - delta;
-                beta = last_depth_score + delta;
-            }
-
-            loop {
-                let search_alpha = alpha.max(-Value::INFINITY);
-                let search_beta = beta.min(Value::INFINITY);
-
-                let mut ctx = SearchContext {
-                    stop: &params.stop,
-                    nodes: &mut nodes,
-                    start_time,
-                    time_limit,
-                    transposition_table: &mut self.transposition_table,
-                    age: self.age,
-                    killers: &mut killers,
-                    history_table: &mut history_table,
-                };
-
-                let mut curr_alpha = search_alpha;
-                best_score = -Value::INFINITY;
-                depth_best_move = Move::null();
-
-                for m in moves.iter().copied() {
-                    if params.stop.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    pos.do_move(m);
-                    let score = -negamax(
-                        &mut pos,
-                        depth - 1,
-                        1,
-                        SearchWindow::new(-search_beta, -curr_alpha),
-                        SearchExtension::default(),
-                        &mut ctx,
-                    );
-                    pos.undo_move(m);
-
-                    if params.stop.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    if score > best_score {
-                        best_score = score;
-                        depth_best_move = m;
-                    }
-                    if score > curr_alpha {
-                        curr_alpha = score;
-                    }
-                }
-
-                if params.stop.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                // If window was already full (-INFINITY, INFINITY), we stop, no re-search.
-                if search_alpha == -Value::INFINITY && search_beta == Value::INFINITY {
-                    break;
-                }
-
-                // Check fail-low / fail-high
-                if best_score <= search_alpha {
-                    // Fail low: score worse or equal to alpha. Widen alpha.
-                    alpha -= delta;
-                    beta = best_score + delta;
-                    delta *= 2;
-                } else if best_score >= search_beta {
-                    // Fail high: score better or equal to beta. Widen beta.
-                    beta += delta;
-                    alpha = best_score - delta;
-                    delta *= 2;
-                } else {
-                    // Stable score inside window!
-                    break;
-                }
-            }
-
-            if params.stop.load(Ordering::Relaxed) {
-                break;
-            }
-
-            last_depth_score = best_score;
-
-            // If the search was not aborted, save search outcomes and print UCI progress
-            if !params.stop.load(Ordering::Relaxed) {
-                if !depth_best_move.is_null() {
-                    best_move = depth_best_move;
-                }
-
-                let pv_vec = if best_move.is_null() {
-                    None
-                } else {
-                    Some(vec![best_move.to_uci_string()])
-                };
-                let time_elapsed = start_time.elapsed();
-                let nps = if time_elapsed.as_secs_f64() > 0.001 {
-                    Some((nodes as f64 / time_elapsed.as_secs_f64()) as u64)
-                } else {
-                    None
-                };
-
-                let uci_score = if let Some(mate_plies) = best_score.ply_to_mate() {
-                    let mate_moves = mate_plies.div_ceil(2);
-                    let sign: i32 = if best_score.raw() > 0 { 1 } else { -1 };
-                    UciScoreBound {
-                        score: UciScore::Mate(sign * mate_moves as i32),
-                        bound: None,
-                    }
-                } else {
-                    UciScoreBound {
-                        score: UciScore::Centipawns(best_score),
-                        bound: None,
-                    }
-                };
-
-                let info = UciInfo {
-                    depth: Some(depth as u32),
-                    nodes: Some(nodes),
-                    time: Some(time_elapsed),
-                    nps,
-                    score: Some(uci_score),
-                    pv: pv_vec,
-                    ..UciInfo::new()
-                };
-
-                tx.send(info).ok();
-            }
-        }
-
-        // Safety check: validate best_move is legal in the current position.
-        // This guards against rare TT corruption, hash collisions, or search bugs
-        // that could otherwise cause the engine to output an illegal move.
-        let mut legal_moves = MoveList::new();
-        generate_moves(&self.position, MoveGenType::Legal, &mut legal_moves);
-
-        let best_move_str = if best_move.is_null() || !legal_moves.contains(&best_move) {
-            if !best_move.is_null() {
-                log::warn!(
-                    "bestmove {} is not legal in current position — falling back to first legal move",
-                    best_move.to_uci_string()
-                );
-            }
-            // Pick first legal move as fallback
-            legal_moves.first().unwrap_or(&Move::null()).to_uci_string()
-        } else {
-            best_move.to_uci_string()
-        };
+        let (best_move, _score, _nodes) = search(
+            self.position.clone(),
+            params,
+            &mut self.transposition_table,
+            self.age,
+            tx,
+        );
 
         Ok(BestMove {
-            mv: best_move_str,
+            mv: best_move.to_uci_string(),
             ponder: None,
         })
     }
