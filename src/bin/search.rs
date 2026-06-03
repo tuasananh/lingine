@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let start = Instant::now();
-    let (best_move, score, nodes) = search(pos, params, &mut transposition_table, 1, tx);
+    let (best_move, score, nodes) = search(pos, params, &mut transposition_table, 1, tx, None);
     let duration = start.elapsed();
 
     let nps = if duration.as_secs_f64() > 0.0001 {

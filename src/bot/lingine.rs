@@ -13,10 +13,13 @@
 //!    collisions.
 
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 
-use crate::core::{File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves};
+use crate::core::{
+    Color, File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
+};
 use crate::search::{TranspositionTable, search};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
@@ -48,6 +51,44 @@ impl Lingine {
     /// Creates a new EngineBot instance.
     pub fn new() -> Self {
         Self::default()
+    }
+    /// Determines the time limit budget for a given search color/increments.
+    fn calculate_search_time(params: &GoParameters, side: Color) -> Option<Duration> {
+        if let Some(movetime) = params.movetime {
+            return Some(movetime.saturating_sub(Duration::from_millis(10)));
+        }
+
+        let (time_left, inc) = match side {
+            Color::White => (params.wtime, params.winc),
+            Color::Black => (params.btime, params.binc),
+        };
+
+        if let Some(time) = time_left {
+            let inc_val = inc.unwrap_or(Duration::ZERO);
+
+            // Determine divisor based on movestogo, default to 20
+            let divisor = if let Some(movestogo) = params.movestogo {
+                movestogo.get() as u64
+            } else {
+                20
+            };
+
+            // Basic allocation: time_left / divisor + inc / 2
+            let allocated = time / divisor as u32 + inc_val / 2;
+
+            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is
+            // smaller, to account for process/communication latency.
+            let buffer = Duration::from_millis(50).min(time / 10);
+            let limit = time.saturating_sub(buffer);
+
+            // Ensure we allocate at least 10ms (or the remaining limit if it's even
+            // smaller)
+            let min_time = Duration::from_millis(10).min(limit);
+
+            Some(allocated.min(limit).max(min_time))
+        } else {
+            None
+        }
     }
 }
 
@@ -155,12 +196,15 @@ impl Engine for Lingine {
         // Increment the age generation at the start of a search session
         self.age = self.age.wrapping_add(1);
 
+        let time_limit = Self::calculate_search_time(&params, self.position.side_to_move());
+
         let (best_move, _score, _nodes) = search(
             self.position.clone(),
             params,
             &mut self.transposition_table,
             self.age,
             tx,
+            time_limit,
         );
 
         Ok(BestMove {

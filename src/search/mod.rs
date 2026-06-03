@@ -45,7 +45,7 @@ pub use transposition_table::*;
 
 /// Represents the alpha-beta search window.
 #[derive(Copy, Clone, Debug)]
-pub struct SearchWindow {
+struct SearchWindow {
     pub alpha: Value,
     pub beta: Value,
 }
@@ -69,7 +69,7 @@ impl SearchWindow {
 /// Tracks search extension and move exclusion parameters for the current
 /// branch.
 #[derive(Copy, Clone, Debug)]
-pub struct SearchExtension {
+struct SearchExtension {
     pub excluded_move: Move,
     pub extensions: u8,
 }
@@ -94,7 +94,7 @@ impl SearchExtension {
 }
 
 /// Shared context parameters passed down the recursive search stack.
-pub struct SearchContext<'a> {
+struct SearchContext<'a> {
     /// Atomic flag set by Thread A to interrupt the search loop.
     pub stop: &'a Arc<AtomicBool>,
     /// Tracks total nodes searched during this `go` invocation.
@@ -168,57 +168,18 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
     });
 }
 
-/// Determines the time limit budget for a given search color/increments.
-fn calculate_search_time(params: &GoParameters, side: Color) -> Option<Duration> {
-    if let Some(movetime) = params.movetime {
-        return Some(movetime.saturating_sub(Duration::from_millis(10)));
-    }
-
-    let (time_left, inc) = match side {
-        Color::White => (params.wtime, params.winc),
-        Color::Black => (params.btime, params.binc),
-    };
-
-    if let Some(time) = time_left {
-        let inc_val = inc.unwrap_or(Duration::ZERO);
-
-        // Determine divisor based on movestogo, default to 20
-        let divisor = if let Some(movestogo) = params.movestogo {
-            movestogo.get() as u64
-        } else {
-            20
-        };
-
-        // Basic allocation: time_left / divisor + inc / 2
-        let allocated = time / divisor as u32 + inc_val / 2;
-
-        // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is
-        // smaller, to account for process/communication latency.
-        let buffer = Duration::from_millis(50).min(time / 10);
-        let limit = time.saturating_sub(buffer);
-
-        // Ensure we allocate at least 10ms (or the remaining limit if it's even
-        // smaller)
-        let min_time = Duration::from_millis(10).min(limit);
-
-        Some(allocated.min(limit).max(min_time))
-    } else {
-        None
-    }
-}
-
 pub fn search(
     mut pos: Position,
     params: GoParameters,
     transposition_table: &mut TranspositionTable,
     age: u8,
     tx: Sender<UciInfo>,
+    time_limit: Option<Duration>,
 ) -> (Move, Value, u64) {
     let start_time = Instant::now();
     let mut nodes = 0u64;
 
     let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as u8;
-    let time_limit = calculate_search_time(&params, pos.side_to_move());
 
     // Increment the age generation at the start of a search session
     // self.age = self.age.wrapping_add(1);
