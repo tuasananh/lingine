@@ -196,6 +196,8 @@ fn extract_pv(
                 break;
             }
             let m = entry.best_move;
+            // Here we do not need to check for null move
+            // since we know that a non-empty TT entry must have a valid move.
             pv.push(m);
             current_pos.do_move(m);
 
