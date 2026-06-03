@@ -811,8 +811,8 @@ impl Position {
         !self.checkers_to(square, occupied, attacker).is_empty()
     }
 
-    /// Checks whether a [`square`] is currently being attacked by [`attacker`] after doing
-    /// a move
+    /// Checks whether a [`square`] is currently being attacked by [`attacker`]
+    /// after doing a move
     #[inline]
     pub fn is_square_attacked_after_move(
         &self,

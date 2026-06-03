@@ -70,7 +70,8 @@ impl Value {
         self.0 <= Self::MATED_IN_MAX_PLY.0
     }
 
-    /// Get a score that is ply independent, useful for [`crate::search::TranspositionTable::store`]
+    /// Get a score that is ply independent, useful for
+    /// [`crate::search::TranspositionTable::store`]
     #[inline]
     pub const fn ply_independent(&self, ply: u8) -> Self {
         if self.is_winning() {
@@ -82,7 +83,8 @@ impl Value {
         }
     }
 
-    /// Get a score that is ply independent, useful for [`crate::search::TranspositionTable::probe`]
+    /// Get a score that is ply independent, useful for
+    /// [`crate::search::TranspositionTable::probe`]
     #[inline]
     pub const fn ply_dependent(self, ply: u8) -> Self {
         if self.is_winning() {
