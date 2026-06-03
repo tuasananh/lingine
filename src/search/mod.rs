@@ -134,28 +134,28 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
         // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
         // prioritized at the very top.
         let move_score = if m == tt_move {
-            20000 // Prioritize TT best move above all else
+            2_000_000_000 // Prioritize TT best move above all else
         } else {
             let to_piece = pos.piece_at(m.square_to());
             if to_piece != Piece::None {
                 // Capture: 10000 + victim_rank * 100 - attacker_rank
                 let victim = get_piece_value_rank(to_piece);
                 let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
-                10000 + victim * 100 - attacker
+                1_000_000_000 + victim * 10_000_000 - attacker * 100_000
             } else {
                 // Quiet move
                 let ply_idx = ply as usize;
                 // We might not need to check for ply_idx out of bounds since ply should not
                 // exceed MAX_PLY in normal circumstances
                 if m == ctx.killers[ply_idx][0] {
-                    9000
+                    900_000_000
                 } else if m == ctx.killers[ply_idx][1] {
-                    8000
+                    800_000_000
                 } else {
                     let side_idx = pos.side_to_move() as usize;
                     let from_idx = m.square_from() as usize;
                     let to_idx = m.square_to() as usize;
-                    // History score capped at 7000
+                    // History score should not be more than 800_000_000
                     ctx.history_table[side_idx][from_idx][to_idx]
                 }
             }
@@ -430,10 +430,7 @@ pub fn negamax(
                 let side_idx = pos.side_to_move() as usize;
                 let from_idx = m.square_from() as usize;
                 let to_idx = m.square_to() as usize;
-                ctx.history_table[side_idx][from_idx][to_idx] = (ctx.history_table[side_idx]
-                    [from_idx][to_idx]
-                    + (depth as i32) * (depth as i32))
-                    .min(7000);
+                ctx.history_table[side_idx][from_idx][to_idx] += (depth as i32) * (depth as i32);
             }
             break; // Beta cutoff
         }
