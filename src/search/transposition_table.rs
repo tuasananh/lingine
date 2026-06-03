@@ -198,6 +198,21 @@ impl TranspositionTable {
             };
         }
     }
+
+    /// Calculates the table's fullness in per-mille (0–1000).
+    pub fn hashfull(&self) -> u32 {
+        if self.table.is_empty() {
+            return 0;
+        }
+        let sample_size = self.table.len().min(1000);
+        let mut filled = 0;
+        for i in 0..sample_size {
+            if self.table[i].flag() != TranspositionTableFlag::Empty {
+                filled += 1;
+            }
+        }
+        (filled * 1000 / sample_size) as u32
+    }
 }
 
 #[cfg(test)]
@@ -317,5 +332,28 @@ mod tests {
         let result = tt.probe(100, ply).unwrap();
         // The stored mate score should be correctly adjusted for the ply when probed.
         assert_eq!(result.score, mate_score);
+    }
+
+    #[test]
+    fn test_transposition_table_hashfull() {
+        let mut tt = TranspositionTable::new(1);
+        assert_eq!(tt.hashfull(), 0);
+
+        // Store one entry
+        tt.store(
+            42,
+            0,
+            tt_entry_value!(
+                value!(100),
+                TranspositionTableFlag::Exact,
+                Move::null(),
+                5,
+                1
+            ),
+        );
+
+        let h = tt.hashfull();
+        assert!(h > 0);
+        assert!(h <= 1000);
     }
 }
