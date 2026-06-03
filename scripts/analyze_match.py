@@ -29,17 +29,42 @@ from datetime import datetime
 
 # ─── Terminal Colors ──────────────────────────────────────────────────────────
 
+
 def color(text, code):
     return f"\033[{code}m{text}\033[0m"
 
-def bold(text):    return color(text, "1")
-def green(text):   return color(text, "32")
-def red(text):     return color(text, "31")
-def yellow(text):  return color(text, "33")
-def blue(text):    return color(text, "34")
-def cyan(text):    return color(text, "36")
-def gray(text):    return color(text, "90")
-def white_bold(text): return color(text, "1;37")
+
+def bold(text):
+    return color(text, "1")
+
+
+def green(text):
+    return color(text, "32")
+
+
+def red(text):
+    return color(text, "31")
+
+
+def yellow(text):
+    return color(text, "33")
+
+
+def blue(text):
+    return color(text, "34")
+
+
+def cyan(text):
+    return color(text, "36")
+
+
+def gray(text):
+    return color(text, "90")
+
+
+def white_bold(text):
+    return color(text, "1;37")
+
 
 def print_header(title):
     print("=" * 85)
@@ -49,6 +74,7 @@ def print_header(title):
 
 # ─── PGN Parser ──────────────────────────────────────────────────────────────
 
+
 def parse_pgn(pgn_path):
     """Parse a PGN file and return a list of game dicts."""
     if not os.path.exists(pgn_path):
@@ -57,7 +83,7 @@ def parse_pgn(pgn_path):
     with open(pgn_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    games_raw = re.split(r'\[Event\s+', content)
+    games_raw = re.split(r"\[Event\s+", content)
     results = []
 
     for game in games_raw:
@@ -76,20 +102,23 @@ def parse_pgn(pgn_path):
 
         if white_match and black_match and result_match:
             ply = int(plycount_match.group(1)) if plycount_match else None
-            results.append({
-                "white": white_match.group(1),
-                "black": black_match.group(1),
-                "result": result_match.group(1),
-                "round": round_match.group(1) if round_match else "?",
-                "date": date_match.group(1) if date_match else "?",
-                "tc": tc_match.group(1) if tc_match else "unknown",
-                "plycount": ply,
-                "duration": duration_match.group(1) if duration_match else None,
-            })
+            results.append(
+                {
+                    "white": white_match.group(1),
+                    "black": black_match.group(1),
+                    "result": result_match.group(1),
+                    "round": round_match.group(1) if round_match else "?",
+                    "date": date_match.group(1) if date_match else "?",
+                    "tc": tc_match.group(1) if tc_match else "unknown",
+                    "plycount": ply,
+                    "duration": duration_match.group(1) if duration_match else None,
+                }
+            )
     return results
 
 
 # ─── Engine detection ─────────────────────────────────────────────────────────
+
 
 def detect_engines(games):
     """Detect the two engine names from the PGN."""
@@ -99,12 +128,17 @@ def detect_engines(games):
         players.add(g["black"])
 
     if len(players) != 2:
-        print(yellow(f"Warning: Expected exactly 2 players, found {len(players)}: {players}"))
+        print(
+            yellow(
+                f"Warning: Expected exactly 2 players, found {len(players)}: {players}"
+            )
+        )
 
     return sorted(players)
 
 
 # ─── Match Statistics ─────────────────────────────────────────────────────────
+
 
 def compute_match_stats(games, engine1, engine2):
     """Compute comprehensive head-to-head statistics for engine1 vs engine2."""
@@ -172,12 +206,14 @@ def compute_match_stats(games, engine1, engine2):
         else:
             outcome = "draw"  # Treat unknown as draw
 
-        stats["game_results"].append({
-            "round": game["round"],
-            "e1_color": e1_color,
-            "outcome": outcome,
-            "plycount": game["plycount"],
-        })
+        stats["game_results"].append(
+            {
+                "round": game["round"],
+                "e1_color": e1_color,
+                "outcome": outcome,
+                "plycount": game["plycount"],
+            }
+        )
 
         if outcome == "win":
             stats["e1_wins"] += 1
@@ -238,9 +274,9 @@ def compute_elo_diff(wins, draws, losses):
     # where mu = score_pct
     if n > 1:
         mu = score_pct
-        var_score = (wins * (1.0 - mu)**2
-                     + draws * (0.5 - mu)**2
-                     + losses * (0.0 - mu)**2) / (n - 1)
+        var_score = (
+            wins * (1.0 - mu) ** 2 + draws * (0.5 - mu) ** 2 + losses * (0.0 - mu) ** 2
+        ) / (n - 1)
         se_score = math.sqrt(var_score / n)
 
         # Convert SE in score-space to SE in Elo-space via derivative using adjusted score to prevent division by zero
@@ -277,21 +313,22 @@ def parse_duration_to_seconds(dur_str):
 
 # ─── Terminal Report ──────────────────────────────────────────────────────────
 
+
 def print_console_report(stats, elo_diff, se_elo, ci_low, ci_high, los):
     """Print a detailed console report."""
     e1 = stats["engine1"]
     e2 = stats["engine2"]
     n = stats["total_games"]
 
-    w, d, l = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
-    pts = w + 0.5 * d
+    win, draw, loss = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
+    pts = win + 0.5 * draw
     score_pct = (pts / n * 100) if n > 0 else 0
 
     # Summary header
     print(f"\n{bold('MATCH')}: {green(e1)} vs {red(e2)}")
     print(f"Total Games: {bold(str(n))}")
     if stats["game_results"]:
-        tc = None
+        _tc = None
         # Try to find TC from first game
         for gr in stats["game_results"]:
             break
@@ -302,12 +339,14 @@ def print_console_report(stats, elo_diff, se_elo, ci_low, ci_high, los):
     print(f"  {bold('ENGINE COMPARISON (from ' + e1 + ' perspective)')}")
     print(f"{'':─<85}")
     print(f"  {'Metric':<30} {e1:<20} {e2:<20}")
-    print(f"  {'-'*70}")
-    print(f"  {'Wins':<30} {green(str(w)):<29} {green(str(l)):<20}")
-    print(f"  {'Draws':<30} {yellow(str(d)):<29} {yellow(str(d)):<20}")
-    print(f"  {'Losses':<30} {red(str(l)):<29} {red(str(w)):<20}")
+    print(f"  {'-' * 70}")
+    print(f"  {'Wins':<30} {green(str(win)):<29} {green(str(loss)):<20}")
+    print(f"  {'Draws':<30} {yellow(str(draw)):<29} {yellow(str(draw)):<20}")
+    print(f"  {'Losses':<30} {red(str(loss)):<29} {red(str(win)):<20}")
     print(f"  {'Points':<30} {str(pts):<20} {str(n - pts):<20}")
-    print(f"  {'Score %':<30} {f'{score_pct:.1f}%':<20} {f'{100 - score_pct:.1f}%':<20}")
+    print(
+        f"  {'Score %':<30} {f'{score_pct:.1f}%':<20} {f'{100 - score_pct:.1f}%':<20}"
+    )
     print()
 
     # Elo difference
@@ -325,16 +364,18 @@ def print_console_report(stats, elo_diff, se_elo, ci_low, ci_high, los):
     print()
 
     # Draw rate
-    draw_rate = (d / n * 100) if n > 0 else 0
-    print(f"  Draw Rate:       {yellow(f'{draw_rate:.1f}%')} ({d}/{n})")
+    draw_rate = (draw / n * 100) if n > 0 else 0
+    print(f"  Draw Rate:       {yellow(f'{draw_rate:.1f}%')} ({draw}/{n})")
     print()
 
     # Color performance
     print(f"{'':─<85}")
     print(f"  {bold('COLOR PERFORMANCE FOR ' + e1.upper())}")
     print(f"{'':─<85}")
-    print(f"  {'Color':<15} {'Games':<8} {'Wins':<8} {'Draws':<8} {'Losses':<8} {'Score %':<10}")
-    print(f"  {'-'*57}")
+    print(
+        f"  {'Color':<15} {'Games':<8} {'Wins':<8} {'Draws':<8} {'Losses':<8} {'Score %':<10}"
+    )
+    print(f"  {'-' * 57}")
 
     rg = stats["e1_as_red_games"]
     rw = stats["e1_as_red_wins"]
@@ -418,22 +459,28 @@ def print_console_report(stats, elo_diff, se_elo, ci_low, ci_high, los):
     print(f"  {bold('COPY-PASTEABLE MARKDOWN TABLE')}")
     print(f"{'':═<85}")
     print(f"| Metric | {e1} | {e2} |")
-    print(f"| :--- | :---: | :---: |")
-    print(f"| **Wins** | {w} | {l} |")
-    print(f"| **Draws** | {d} | {d} |")
-    print(f"| **Losses** | {l} | {w} |")
-    print(f"| **Score** | {pts}/{n} ({score_pct:.1f}%) | {n - pts}/{n} ({100 - score_pct:.1f}%) |")
+    print("| :--- | :---: | :---: |")
+    print(f"| **Wins** | {win} | {loss} |")
+    print(f"| **Draws** | {draw} | {draw} |")
+    print(f"| **Losses** | {loss} | {win} |")
+    print(
+        f"| **Score** | {pts}/{n} ({score_pct:.1f}%) | {n - pts}/{n} ({100 - score_pct:.1f}%) |"
+    )
     elo_str = f"{elo_sign}{elo_diff:.0f}"
     ci_str = f"[{ci_low:.0f}, {ci_high:.0f}]" if ci_low is not None else "N/A"
     los_str = f"{los * 100:.1f}%" if los is not None else "N/A"
-    print(f"| **Elo Diff** | {elo_str} | {'+' if elo_diff <= 0 else ''}{-elo_diff:.0f} |")
+    print(
+        f"| **Elo Diff** | {elo_str} | {'+' if elo_diff <= 0 else ''}{-elo_diff:.0f} |"
+    )
     print(f"| **95% CI** | {ci_str} | — |")
     print(f"| **LOS** | {los_str} | — |")
     print(f"| **Draw Rate** | {draw_rate:.1f}% | — |")
     print(f"{'':═<85}")
     print()
 
+
 # ─── Markdown Report ──────────────────────────────────────────────────────────
+
 
 def generate_markdown_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los):
     """Generate a clean, beautiful Markdown report for the match."""
@@ -441,10 +488,10 @@ def generate_markdown_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high,
     e1 = stats["engine1"]
     e2 = stats["engine2"]
     n = stats["total_games"]
-    w, d, l = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
-    pts = w + 0.5 * d
+    win, draw, loss = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
+    pts = win + 0.5 * draw
     score_pct = (pts / n * 100) if n > 0 else 0
-    draw_rate = (d / n * 100) if n > 0 else 0
+    draw_rate = (draw / n * 100) if n > 0 else 0
 
     elo_sign = "+" if elo_diff >= 0 else ""
     elo_str = f"{elo_sign}{elo_diff:.1f}"
@@ -493,7 +540,7 @@ def generate_markdown_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high,
         med_ply = statistics.median(plies)
         min_ply = min(plies)
         max_ply = max(plies)
-        game_len_str = f"Average: {avg_ply:.1f} plies (≈ {avg_ply/2:.0f} moves), Median: {med_ply:.0f}, Range: {min_ply} - {max_ply} plies"
+        game_len_str = f"Average: {avg_ply:.1f} plies (≈ {avg_ply / 2:.0f} moves), Median: {med_ply:.0f}, Range: {min_ply} - {max_ply} plies"
 
     md_content = f"""# Match Report: {e1} vs {e2}
 
@@ -504,11 +551,11 @@ Total Games Played: **{n}**
 
 | Metric | {e1} | {e2} |
 | :--- | :---: | :---: |
-| **Wins** | {w} | {l} |
-| **Draws** | {d} | {d} |
-| **Losses** | {l} | {w} |
+| **Wins** | {win} | {loss} |
+| **Draws** | {draw} | {draw} |
+| **Losses** | {loss} | {win} |
 | **Points** | {pts} / {n} ({score_pct:.1f}%) | {n - pts} / {n} ({100 - score_pct:.1f}%) |
-| **Elo Diff** | **{elo_str}** | **{'-' if elo_diff >= 0 else '+'}{abs(elo_diff):.1f}** |
+| **Elo Diff** | **{elo_str}** | **{"-" if elo_diff >= 0 else "+"}{abs(elo_diff):.1f}** |
 | **Standard Error** | {se_str} | — |
 | **95% Confidence Interval** | {ci_str} | — |
 | **LOS (Likelihood of Superiority)** | {los_str} | — |
@@ -536,6 +583,7 @@ Total Games Played: **{n}**
 
 # ─── HTML Report ──────────────────────────────────────────────────────────────
 
+
 def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los):
     """Generate a premium responsive HTML dashboard for the match."""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -543,10 +591,10 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
     e1 = stats["engine1"]
     e2 = stats["engine2"]
     n = stats["total_games"]
-    w, d, l = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
-    pts = w + 0.5 * d
+    win, draw, loss = stats["e1_wins"], stats["e1_draws"], stats["e1_losses"]
+    pts = win + 0.5 * draw
     score_pct = (pts / n * 100) if n > 0 else 0
-    draw_rate = (d / n * 100) if n > 0 else 0
+    draw_rate = (draw / n * 100) if n > 0 else 0
     e2_pts = n - pts
     e2_score_pct = 100 - score_pct
 
@@ -589,24 +637,26 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
             game_dots += '<span class="dot dot-draw" title="Draw">●</span>'
 
     # Win rate bar chart segments
-    win_bar = (w / n * 100) if n > 0 else 0
-    draw_bar = (d / n * 100) if n > 0 else 0
-    loss_bar = (l / n * 100) if n > 0 else 0
+    win_bar = (win / n * 100) if n > 0 else 0
+    draw_bar = (draw / n * 100) if n > 0 else 0
+    loss_bar = (loss / n * 100) if n > 0 else 0
 
     # Elo difference color
     elo_color = "#10b981" if elo_diff >= 0 else "#ef4444"
-    los_color = "#10b981" if los_pct > 75 else ("#eab308" if los_pct > 50 else "#ef4444")
+    los_color = (
+        "#10b981" if los_pct > 75 else ("#eab308" if los_pct > 50 else "#ef4444")
+    )
 
     # Determine winner for highlight
-    if score_pct > 50:
-        winner_name = e1
-        winner_pct = score_pct
-    elif score_pct < 50:
-        winner_name = e2
-        winner_pct = e2_score_pct
-    else:
-        winner_name = "Tied"
-        winner_pct = 50.0
+    # if score_pct > 50:
+    #     winner_name = e1
+    #     winner_pct = score_pct
+    # elif score_pct < 50:
+    #     winner_name = e2
+    #     winner_pct = e2_score_pct
+    # else:
+    #     winner_name = "Tied"
+    #     winner_pct = 50.0
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1027,14 +1077,14 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
         <div class="card main-section">
             <h2 class="section-title">Result Distribution</h2>
             <div class="score-bar-container">
-                <div class="score-bar-win" style="width: {win_bar:.1f}%;">{w}W</div>
-                <div class="score-bar-draw" style="width: {draw_bar:.1f}%;">{d}D</div>
-                <div class="score-bar-loss" style="width: {loss_bar:.1f}%;">{l}L</div>
+                <div class="score-bar-win" style="width: {win_bar:.1f}%;">{win}W</div>
+                <div class="score-bar-draw" style="width: {draw_bar:.1f}%;">{draw}D</div>
+                <div class="score-bar-loss" style="width: {loss_bar:.1f}%;">{loss}L</div>
             </div>
             <div class="score-bar-labels">
-                <span style="color: var(--emerald);">{e1} wins: {w} ({win_bar:.1f}%)</span>
-                <span style="color: var(--amber);">Draws: {d} ({draw_rate:.1f}%)</span>
-                <span style="color: var(--rose);">{e2} wins: {l} ({loss_bar:.1f}%)</span>
+                <span style="color: var(--emerald);">{e1} wins: {win} ({win_bar:.1f}%)</span>
+                <span style="color: var(--amber);">Draws: {draw} ({draw_rate:.1f}%)</span>
+                <span style="color: var(--rose);">{e2} wins: {loss} ({loss_bar:.1f}%)</span>
             </div>
         </div>
 
@@ -1055,7 +1105,7 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
 
             <div class="card">
                 <div class="card-label">{e1} Score</div>
-                <div class="card-value" style="color: {'var(--emerald)' if score_pct > 50 else ('var(--rose)' if score_pct < 50 else 'var(--amber)')}; font-size: 2.5rem;">{score_pct:.1f}%</div>
+                <div class="card-value" style="color: {"var(--emerald)" if score_pct > 50 else ("var(--rose)" if score_pct < 50 else "var(--amber)")}; font-size: 2.5rem;">{score_pct:.1f}%</div>
                 <div class="card-subtext">{pts}/{n} points</div>
             </div>
         </div>
@@ -1076,18 +1126,18 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
                 <tbody>
                     <tr>
                         <td style="font-weight: 600;">Wins</td>
-                        <td style="color: var(--emerald); font-weight: 700;">{w}</td>
-                        <td style="color: var(--emerald); font-weight: 700;">{l}</td>
+                        <td style="color: var(--emerald); font-weight: 700;">{win}</td>
+                        <td style="color: var(--emerald); font-weight: 700;">{loss}</td>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Draws</td>
-                        <td style="color: var(--amber); font-weight: 700;">{d}</td>
-                        <td style="color: var(--amber); font-weight: 700;">{d}</td>
+                        <td style="color: var(--amber); font-weight: 700;">{draw}</td>
+                        <td style="color: var(--amber); font-weight: 700;">{draw}</td>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Losses</td>
-                        <td style="color: var(--rose); font-weight: 700;">{l}</td>
-                        <td style="color: var(--rose); font-weight: 700;">{w}</td>
+                        <td style="color: var(--rose); font-weight: 700;">{loss}</td>
+                        <td style="color: var(--rose); font-weight: 700;">{win}</td>
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Points</td>
@@ -1096,8 +1146,8 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
                     </tr>
                     <tr>
                         <td style="font-weight: 600;">Score %</td>
-                        <td style="font-weight: 700; color: {'var(--emerald)' if score_pct > 50 else 'var(--rose)'};">{score_pct:.1f}%</td>
-                        <td style="font-weight: 700; color: {'var(--emerald)' if e2_score_pct > 50 else 'var(--rose)'};">{e2_score_pct:.1f}%</td>
+                        <td style="font-weight: 700; color: {"var(--emerald)" if score_pct > 50 else "var(--rose)"};">{score_pct:.1f}%</td>
+                        <td style="font-weight: 700; color: {"var(--emerald)" if e2_score_pct > 50 else "var(--rose)"};">{e2_score_pct:.1f}%</td>
                     </tr>
                 </tbody>
             </table>
@@ -1203,6 +1253,7 @@ def generate_html_report(filepath, stats, elo_diff, se_elo, ci_low, ci_high, los
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Analyze a head-to-head match PGN between two engines."
@@ -1227,13 +1278,15 @@ def main():
         help="Name of engine 2 (default: auto-detect)",
     )
     parser.add_argument(
-        "-o", "--html",
+        "-o",
+        "--html",
         type=str,
         default=None,
         help="Output filepath for an HTML dashboard report",
     )
     parser.add_argument(
-        "-m", "--markdown",
+        "-m",
+        "--markdown",
         type=str,
         default=None,
         help="Output filepath for a clean Markdown report",
@@ -1315,7 +1368,9 @@ def main():
     # Generate HTML if requested
     if args.html:
         try:
-            generate_html_report(args.html, stats, elo_diff, se_elo, ci_low, ci_high, los)
+            generate_html_report(
+                args.html, stats, elo_diff, se_elo, ci_low, ci_high, los
+            )
             print(f"=> {green('HTML Report Generated')}: {bold(args.html)}")
         except Exception as e:
             print(red(f"Error generating HTML report: {e}"))
@@ -1323,7 +1378,9 @@ def main():
     # Generate Markdown if requested
     if args.markdown:
         try:
-            generate_markdown_report(args.markdown, stats, elo_diff, se_elo, ci_low, ci_high, los)
+            generate_markdown_report(
+                args.markdown, stats, elo_diff, se_elo, ci_low, ci_high, los
+            )
             print(f"=> {green('Markdown Report Generated')}: {bold(args.markdown)}")
         except Exception as e:
             print(red(f"Error generating Markdown report: {e}"))
