@@ -106,10 +106,10 @@ pub struct StateInfo {
     /// Whether each color [White, Black] was in check in this position state.
     pub in_check: [bool; Color::COUNT],
     /// Precalculated incremental material score (from White's perspective)
-    pub material_score: i32,
+    pub material_score: Value,
     /// Precalculated incremental piece-square table positional score (from
     /// White's perspective)
-    pub piece_square_table_score: i32,
+    pub piece_square_table_score: Value,
 }
 ```
 
@@ -194,10 +194,9 @@ let us = if IS_WHITE { Color::White } else { Color::Black };
 let us_pieces = pos.bitboard_by_color(us);
 let mut advisors = pos.bitboard_by_type(PieceType::Advisor) & us_pieces;
 while let Some(from_sq) = advisors.pop_lsb() {
-    let mut target_bb = Bitboard(ADVISOR_ATTACKS[from_sq as usize].0 & !us_pieces.0);
+    let mut target_bb = ADVISOR_ATTACKS[from_sq as usize] & !us_pieces;
     while let Some(to_sq) = target_bb.pop_lsb() {
-        moves[*count] = Move::new(from_sq, to_sq);
-        *count += 1;
+        moves.push(Move::new(from_sq, to_sq));
     }
 }
 ```

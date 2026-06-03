@@ -21,10 +21,10 @@
 | Threading                | Single-threaded first; Lazy SMP after search is stable                                                                                              |
 | Evaluation tuning        | Bootstrap from Eleeye values → SPSA/Texel tuning to reach 2400+                                                                                     |
 | Testing framework        | Perft tests per piece type + unit tests; sylvan-cli gauntlet vs Fairy-Stockfish for ELO                                                             |
-| Move encoding            | `u16` encoding: 7 bits from, 7 bits to, 2 bits for flags (Capture, Quiet, Check) for cache-friendly sorting; query captures via board               |
+| Move encoding            | `u16` encoding: 7 bits from, 7 bits to, 2 bits for transposition table flags (`TranspositionTableFlag`: Empty, Exact, Alpha, Beta) to save space inside the TT; query captures via board |
 | Board undo state         | Track backtracking using `StateInfo` struct (captured piece, previous hash, rule50, check status, evaluation accumulators)                          |
 | FEN parsing              | Robust parsing dynamically detecting token counts (4 vs 6 tokens) for correct halfmove/fullmove indices                                             |
-| Pondering                | Non-blocking ponderhit transition via shared atomic `ponder_flag` in `GoParameters`                                                                 |
+| Pondering                | Currently unsupported due to blocked search execution loop (ponderhit remains a deferred feature) |
 
 ---
 

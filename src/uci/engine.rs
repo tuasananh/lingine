@@ -9,7 +9,7 @@ use crate::uci::{
 
 /// The interface every engine implementation must satisfy.
 ///
-/// The [`UCIHandler`] calls these methods in response to GUI commands and is
+/// The [`Handler`] calls these methods in response to GUI commands and is
 /// responsible for all output to stdout (printing `uciok`, `readyok`,
 /// `bestmove`, `info`, etc.). Engine implementations only produce typed values
 /// and must **never** write to stdout directly.

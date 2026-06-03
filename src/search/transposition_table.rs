@@ -42,10 +42,11 @@ struct TranspositionTableEntry {
     pub key: TranspositionTableKey,
     /// The evaluation score (may be relative to mate).
     pub score: Value,
-    /// The best move found at this position.
+    /// The best move found at this position. The upper bits of this Move encode
+    /// the TranspositionTableFlag, which denotes the entry's bound type (and
+    /// validity; a flag of Empty indicates an invalid/empty entry).
     pub best_move: Move,
-    /// The search depth this score was evaluated to (-1 represents
-    /// empty/invalid).
+    /// The search depth this score was evaluated to.
     pub depth: u8,
     /// The search sequence generation/age to track relevance.
     pub age: u8,
