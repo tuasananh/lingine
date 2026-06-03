@@ -174,7 +174,7 @@ legality, generating moves, and applying/reverting transitions incrementally.
   cache-friendly footprint:
   - **Bits 0–6**: Destination square (0 to 89)
   - **Bits 7–13**: Origin square (0 to 89)
-  - **Bits 14–15**: Move flags (Quiet, Capture, Check, etc.)
+  - **Bits 14–15**: Transposition Table flags (Empty, Exact, Alpha, Beta)
 - **Undo State**: Evaluated incrementally through `StateInfo` stack tracking.
   Avoids expensive full-board re-cloning.
 
@@ -324,15 +324,13 @@ Lingine:
     placeholders and traditional clean Xiangqi FENs, avoiding incorrect default
     resets.
 - **Decision 8: Pondering Support**
-  - _Result_: **Option A** (Atomic Ponder Flag). We will inject a shared
-    `ponder_flag` (`Arc<AtomicBool>`) into `GoParameters` to support
-    non-blocking transition when `ponderhit` arrives, avoiding complex internal
-    search thread management.
+  - _Result_: Pondering is currently unsupported due to the search execution loop
+    blocking the engine actor thread. Non-blocking pondering support remains a
+    deferred feature.
 - **Decision 9: Move Flags Utility**
-  - _Result_: **Option A** (Search Sorter Reservation). We will keep the 2-bit
-    flags in the 16-bit `Move` representation reserved for search
-    move-ordering/heuristics, and query captures directly from the board array
-    representation during search.
+  - _Result_: We will use the 2-bit flags in the 16-bit `Move` representation
+    to store the `TranspositionTableFlag` (Empty, Exact, Alpha, Beta) to save space inside the TT,
+    rather than for move classifications (which are queried from the board/move generator).
 
 ---
 
