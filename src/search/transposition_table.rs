@@ -215,7 +215,6 @@ impl TranspositionTable {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::value;
@@ -358,4 +357,3 @@ mod tests {
         assert!(h <= 1000);
     }
 }
-

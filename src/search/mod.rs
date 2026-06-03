@@ -170,7 +170,8 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
     });
 }
 
-/// Traverses the transposition table to extract the predicted line of moves (Principal Variation).
+/// Traverses the transposition table to extract the predicted line of moves
+/// (Principal Variation).
 fn extract_pv(
     pos: &Position,
     tt: &TranspositionTable,
