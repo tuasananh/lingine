@@ -111,6 +111,8 @@ struct SearchContext<'a> {
     pub killers: &'a mut [[Move; 2]; MAX_PLY],
     /// History heuristic table to prioritize frequently successful quiet moves.
     pub history_table: &'a mut [[[MoveScore; Square::COUNT]; Square::COUNT]; Color::COUNT],
+    /// Tracks the maximum search depth reached, including quiescence.
+    pub max_ply: &'a mut u8,
 }
 
 /// Simple helper to rank piece types for MVV-LVA move ordering.
@@ -168,6 +170,47 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
     });
 }
 
+/// Traverses the transposition table to extract the predicted line of moves (Principal Variation).
+fn extract_pv(
+    pos: &Position,
+    tt: &TranspositionTable,
+    depth: u8,
+    best_move: Move,
+) -> Option<Vec<Move>> {
+    if best_move.is_null() {
+        return None;
+    }
+    let mut pv = Vec::new();
+    pv.push(best_move);
+
+    let mut current_pos = pos.clone();
+    current_pos.do_move(best_move);
+
+    let mut visited = std::collections::HashSet::new();
+    visited.insert(current_pos.zobrist_hash());
+
+    for ply in 1..depth {
+        if let Some(entry) = tt.probe(current_pos.zobrist_hash(), ply) {
+            if entry.flag == TranspositionTableFlag::Empty {
+                break;
+            }
+            let m = entry.best_move;
+            pv.push(m);
+            current_pos.do_move(m);
+
+            let hash = current_pos.zobrist_hash();
+            if visited.contains(&hash) {
+                break;
+            }
+            visited.insert(hash);
+        } else {
+            break;
+        }
+    }
+
+    Some(pv)
+}
+
 /// Starts a search from the current position
 pub fn search(
     mut pos: Position,
@@ -181,9 +224,6 @@ pub fn search(
     let mut nodes = 0u64;
 
     let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as u8;
-
-    // Increment the age generation at the start of a search session
-    // self.age = self.age.wrapping_add(1);
 
     let mut best_move = Move::null();
     let mut last_depth_score = -Value::INFINITY;
@@ -217,6 +257,8 @@ pub fn search(
         let mut best_score;
         let mut depth_best_move;
 
+        let mut max_ply = 0u8;
+
         // Aspiration Windows Setup
         let mut alpha = -Value::INFINITY;
         let mut beta = Value::INFINITY;
@@ -240,6 +282,7 @@ pub fn search(
                 age,
                 killers: &mut killers,
                 history_table: &mut history_table,
+                max_ply: &mut max_ply,
             };
 
             let mut curr_alpha = search_alpha;
@@ -312,11 +355,7 @@ pub fn search(
                 best_move = depth_best_move;
             }
 
-            let pv_vec = if best_move.is_null() {
-                None
-            } else {
-                Some(vec![best_move.to_uci_string()])
-            };
+            let pv_vec = extract_pv(&pos, transposition_table, depth, best_move);
             let time_elapsed = start_time.elapsed();
             let nps = if time_elapsed.as_secs_f64() > 0.001 {
                 Some((nodes as f64 / time_elapsed.as_secs_f64()) as u64)
@@ -340,11 +379,13 @@ pub fn search(
 
             let info = UciInfo {
                 depth: Some(depth as u32),
+                seldepth: Some(max_ply as u32),
                 nodes: Some(nodes),
                 time: Some(time_elapsed),
                 nps,
+                hashfull: Some(transposition_table.hashfull()),
                 score: Some(uci_score),
-                pv: pv_vec,
+                pv: pv_vec.map(|pv| pv.into_iter().map(|m| m.to_uci_string()).collect()),
                 ..UciInfo::new()
             };
 
@@ -370,6 +411,10 @@ fn quiescence(
         return Value::ZERO;
     }
     *ctx.nodes += 1;
+
+    if ply > *ctx.max_ply {
+        *ctx.max_ply = ply;
+    }
 
     // Check stop signals periodically
     if *ctx.nodes & 1023 == 0
@@ -467,13 +512,17 @@ fn negamax(
     }
     *ctx.nodes += 1;
 
+    if ply > *ctx.max_ply {
+        *ctx.max_ply = ply;
+    }
+
     // Check stop signals periodically
     if *ctx.nodes & 1023 == 0
         && let Some(limit) = ctx.time_limit
         && ctx.start_time.elapsed() >= limit
     {
         ctx.stop.store(true, Ordering::Relaxed);
-        return Value::DRAW;
+        return Value::ZERO;
     }
 
     // Game over / rule evaluations (60-move rule, insufficient material,
@@ -688,6 +737,7 @@ mod tests {
         let mut transposition_table = TranspositionTable::new(1);
         let mut killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
+        let mut max_ply = 0;
         let mut ctx = SearchContext {
             stop: &stop,
             nodes: &mut nodes,
@@ -697,6 +747,7 @@ mod tests {
             age: 1,
             killers: &mut killers,
             history_table: &mut history_table,
+            max_ply: &mut max_ply,
         };
         let score = negamax(
             &mut pos,
@@ -755,6 +806,7 @@ mod tests {
         let mut transposition_table = TranspositionTable::new(1);
         let mut killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
+        let mut max_ply = 0;
         let mut ctx = SearchContext {
             stop: &stop,
             nodes: &mut nodes,
@@ -764,6 +816,7 @@ mod tests {
             age: 1,
             killers: &mut killers,
             history_table: &mut history_table,
+            max_ply: &mut max_ply,
         };
         let score = negamax(
             &mut pos,
@@ -774,5 +827,42 @@ mod tests {
             &mut ctx,
         );
         assert_eq!(score, Value::mate_in(5));
+    }
+
+    #[test]
+    fn test_search_max_ply_and_pv() {
+        let mut pos = Position::new();
+        pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w")
+            .unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut tt = TranspositionTable::new(1);
+        let params = GoParameters {
+            depth: Some(2),
+            ..GoParameters::default()
+        };
+
+        let (best_move, _score, _nodes) = search(pos, params, &mut tt, 1, tx, None);
+
+        assert!(!best_move.is_null());
+
+        // Drain the channel and check UciInfo values
+        let mut max_seldepth = 0;
+        let mut has_pv = false;
+        while let Ok(info) = rx.try_recv() {
+            if let Some(sd) = info.seldepth
+                && sd > max_seldepth
+            {
+                max_seldepth = sd;
+            }
+            if let Some(pv) = info.pv
+                && !pv.is_empty()
+            {
+                has_pv = true;
+            }
+        }
+
+        // Depth 2 search must reach at least ply 2 in negamax or quiescence
+        assert!(max_seldepth >= 2, "max_seldepth was {}", max_seldepth);
+        assert!(has_pv);
     }
 }
