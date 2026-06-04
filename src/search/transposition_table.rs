@@ -48,7 +48,8 @@ pub struct TranspositionTableValue {
     /// The type of bound this entry's score represents.
     pub flag: TranspositionTableFlag,
     /// The search depth this score was evaluated to.
-    /// Negative depth is Quiescence search, non-negative is regular search depth.
+    /// Negative depth is Quiescence search, non-negative is regular search
+    /// depth.
     pub depth: i8,
     /// The search sequence generation/age to track relevance.
     pub age: u8,
