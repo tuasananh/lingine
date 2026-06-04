@@ -134,7 +134,18 @@ impl<'a> Search<'a> {
             tx,
             age,
         } = params;
-        let mut search = Search {
+
+        // Decay history table to make sure old moves do not accumulate indefinitely and
+        // overshadow newer moves.
+        for side in history_table.iter_mut() {
+            for from in side.iter_mut() {
+                for to in from.iter_mut() {
+                    *to >>= 3;
+                }
+            }
+        }
+
+        let search = Search {
             pos,
             stop,
             nodes: 0,
@@ -148,47 +159,64 @@ impl<'a> Search<'a> {
             tx,
         };
 
-        let (best_score, best_move) = search.search(max_depth);
-
-        (best_score, best_move, search.nodes)
+        search.search(max_depth)
     }
 
-    /// Starts a search from the current position
-    fn search(&mut self, max_depth: i8) -> (Value, Move) {
-        let mut best_move = Move::null();
+    /// Starts an iterative deepening search up to the specified maximum depth,
+    /// with aspiration windows and UCI info updates.
+    fn search(mut self, max_depth: i8) -> (Value, Move, u64) {
+        // Fetch the best move from the transposition table to use as the initial guess
+        // for best move, Since we might have seen this position before in
+        // earlier searches.
+        let mut best_move = self
+            .transposition_table
+            .probe(self.pos.zobrist_hash(), 0)
+            .map_or(Move::null(), |entry| entry.best_move);
         let mut last_depth_score = -Value::INFINITY;
 
+        let mut moves = MoveList::new();
+        generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
+
+        if moves.is_empty() {
+            return (last_depth_score, Move::null(), 0);
+        }
+
+        // Iterative deepening: This helps to find good moves faster and allows us to
+        // send intermediate results back to the main thread after each depth
+        // iteration. It also enables aspiration windows based on the previous depth's
+        // score.
+        //
+        // See: https://www.chessprogramming.org/Iterative_Deepening
         for depth in 1..=max_depth {
             if self.stop.load(Ordering::Relaxed) {
                 break;
             }
 
-            // Check if we have spent >50% of the allowed time to avoid timing out in next
-            // ply
+            // Check if we still have enough time for another iteration to avoid timing out
+            // in the middle of a ply. Also known as a Soft-Bound Time Limit.
+            //
+            // See: https://www.chessprogramming.org/Time_Management#Soft_Bound
             if let Some(limit) = self.allocated_time
-                && self.start_time.elapsed() > limit / 2
+                && self.start_time.elapsed() > limit / 4
             {
                 break;
             }
 
-            let mut moves = MoveList::new();
-            generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
-
-            if moves.is_empty() {
-                break;
-            }
-
-            // Sort root moves to maximize alpha-beta pruning (captures first)
-            //
-            // TODO: Optimize this by using a more informed heuristic (MVV-LVA, TT move,
-            // etc.) instead of just sorting by whether the destination square
-            // is empty.
-            moves.sort_by_key(|mv| self.pos.is_empty(mv.square_to()));
+            // Sort moves at the root based on the previous depth's best move and heuristics
+            // to maximize alpha-beta pruning efficiency in the next iteration.
+            self.sort_moves(&mut moves, best_move, 0);
 
             let mut best_score;
             let mut depth_best_move;
 
-            // Aspiration Windows Setup
+            // Aspiration Windows
+            //
+            // We set a narrow window around the previous depth's score to try to
+            // trigger more beta cutoffs and speed up the search. If the search fails low or
+            // high, we widen the window and re-search until we get a stable
+            // score within the window.
+            //
+            // See: https://www.chessprogramming.org/Aspiration_Windows
             let mut alpha = -Value::INFINITY;
             let mut beta = Value::INFINITY;
             let mut delta: Value = value!(25); // aspiration window size in centipawns
@@ -219,10 +247,6 @@ impl<'a> Search<'a> {
                         SearchContext::default(),
                     );
                     self.pos.undo_move(m);
-
-                    if self.stop.load(Ordering::Relaxed) {
-                        break;
-                    }
 
                     if score > best_score {
                         best_score = score;
@@ -259,21 +283,20 @@ impl<'a> Search<'a> {
                 }
             }
 
-            if self.stop.load(Ordering::Relaxed) {
-                break;
-            } else {
-                if !depth_best_move.is_null() {
-                    last_depth_score = best_score;
-                    best_move = depth_best_move;
-                }
+            if !self.stop.load(Ordering::Relaxed) && !depth_best_move.is_null() {
+                last_depth_score = best_score;
+                best_move = depth_best_move;
 
                 self.send_uci_info(depth, best_score, best_move);
             }
         }
 
-        (last_depth_score, best_move)
+        (last_depth_score, best_move, self.nodes)
     }
 
+    /// Sends UCI info updates back to the main thread after each completed
+    /// depth iteration, including the best move, score, principal
+    /// variation, nodes searched, time taken, and NPS.
     fn send_uci_info(&self, depth: i8, best_score: Value, best_move: Move) {
         let pv_vec = self.extract_pv(depth, best_move);
         let time_elapsed = self.start_time.elapsed();
@@ -312,6 +335,29 @@ impl<'a> Search<'a> {
         self.tx.send(info).ok();
     }
 
+    #[inline]
+    fn update_analytics(&mut self, ply: u8) {
+        self.nodes += 1;
+        self.max_ply = self.max_ply.max(ply);
+    }
+
+    #[inline]
+    fn should_stop_search(&self) -> bool {
+        if self.stop.load(Ordering::Relaxed) {
+            return true;
+        }
+        // Periodically check if we have exceeded the allocated time budget to avoid
+        // timing out in the middle of a ply.
+        if self.nodes & 1023 == 0
+            && let Some(limit) = self.allocated_time
+            && self.start_time.elapsed() >= limit
+        {
+            self.stop.store(true, Ordering::Relaxed);
+            return true;
+        }
+        false
+    }
+
     /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
     fn negamax(
         &mut self,
@@ -321,18 +367,9 @@ impl<'a> Search<'a> {
         beta: Value,
         mut ctx: SearchContext,
     ) -> Value {
-        if self.stop.load(Ordering::Relaxed) {
-            return Value::ZERO;
-        }
-        self.nodes += 1;
-        self.max_ply = self.max_ply.max(ply);
+        self.update_analytics(ply);
 
-        // Check stop signals periodically
-        if self.nodes & 1023 == 0
-            && let Some(limit) = self.allocated_time
-            && self.start_time.elapsed() >= limit
-        {
-            self.stop.store(true, Ordering::Relaxed);
+        if self.should_stop_search() {
             return Value::ZERO;
         }
 
@@ -342,13 +379,10 @@ impl<'a> Search<'a> {
             return rule_score;
         }
 
-        let mut depth = depth;
-        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
-            depth += 1;
-            ctx.extensions += 1;
-        }
-
         let alpha_orig = alpha;
+
+        let mut best_score = -Value::INFINITY;
+        let mut best_move = Move::null();
 
         let mut is_singular = false;
         let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
@@ -370,9 +404,18 @@ impl<'a> Search<'a> {
                         unreachable!("Empty flag should not be returned by probe")
                     }
                 }
+            } else {
+                // Even though the TT entry is not deep enough to be directly used, we can still
+                // use the best move for move ordering and singular extensions.
+                best_move = value.best_move;
             }
 
-            // Singular Extensions
+            // Singular Extensions: We want to check if TT move is a critical move, and that
+            // removing it would cause us to be at a really bad position (score
+            // drops significantly below beta). If so, we want to extend the
+            // search to give the engine a better change to evaluate this move.
+            //
+            // See: https://www.chessprogramming.org/Singular_Extensions
             if depth >= 8
                 && ctx.excluded_move.is_null()
                 && ctx.extensions < 6
@@ -389,23 +432,15 @@ impl<'a> Search<'a> {
                     rbeta,
                     SearchContext::new(ctx.extensions, value.best_move),
                 );
+
+                // Score fails low, that means the TT move is really good, and that the
+                // alternatives are much worse. We should extend this node to find the best move
+                // after this critical move.
                 if score < rbeta {
                     is_singular = true;
                 }
             }
-
-            value.best_move
-        } else {
-            Move::null()
         };
-
-        // Validate that the TT move is actually legal in the current position.
-        // A stale or collided TT entry may reference a move that is not valid here.
-        //
-        // Assume the TT move is legal
-        // if !tt_move.is_null() && !moves.contains(&tt_move) {
-        //     tt_move = Move::none();
-        // }
 
         // Base case: fall back to quiescence search
         if depth == 0 {
@@ -420,7 +455,23 @@ impl<'a> Search<'a> {
             return Value::mated_in(ply);
         }
 
-        // One-Reply Extensions
+        let mut depth = depth;
+
+        // Check Extensions: If the side to move is in check,
+        // we extend the search depth by 1 ply to give the engine a better chance to
+        // find a defensive resource and avoid missing critical moves that could
+        // save the King.
+        //
+        // See: https://www.chessprogramming.org/Check_Extensions
+        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+            depth += 1;
+            ctx.extensions += 1;
+        }
+
+        // One Reply Extensions: If there is only one legal move available,
+        // we extend the search, as it is likely a critical position.
+        //
+        // See: https://www.chessprogramming.org/One_Reply_Extensions
         if moves.len() == 1 && ctx.excluded_move.is_null() && ctx.extensions < 6 {
             depth += 1;
             ctx.extensions += 1;
@@ -428,14 +479,7 @@ impl<'a> Search<'a> {
 
         // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
         // prioritized first, killers, and history
-        self.sort_moves(
-            &mut moves,
-            tt_value.as_ref().map(|x| x.best_move).unwrap_or_default(),
-            ply,
-        );
-
-        let mut best_score = -Value::INFINITY;
-        let mut best_move = Move::null();
+        self.sort_moves(&mut moves, best_move, ply);
 
         for m in moves {
             if m == ctx.excluded_move {
@@ -493,20 +537,18 @@ impl<'a> Search<'a> {
         }
 
         // Cache search results to Transposition Table
-        if !self.stop.load(Ordering::Relaxed) {
-            let flag = if best_score >= beta {
-                TranspositionTableFlag::Beta
-            } else if best_score <= alpha_orig {
-                TranspositionTableFlag::Alpha
-            } else {
-                TranspositionTableFlag::Exact
-            };
-            self.transposition_table.store(
-                self.pos.zobrist_hash(),
-                ply,
-                tt_value!(best_score, flag, best_move, depth, self.age),
-            );
-        }
+        let flag = if best_score >= beta {
+            TranspositionTableFlag::Beta
+        } else if best_score <= alpha_orig {
+            TranspositionTableFlag::Alpha
+        } else {
+            TranspositionTableFlag::Exact
+        };
+        self.transposition_table.store(
+            self.pos.zobrist_hash(),
+            ply,
+            tt_value!(best_score, flag, best_move, depth, self.age),
+        );
 
         best_score
     }
@@ -600,8 +642,9 @@ impl<'a> Search<'a> {
 
     /// Sorts the moves based on their heuristic scores, prioritizing the
     /// transposition table best move, killers, and history.
+    #[inline]
     fn sort_moves(&self, moves: &mut [Move], tt_move: Move, ply: u8) {
-        moves.sort_by_cached_key(|&m| {
+        moves.sort_unstable_by_key(|&m| {
             // Returns a heuristic move-ordering score. Captures are scored highly based
             // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
             // prioritized at the very top.
