@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: lingine-playstrategy-bot
+    runtime: python
+    plan: free
+    buildCommand: "cd playstrategy-bot && ./build.sh"
+    startCommand: "cd playstrategy-bot && python start.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: LICHESS_BOT_TOKEN
+        sync: false

@@ -1,0 +1,19 @@
+name: Deploy to Render
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    name: Trigger Render Deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Deploy Hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          echo "Triggering Render redeployment..."
+          curl -s -S -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Render redeploy request sent."
