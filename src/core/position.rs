@@ -205,6 +205,13 @@ impl Position {
             .unwrap_or(Value::ZERO)
     }
 
+    /// Get the complete evaluation score (material + piece-square table) of the
+    /// current position from White's perspective
+    #[inline]
+    pub fn evaluate(&self) -> Value {
+        self.material_score() + self.piece_square_table_score()
+    }
+
     /// Computes the complete material and Piece-Square Table scores from
     /// scratch.
     pub fn compute_evaluation_scores(&self) -> (Value, Value) {

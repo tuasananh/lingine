@@ -2,11 +2,12 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
+use strum::EnumCount;
 
 use crate::core::{
-    Color, File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
+    Color, File, MAX_DEPTH, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
 };
-use crate::search::{TranspositionTable, search};
+use crate::search::{Search, SearchParameters, TranspositionTable};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
     UciId, UciInfo, UciOption,
@@ -194,14 +195,20 @@ impl Engine for Lingine {
         // a best move.
         let time_limit = Self::calculate_search_time(&params, self.position.side_to_move());
 
-        let (best_move, _score, _nodes) = search(
-            self.position.clone(),
-            params,
-            &mut self.transposition_table,
-            self.age,
+        let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
+
+        let mut history_table = [[[0i32; Square::COUNT]; Square::COUNT]; Color::COUNT];
+
+        let (_score, best_move, _nodes) = Search::start_search(SearchParameters {
+            pos: self.position.clone(),
+            allocated_time: time_limit,
+            stop: params.stop.clone(),
+            max_depth,
+            transposition_table: &mut self.transposition_table,
+            history_table: &mut history_table,
             tx,
-            time_limit,
-        );
+            age: self.age,
+        });
 
         // Returns the best move found in UCI format. Pondering is not implemented in
         // this version, so we return `None` for the ponder move.

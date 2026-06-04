@@ -33,48 +33,24 @@ use std::time::{Duration, Instant};
 use strum::EnumCount;
 
 use crate::core::{
-    Color, MAX_DEPTH, MAX_PLY, Move, MoveGenType, MoveList, MoveScore, Piece, PieceType, Position,
-    Square, Value, generate_moves,
+    Color, MAX_PLY, Move, MoveGenType, MoveList, MoveScore, Piece, PieceType, Position, Square,
+    Value, generate_moves,
 };
-use crate::eval::evaluate;
-use crate::uci::{GoParameters, UciInfo, UciScore, UciScoreBound};
+use crate::uci::{UciInfo, UciScore, UciScoreBound};
 use crate::{tt_value, value};
 
 mod transposition_table;
 pub use transposition_table::*;
 
-/// Represents the alpha-beta search window.
-#[derive(Copy, Clone, Debug)]
-struct SearchWindow {
-    pub alpha: Value,
-    pub beta: Value,
-}
-
-impl SearchWindow {
-    /// Creates a new SearchWindow.
-    pub fn new(alpha: Value, beta: Value) -> Self {
-        Self { alpha, beta }
-    }
-
-    /// Negates the window (reverses and negates bounds) for the next ply in
-    /// Negamax.
-    pub fn negate(self) -> Self {
-        Self {
-            alpha: -self.beta,
-            beta: -self.alpha,
-        }
-    }
-}
-
 /// Tracks search extension and move exclusion parameters for the current
 /// branch.
 #[derive(Copy, Clone, Debug)]
-struct SearchExtension {
+struct SearchContext {
     pub excluded_move: Move,
     pub extensions: u8,
 }
 
-impl Default for SearchExtension {
+impl Default for SearchContext {
     fn default() -> Self {
         Self {
             extensions: 0,
@@ -83,7 +59,7 @@ impl Default for SearchExtension {
     }
 }
 
-impl SearchExtension {
+impl SearchContext {
     /// Creates a new SearchExtension parameters set.
     pub fn new(extensions: u8, excluded_move: Move) -> Self {
         Self {
@@ -94,25 +70,615 @@ impl SearchExtension {
 }
 
 /// Shared context parameters passed down the recursive search stack.
-struct SearchContext<'a> {
+pub struct Search<'a> {
+    pos: Position,
     /// Atomic flag set by Thread A to interrupt the search loop.
-    pub stop: &'a Arc<AtomicBool>,
+    stop: Arc<AtomicBool>,
     /// Tracks total nodes searched during this `go` invocation.
-    pub nodes: &'a mut u64,
+    nodes: u64,
     /// The moment when the search was started.
-    pub start_time: Instant,
+    start_time: Instant,
     /// Absolute time budget allowed for this search ply.
-    pub time_limit: Option<std::time::Duration>,
+    allocated_time: Option<std::time::Duration>,
     /// Reference to the transposition table.
-    pub transposition_table: &'a mut TranspositionTable,
+    transposition_table: &'a mut TranspositionTable,
     /// Current search sequence age.
-    pub age: u8,
+    age: u8,
     /// Killer moves tracked per ply to sort high-quality quiet moves.
-    pub killers: &'a mut [[Move; 2]; MAX_PLY],
+    killers: [[Move; 2]; MAX_PLY],
     /// History heuristic table to prioritize frequently successful quiet moves.
-    pub history_table: &'a mut [[[MoveScore; Square::COUNT]; Square::COUNT]; Color::COUNT],
+    history_table: &'a mut [[[MoveScore; Square::COUNT]; Square::COUNT]; Color::COUNT],
     /// Tracks the maximum search depth reached, including quiescence.
-    pub max_ply: &'a mut u8,
+    max_ply: u8,
+    /// Channel sender to send UCI info updates back to the main thread.
+    tx: Sender<UciInfo>,
+}
+
+pub struct SearchParameters<'a> {
+    // We take ownership of the position here since we will be modifying it during search.
+    pub pos: Position,
+    // The time limit for this search
+    pub allocated_time: Option<Duration>,
+    // The stop flag to signal search interruption from another thread
+    pub stop: Arc<AtomicBool>,
+    // The max depth to search to
+    pub max_depth: i8,
+    // The transposition table to use for caching search results
+    //
+    // See: https://www.chessprogramming.org/Transposition_Table
+    pub transposition_table: &'a mut TranspositionTable,
+    // The history table for quiet moves
+    //
+    // See: https://www.chessprogramming.org/History_Heuristic
+    pub history_table: &'a mut [[[MoveScore; Square::COUNT]; Square::COUNT]; Color::COUNT],
+    // The channel sender to send UCI info updates back to the main thread
+    pub tx: Sender<UciInfo>,
+    // The current search sequence age for TT entry management
+    //
+    // See: https://www.chessprogramming.org/Transposition_Table#Aging
+    pub age: u8,
+}
+
+impl<'a> Search<'a> {
+    /// Starts the iterative deepening search loop
+    ///
+    /// Returns the best move found, its score, and the total nodes searched.
+    pub fn start_search(params: SearchParameters) -> (Value, Move, u64) {
+        let SearchParameters {
+            pos,
+            allocated_time,
+            stop,
+            max_depth,
+            transposition_table,
+            history_table,
+            tx,
+            age,
+        } = params;
+        let mut search = Search {
+            pos,
+            stop,
+            nodes: 0,
+            start_time: Instant::now(),
+            allocated_time,
+            transposition_table,
+            age,
+            killers: [[Move::null(); 2]; MAX_PLY],
+            history_table,
+            max_ply: 0,
+            tx,
+        };
+
+        let (best_score, best_move) = search.search(max_depth);
+
+        (best_score, best_move, search.nodes)
+    }
+
+    /// Starts a search from the current position
+    fn search(&mut self, max_depth: i8) -> (Value, Move) {
+        let mut best_move = Move::null();
+        let mut last_depth_score = -Value::INFINITY;
+
+        for depth in 1..=max_depth {
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            }
+
+            // Check if we have spent >50% of the allowed time to avoid timing out in next
+            // ply
+            if let Some(limit) = self.allocated_time
+                && self.start_time.elapsed() > limit / 2
+            {
+                break;
+            }
+
+            let mut moves = MoveList::new();
+            generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
+
+            if moves.is_empty() {
+                break;
+            }
+
+            // Sort root moves to maximize alpha-beta pruning (captures first)
+            //
+            // TODO: Optimize this by using a more informed heuristic (MVV-LVA, TT move,
+            // etc.) instead of just sorting by whether the destination square
+            // is empty.
+            moves.sort_by_key(|mv| self.pos.is_empty(mv.square_to()));
+
+            let mut best_score;
+            let mut depth_best_move;
+
+            // Aspiration Windows Setup
+            let mut alpha = -Value::INFINITY;
+            let mut beta = Value::INFINITY;
+            let mut delta: Value = value!(25); // aspiration window size in centipawns
+
+            if depth >= 5 && !last_depth_score.abs().is_winning() {
+                alpha = last_depth_score - delta;
+                beta = last_depth_score + delta;
+            }
+
+            loop {
+                let search_alpha = alpha.max(-Value::INFINITY);
+                let search_beta = beta.min(Value::INFINITY);
+
+                let mut curr_alpha = search_alpha;
+                best_score = -Value::INFINITY;
+                depth_best_move = Move::null();
+
+                for m in moves.iter().copied() {
+                    if self.stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    self.pos.do_move(m);
+                    let score = -self.negamax(
+                        depth - 1,
+                        1,
+                        -search_beta,
+                        -curr_alpha,
+                        SearchContext::default(),
+                    );
+                    self.pos.undo_move(m);
+
+                    if self.stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    if score > best_score {
+                        best_score = score;
+                        depth_best_move = m;
+                    }
+                    if score > curr_alpha {
+                        curr_alpha = score;
+                    }
+                }
+
+                if self.stop.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                // If window was already full (-INFINITY, INFINITY), we stop, no re-search.
+                if search_alpha == -Value::INFINITY && search_beta == Value::INFINITY {
+                    break;
+                }
+
+                // Check fail-low / fail-high
+                if best_score <= search_alpha {
+                    // Fail low: score worse or equal to alpha. Widen alpha.
+                    alpha -= delta;
+                    beta = best_score + delta;
+                    delta *= 2;
+                } else if best_score >= search_beta {
+                    // Fail high: score better or equal to beta. Widen beta.
+                    beta += delta;
+                    alpha = best_score - delta;
+                    delta *= 2;
+                } else {
+                    // Stable score inside window!
+                    break;
+                }
+            }
+
+            if self.stop.load(Ordering::Relaxed) {
+                break;
+            } else {
+                if !depth_best_move.is_null() {
+                    last_depth_score = best_score;
+                    best_move = depth_best_move;
+                }
+
+                self.send_uci_info(depth, best_score, best_move);
+            }
+        }
+
+        (last_depth_score, best_move)
+    }
+
+    fn send_uci_info(&self, depth: i8, best_score: Value, best_move: Move) {
+        let pv_vec = self.extract_pv(depth, best_move);
+        let time_elapsed = self.start_time.elapsed();
+        let nps = if time_elapsed.as_secs_f64() > 0.001 {
+            Some((self.nodes as f64 / time_elapsed.as_secs_f64()) as u64)
+        } else {
+            None
+        };
+
+        let uci_score = if let Some(mate_plies) = best_score.ply_to_mate_or_mated() {
+            let mate_moves = mate_plies.div_ceil(2);
+            let sign: i32 = if best_score.raw() > 0 { 1 } else { -1 };
+            UciScoreBound {
+                score: UciScore::Mate(sign * mate_moves as i32),
+                bound: None,
+            }
+        } else {
+            UciScoreBound {
+                score: UciScore::Centipawns(best_score),
+                bound: None,
+            }
+        };
+
+        let info = UciInfo {
+            depth: Some(depth as u32),
+            seldepth: Some(self.max_ply as u32),
+            nodes: Some(self.nodes),
+            time: Some(time_elapsed),
+            nps,
+            hashfull: Some(self.transposition_table.hashfull()),
+            score: Some(uci_score),
+            pv: pv_vec.map(|pv| pv.into_iter().map(|m| m.to_uci_string()).collect()),
+            ..UciInfo::new()
+        };
+
+        self.tx.send(info).ok();
+    }
+
+    /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
+    fn negamax(
+        &mut self,
+        depth: i8,
+        ply: u8,
+        mut alpha: Value,
+        beta: Value,
+        mut ctx: SearchContext,
+    ) -> Value {
+        if self.stop.load(Ordering::Relaxed) {
+            return Value::ZERO;
+        }
+        self.nodes += 1;
+        self.max_ply = self.max_ply.max(ply);
+
+        // Check stop signals periodically
+        if self.nodes & 1023 == 0
+            && let Some(limit) = self.allocated_time
+            && self.start_time.elapsed() >= limit
+        {
+            self.stop.store(true, Ordering::Relaxed);
+            return Value::ZERO;
+        }
+
+        // Game over / rule evaluations (60-move rule, insufficient material,
+        // repetitions, perpetual checks)
+        if let Some(rule_score) = self.pos.rule_judge(ply) {
+            return rule_score;
+        }
+
+        let mut depth = depth;
+        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+            depth += 1;
+            ctx.extensions += 1;
+        }
+
+        let alpha_orig = alpha;
+
+        let mut is_singular = false;
+        let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
+        if let Some(value) = &tt_value {
+            if value.depth >= depth {
+                match value.flag {
+                    TranspositionTableFlag::Exact => return value.score,
+                    TranspositionTableFlag::Alpha => {
+                        if value.score <= alpha {
+                            return value.score;
+                        }
+                    }
+                    TranspositionTableFlag::Beta => {
+                        if value.score >= beta {
+                            return value.score;
+                        }
+                    }
+                    TranspositionTableFlag::Empty => {
+                        unreachable!("Empty flag should not be returned by probe")
+                    }
+                }
+            }
+
+            // Singular Extensions
+            if depth >= 8
+                && ctx.excluded_move.is_null()
+                && ctx.extensions < 6
+                && value.depth >= depth - 3
+                && value.flag != TranspositionTableFlag::Alpha
+                && !value.score.abs().is_winning()
+            {
+                let rdepth = depth - 3;
+                let rbeta = value.score - singular_margin(depth);
+                let score = self.negamax(
+                    rdepth,
+                    ply,
+                    rbeta - value!(1),
+                    rbeta,
+                    SearchContext::new(ctx.extensions, value.best_move),
+                );
+                if score < rbeta {
+                    is_singular = true;
+                }
+            }
+
+            value.best_move
+        } else {
+            Move::null()
+        };
+
+        // Validate that the TT move is actually legal in the current position.
+        // A stale or collided TT entry may reference a move that is not valid here.
+        //
+        // Assume the TT move is legal
+        // if !tt_move.is_null() && !moves.contains(&tt_move) {
+        //     tt_move = Move::none();
+        // }
+
+        // Base case: fall back to quiescence search
+        if depth == 0 {
+            return self.quiescence(0, ply, alpha, beta);
+        }
+
+        let mut moves = MoveList::new();
+        generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
+
+        // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
+        if moves.is_empty() {
+            return Value::mated_in(ply);
+        }
+
+        // One-Reply Extensions
+        if moves.len() == 1 && ctx.excluded_move.is_null() && ctx.extensions < 6 {
+            depth += 1;
+            ctx.extensions += 1;
+        }
+
+        // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
+        // prioritized first, killers, and history
+        self.sort_moves(
+            &mut moves,
+            tt_value.as_ref().map(|x| x.best_move).unwrap_or_default(),
+            ply,
+        );
+
+        let mut best_score = -Value::INFINITY;
+        let mut best_move = Move::null();
+
+        for m in moves {
+            if m == ctx.excluded_move {
+                continue;
+            }
+
+            let mut ext = 0;
+
+            if let Some(value) = &tt_value
+                && m == value.best_move
+                && is_singular
+            {
+                ext = 1;
+            }
+
+            self.pos.do_move(m);
+            let score = -self.negamax(
+                depth - 1 + ext as i8,
+                ply + 1,
+                -beta,
+                -alpha,
+                SearchContext::new(ctx.extensions + ext, Move::null()),
+            );
+            self.pos.undo_move(m);
+
+            if self.stop.load(Ordering::Relaxed) {
+                return Value::ZERO;
+            }
+
+            if score > best_score {
+                best_score = score;
+                best_move = m;
+            }
+            if best_score > alpha {
+                alpha = best_score;
+            }
+            if alpha >= beta {
+                // Update killers and history for quiet moves
+                if self.pos.piece_at(m.square_to()) == Piece::None {
+                    let ply_idx = ply as usize;
+                    // We do not check for ply_idx out of bounds since
+                    // ply should not exceed MAX_PLY in normal circumstances
+                    if self.killers[ply_idx][0] != m {
+                        self.killers[ply_idx][1] = self.killers[ply_idx][0];
+                        self.killers[ply_idx][0] = m;
+                    }
+                    let side_idx = self.pos.side_to_move() as usize;
+                    let from_idx = m.square_from() as usize;
+                    let to_idx = m.square_to() as usize;
+                    self.history_table[side_idx][from_idx][to_idx] +=
+                        (depth as i32) * (depth as i32);
+                }
+                break; // Beta cutoff
+            }
+        }
+
+        // Cache search results to Transposition Table
+        if !self.stop.load(Ordering::Relaxed) {
+            let flag = if best_score >= beta {
+                TranspositionTableFlag::Beta
+            } else if best_score <= alpha_orig {
+                TranspositionTableFlag::Alpha
+            } else {
+                TranspositionTableFlag::Exact
+            };
+            self.transposition_table.store(
+                self.pos.zobrist_hash(),
+                ply,
+                tt_value!(best_score, flag, best_move, depth, self.age),
+            );
+        }
+
+        best_score
+    }
+
+    /// Implements Quiescence Search to evaluate tactical capture sequences.
+    ///
+    /// Prevents the horizon effect by searching captures only until a quiet
+    /// position is reached.
+    fn quiescence(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
+        if self.stop.load(Ordering::Relaxed) {
+            return Value::ZERO;
+        }
+        self.nodes += 1;
+        self.max_ply = self.max_ply.max(ply);
+
+        // Check stop signals periodically
+        if self.nodes & 1023 == 0
+            && let Some(limit) = self.allocated_time
+            && self.start_time.elapsed() >= limit
+        {
+            self.stop.store(true, Ordering::Relaxed);
+            return Value::ZERO;
+        }
+
+        // Base case: to avoid infinite recursion and stack overflow from perpetual
+        // checks
+        if depth <= -12 {
+            let stand_pat = self.pos.evaluate();
+            return if self.pos.side_to_move() == Color::White {
+                stand_pat
+            } else {
+                -stand_pat
+            };
+        }
+
+        let in_check = self.pos.is_in_check(self.pos.side_to_move());
+
+        // Standing pat: static evaluation provides the lower bound for non-check nodes.
+        if !in_check {
+            let stand_pat = self.pos.evaluate();
+            let eval_side = if self.pos.side_to_move() == Color::White {
+                stand_pat
+            } else {
+                -stand_pat
+            };
+
+            if eval_side >= beta {
+                return eval_side;
+            }
+            if eval_side > alpha {
+                alpha = eval_side;
+            }
+        }
+
+        // Generate moves: if in check, we must search all legal evasions to save the
+        // King. Otherwise, we only search capture moves.
+        let mut moves = MoveList::new();
+        if in_check {
+            generate_moves(&self.pos, MoveGenType::Legal, &mut moves)
+        } else {
+            generate_moves(&self.pos, MoveGenType::Captures, &mut moves)
+        };
+
+        // Checkmate detection: in check with no legal moves = checkmate
+        if in_check && moves.is_empty() {
+            return Value::mated_in(ply);
+        }
+
+        // Sort captures using MVV-LVA
+        self.sort_moves(&mut moves, Move::null(), ply);
+
+        for m in moves {
+            self.pos.do_move(m);
+            let score = -self.quiescence(depth - 1, ply + 1, -beta, -alpha);
+            self.pos.undo_move(m);
+
+            if self.stop.load(Ordering::Relaxed) {
+                return Value::ZERO;
+            }
+
+            if score >= beta {
+                return score;
+            }
+            if score > alpha {
+                alpha = score;
+            }
+        }
+
+        alpha
+    }
+
+    /// Sorts the moves based on their heuristic scores, prioritizing the
+    /// transposition table best move, killers, and history.
+    fn sort_moves(&self, moves: &mut [Move], tt_move: Move, ply: u8) {
+        moves.sort_by_cached_key(|&m| {
+            // Returns a heuristic move-ordering score. Captures are scored highly based
+            // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
+            // prioritized at the very top.
+            let move_score = if m == tt_move {
+                2_000_000_000 // Prioritize TT best move above all else
+            } else {
+                let to_piece = self.pos.piece_at(m.square_to());
+                if to_piece != Piece::None {
+                    // Capture: 10000 + victim_rank * 100 - attacker_rank
+                    let victim = get_piece_value_rank(to_piece);
+                    let attacker = get_piece_value_rank(self.pos.piece_at(m.square_from()));
+                    1_000_000_000 + victim * 10_000_000 - attacker * 100_000
+                } else {
+                    // Quiet move
+                    let ply_idx = ply as usize;
+                    // We might not need to check for ply_idx out of bounds since ply should not
+                    // exceed MAX_PLY in normal circumstances
+                    if m == self.killers[ply_idx][0] {
+                        900_000_000
+                    } else if m == self.killers[ply_idx][1] {
+                        800_000_000
+                    } else {
+                        let side_idx = self.pos.side_to_move() as usize;
+                        let from_idx = m.square_from() as usize;
+                        let to_idx = m.square_to() as usize;
+                        // History score should not be more than 800_000_000
+                        self.history_table[side_idx][from_idx][to_idx]
+                    }
+                }
+            };
+
+            // Sort it in reverse since we want the best one
+            Reverse(move_score)
+        });
+    }
+
+    /// Traverses the transposition table to extract the predicted line of moves
+    /// (Principal Variation).
+    fn extract_pv(&self, depth: i8, best_move: Move) -> Option<Vec<Move>> {
+        if best_move.is_null() {
+            return None;
+        }
+        let mut pv = Vec::new();
+        pv.push(best_move);
+
+        let mut current_pos = self.pos.clone();
+        current_pos.do_move(best_move);
+
+        let mut visited = std::collections::HashSet::new();
+        visited.insert(current_pos.zobrist_hash());
+
+        for ply in 1..depth as u8 {
+            if let Some(entry) = self
+                .transposition_table
+                .probe(current_pos.zobrist_hash(), ply)
+            {
+                if entry.flag == TranspositionTableFlag::Empty {
+                    break;
+                }
+                let m = entry.best_move;
+                // Here we do not need to check for null move
+                // since we know that a non-empty TT entry must have a valid move.
+                pv.push(m);
+                current_pos.do_move(m);
+
+                let hash = current_pos.zobrist_hash();
+                if visited.contains(&hash) {
+                    break;
+                }
+                visited.insert(hash);
+            } else {
+                break;
+            }
+        }
+
+        Some(pv)
+    }
 }
 
 /// Simple helper to rank piece types for MVV-LVA move ordering.
@@ -130,580 +696,10 @@ const fn get_piece_value_rank(p: Piece) -> i32 {
     }
 }
 
-/// Sorts the moves based on their heuristic scores, prioritizing the
-/// transposition table best move, killers, and history.
-fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchContext, ply: u8) {
-    moves.sort_by_cached_key(|&m| {
-        // Returns a heuristic move-ordering score. Captures are scored highly based
-        // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
-        // prioritized at the very top.
-        let move_score = if m == tt_move {
-            2_000_000_000 // Prioritize TT best move above all else
-        } else {
-            let to_piece = pos.piece_at(m.square_to());
-            if to_piece != Piece::None {
-                // Capture: 10000 + victim_rank * 100 - attacker_rank
-                let victim = get_piece_value_rank(to_piece);
-                let attacker = get_piece_value_rank(pos.piece_at(m.square_from()));
-                1_000_000_000 + victim * 10_000_000 - attacker * 100_000
-            } else {
-                // Quiet move
-                let ply_idx = ply as usize;
-                // We might not need to check for ply_idx out of bounds since ply should not
-                // exceed MAX_PLY in normal circumstances
-                if m == ctx.killers[ply_idx][0] {
-                    900_000_000
-                } else if m == ctx.killers[ply_idx][1] {
-                    800_000_000
-                } else {
-                    let side_idx = pos.side_to_move() as usize;
-                    let from_idx = m.square_from() as usize;
-                    let to_idx = m.square_to() as usize;
-                    // History score should not be more than 800_000_000
-                    ctx.history_table[side_idx][from_idx][to_idx]
-                }
-            }
-        };
-
-        // Sort it in reverse since we want the best one
-        Reverse(move_score)
-    });
-}
-
-/// Traverses the transposition table to extract the predicted line of moves
-/// (Principal Variation).
-fn extract_pv(
-    pos: &Position,
-    tt: &TranspositionTable,
-    depth: i8,
-    best_move: Move,
-) -> Option<Vec<Move>> {
-    if best_move.is_null() {
-        return None;
-    }
-    let mut pv = Vec::new();
-    pv.push(best_move);
-
-    let mut current_pos = pos.clone();
-    current_pos.do_move(best_move);
-
-    let mut visited = std::collections::HashSet::new();
-    visited.insert(current_pos.zobrist_hash());
-
-    for ply in 1..depth as u8 {
-        if let Some(entry) = tt.probe(current_pos.zobrist_hash(), ply) {
-            if entry.flag == TranspositionTableFlag::Empty {
-                break;
-            }
-            let m = entry.best_move;
-            // Here we do not need to check for null move
-            // since we know that a non-empty TT entry must have a valid move.
-            pv.push(m);
-            current_pos.do_move(m);
-
-            let hash = current_pos.zobrist_hash();
-            if visited.contains(&hash) {
-                break;
-            }
-            visited.insert(hash);
-        } else {
-            break;
-        }
-    }
-
-    Some(pv)
-}
-
-/// Starts a search from the current position
-pub fn search(
-    mut pos: Position,
-    params: GoParameters,
-    transposition_table: &mut TranspositionTable,
-    age: u8,
-    tx: Sender<UciInfo>,
-    time_limit: Option<Duration>,
-) -> (Move, Value, u64) {
-    let start_time = Instant::now();
-    let mut nodes = 0u64;
-
-    let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
-
-    let mut best_move = Move::null();
-    let mut last_depth_score = -Value::INFINITY;
-
-    let mut killers = [[Move::null(); 2]; MAX_PLY];
-    let mut history_table = [[[0; 90]; 90]; 2];
-
-    for depth in 1..=max_depth {
-        if params.stop.load(Ordering::Relaxed) {
-            break;
-        }
-
-        // Check if we have spent >50% of the allowed time to avoid timing out in next
-        // ply
-        if let Some(limit) = time_limit
-            && start_time.elapsed() > limit / 2
-        {
-            break;
-        }
-
-        let mut moves = MoveList::new();
-        generate_moves(&pos, MoveGenType::Legal, &mut moves);
-
-        if moves.is_empty() {
-            break;
-        }
-
-        // Sort root moves to maximize alpha-beta pruning (captures first)
-        moves.sort_by_key(|mv| pos.is_empty(mv.square_to()));
-
-        let mut best_score;
-        let mut depth_best_move;
-
-        let mut max_ply = 0u8;
-
-        // Aspiration Windows Setup
-        let mut alpha = -Value::INFINITY;
-        let mut beta = Value::INFINITY;
-        let mut delta: Value = value!(25); // aspiration window size in centipawns
-
-        if depth >= 5 && !last_depth_score.abs().is_winning() {
-            alpha = last_depth_score - delta;
-            beta = last_depth_score + delta;
-        }
-
-        loop {
-            let search_alpha = alpha.max(-Value::INFINITY);
-            let search_beta = beta.min(Value::INFINITY);
-
-            let mut ctx = SearchContext {
-                stop: &params.stop,
-                nodes: &mut nodes,
-                start_time,
-                time_limit,
-                transposition_table,
-                age,
-                killers: &mut killers,
-                history_table: &mut history_table,
-                max_ply: &mut max_ply,
-            };
-
-            let mut curr_alpha = search_alpha;
-            best_score = -Value::INFINITY;
-            depth_best_move = Move::null();
-
-            for m in moves.iter().copied() {
-                if params.stop.load(Ordering::Relaxed) {
-                    break;
-                }
-                pos.do_move(m);
-                let score = -negamax(
-                    &mut pos,
-                    depth - 1,
-                    1,
-                    SearchWindow::new(-search_beta, -curr_alpha),
-                    SearchExtension::default(),
-                    &mut ctx,
-                );
-                pos.undo_move(m);
-
-                if params.stop.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                if score > best_score {
-                    best_score = score;
-                    depth_best_move = m;
-                }
-                if score > curr_alpha {
-                    curr_alpha = score;
-                }
-            }
-
-            if params.stop.load(Ordering::Relaxed) {
-                break;
-            }
-
-            // If window was already full (-INFINITY, INFINITY), we stop, no re-search.
-            if search_alpha == -Value::INFINITY && search_beta == Value::INFINITY {
-                break;
-            }
-
-            // Check fail-low / fail-high
-            if best_score <= search_alpha {
-                // Fail low: score worse or equal to alpha. Widen alpha.
-                alpha -= delta;
-                beta = best_score + delta;
-                delta *= 2;
-            } else if best_score >= search_beta {
-                // Fail high: score better or equal to beta. Widen beta.
-                beta += delta;
-                alpha = best_score - delta;
-                delta *= 2;
-            } else {
-                // Stable score inside window!
-                break;
-            }
-        }
-
-        if params.stop.load(Ordering::Relaxed) {
-            break;
-        }
-
-        last_depth_score = best_score;
-
-        // If the search was not aborted, save search outcomes and print UCI progress
-        if !params.stop.load(Ordering::Relaxed) {
-            if !depth_best_move.is_null() {
-                best_move = depth_best_move;
-            }
-
-            let pv_vec = extract_pv(&pos, transposition_table, depth, best_move);
-            let time_elapsed = start_time.elapsed();
-            let nps = if time_elapsed.as_secs_f64() > 0.001 {
-                Some((nodes as f64 / time_elapsed.as_secs_f64()) as u64)
-            } else {
-                None
-            };
-
-            let uci_score = if let Some(mate_plies) = best_score.ply_to_mate_or_mated() {
-                let mate_moves = mate_plies.div_ceil(2);
-                let sign: i32 = if best_score.raw() > 0 { 1 } else { -1 };
-                UciScoreBound {
-                    score: UciScore::Mate(sign * mate_moves as i32),
-                    bound: None,
-                }
-            } else {
-                UciScoreBound {
-                    score: UciScore::Centipawns(best_score),
-                    bound: None,
-                }
-            };
-
-            let info = UciInfo {
-                depth: Some(depth as u32),
-                seldepth: Some(max_ply as u32),
-                nodes: Some(nodes),
-                time: Some(time_elapsed),
-                nps,
-                hashfull: Some(transposition_table.hashfull()),
-                score: Some(uci_score),
-                pv: pv_vec.map(|pv| pv.into_iter().map(|m| m.to_uci_string()).collect()),
-                ..UciInfo::new()
-            };
-
-            tx.send(info).ok();
-        }
-    }
-
-    (best_move, last_depth_score, nodes)
-}
-
-/// Implements Quiescence Search to evaluate tactical capture sequences.
-///
-/// Prevents the horizon effect by searching captures only until a quiet
-/// position is reached.
-fn quiescence(
-    pos: &mut Position,
-    mut window: SearchWindow,
-    ply: u8,
-    qdepth: u8,
-    ctx: &mut SearchContext,
-) -> Value {
-    if ctx.stop.load(Ordering::Relaxed) {
-        return Value::ZERO;
-    }
-    *ctx.nodes += 1;
-
-    if ply > *ctx.max_ply {
-        *ctx.max_ply = ply;
-    }
-
-    // Check stop signals periodically
-    if *ctx.nodes & 1023 == 0
-        && let Some(limit) = ctx.time_limit
-        && ctx.start_time.elapsed() >= limit
-    {
-        ctx.stop.store(true, Ordering::Relaxed);
-        return Value::ZERO;
-    }
-
-    // Base case: to avoid infinite recursion and stack overflow from perpetual
-    // checks
-    if qdepth >= 12 {
-        let stand_pat = evaluate(pos);
-        return if pos.side_to_move() == Color::White {
-            stand_pat
-        } else {
-            -stand_pat
-        };
-    }
-
-    let in_check = pos.is_in_check(pos.side_to_move());
-
-    // Standing pat: static evaluation provides the lower bound for non-check nodes.
-    if !in_check {
-        let stand_pat = evaluate(pos);
-        let eval_side = if pos.side_to_move() == Color::White {
-            stand_pat
-        } else {
-            -stand_pat
-        };
-
-        if eval_side >= window.beta {
-            return eval_side;
-        }
-        if eval_side > window.alpha {
-            window.alpha = eval_side;
-        }
-    }
-
-    // Generate moves: if in check, we must search all legal evasions to save the
-    // King. Otherwise, we only search capture moves.
-    let mut moves = MoveList::new();
-    if in_check {
-        generate_moves(pos, MoveGenType::Legal, &mut moves)
-    } else {
-        generate_moves(pos, MoveGenType::Captures, &mut moves)
-    };
-
-    // Checkmate detection: in check with no legal moves = checkmate
-    if in_check && moves.is_empty() {
-        return Value::mated_in(ply);
-    }
-
-    // Sort captures using MVV-LVA
-    sort_moves(pos, &mut moves, Move::null(), ctx, ply);
-
-    for m in moves {
-        pos.do_move(m);
-        let score = -quiescence(pos, window.negate(), ply + 1, qdepth + 1, ctx);
-        pos.undo_move(m);
-
-        if ctx.stop.load(Ordering::Relaxed) {
-            return Value::ZERO;
-        }
-
-        if score >= window.beta {
-            return score;
-        }
-        if score > window.alpha {
-            window.alpha = score;
-        }
-    }
-
-    window.alpha
-}
-
 /// Calculates the margin threshold required for singular extensions.
 #[inline]
 fn singular_margin(depth: i8) -> Value {
     value!(2 * depth as i16)
-}
-
-/// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
-fn negamax(
-    pos: &mut Position,
-    depth: i8,
-    ply: u8,
-    mut window: SearchWindow,
-    mut ext_control: SearchExtension,
-    ctx: &mut SearchContext,
-) -> Value {
-    if ctx.stop.load(Ordering::Relaxed) {
-        return Value::ZERO;
-    }
-    *ctx.nodes += 1;
-
-    if ply > *ctx.max_ply {
-        *ctx.max_ply = ply;
-    }
-
-    // Check stop signals periodically
-    if *ctx.nodes & 1023 == 0
-        && let Some(limit) = ctx.time_limit
-        && ctx.start_time.elapsed() >= limit
-    {
-        ctx.stop.store(true, Ordering::Relaxed);
-        return Value::ZERO;
-    }
-
-    // Game over / rule evaluations (60-move rule, insufficient material,
-    // repetitions, perpetual checks)
-    if let Some(rule_score) = pos.rule_judge(ply) {
-        return rule_score;
-    }
-
-    let mut depth = depth;
-    if pos.is_in_check(pos.side_to_move()) && ext_control.extensions < 6 {
-        depth += 1;
-        ext_control.extensions += 1;
-    }
-
-    let alpha_orig = window.alpha;
-
-    let mut is_singular = false;
-    let tt_value = ctx.transposition_table.probe(pos.zobrist_hash(), ply);
-    if let Some(value) = &tt_value {
-        if value.depth >= depth {
-            match value.flag {
-                TranspositionTableFlag::Exact => return value.score,
-                TranspositionTableFlag::Alpha => {
-                    if value.score <= window.alpha {
-                        return value.score;
-                    }
-                }
-                TranspositionTableFlag::Beta => {
-                    if value.score >= window.beta {
-                        return value.score;
-                    }
-                }
-                TranspositionTableFlag::Empty => {
-                    unreachable!("Empty flag should not be returned by probe")
-                }
-            }
-        }
-
-        // Singular Extensions
-        if depth >= 8
-            && ext_control.excluded_move.is_null()
-            && ext_control.extensions < 6
-            && value.depth >= depth - 3
-            && value.flag != TranspositionTableFlag::Alpha
-            && !value.score.abs().is_winning()
-        {
-            let rdepth = depth - 3;
-            let rbeta = value.score - singular_margin(depth);
-            let score = negamax(
-                pos,
-                rdepth,
-                ply,
-                SearchWindow::new(rbeta - value!(1), rbeta),
-                SearchExtension::new(ext_control.extensions, value.best_move),
-                ctx,
-            );
-            if score < rbeta {
-                is_singular = true;
-            }
-        }
-
-        value.best_move
-    } else {
-        Move::null()
-    };
-
-    // Validate that the TT move is actually legal in the current position.
-    // A stale or collided TT entry may reference a move that is not valid here.
-    //
-    // Assume the TT move is legal
-    // if !tt_move.is_null() && !moves.contains(&tt_move) {
-    //     tt_move = Move::none();
-    // }
-
-    // Base case: fall back to quiescence search
-    if depth == 0 {
-        return quiescence(pos, window, ply, 0, ctx);
-    }
-
-    let mut moves = MoveList::new();
-    generate_moves(pos, MoveGenType::Legal, &mut moves);
-
-    // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
-    if moves.is_empty() {
-        return Value::mated_in(ply);
-    }
-
-    // One-Reply Extensions
-    if moves.len() == 1 && ext_control.excluded_move.is_null() && ext_control.extensions < 6 {
-        depth += 1;
-        ext_control.extensions += 1;
-    }
-
-    // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
-    // prioritized first, killers, and history
-    sort_moves(
-        pos,
-        &mut moves,
-        tt_value.as_ref().map(|x| x.best_move).unwrap_or_default(),
-        ctx,
-        ply,
-    );
-
-    let mut best_score = -Value::INFINITY;
-    let mut best_move = Move::null();
-
-    for m in moves {
-        if m == ext_control.excluded_move {
-            continue;
-        }
-
-        let mut ext = 0;
-
-        if let Some(value) = &tt_value
-            && m == value.best_move
-            && is_singular
-        {
-            ext = 1;
-        }
-
-        pos.do_move(m);
-        let score = -negamax(
-            pos,
-            depth - 1 + ext as i8,
-            ply + 1,
-            window.negate(),
-            SearchExtension::new(ext_control.extensions + ext, Move::null()),
-            ctx,
-        );
-        pos.undo_move(m);
-
-        if ctx.stop.load(Ordering::Relaxed) {
-            return Value::ZERO;
-        }
-
-        if score > best_score {
-            best_score = score;
-            best_move = m;
-        }
-        if best_score > window.alpha {
-            window.alpha = best_score;
-        }
-        if window.alpha >= window.beta {
-            // Update killers and history for quiet moves
-            if pos.piece_at(m.square_to()) == Piece::None {
-                let ply_idx = ply as usize;
-                // We do not check for ply_idx out of bounds since
-                // ply should not exceed MAX_PLY in normal circumstances
-                if ctx.killers[ply_idx][0] != m {
-                    ctx.killers[ply_idx][1] = ctx.killers[ply_idx][0];
-                    ctx.killers[ply_idx][0] = m;
-                }
-                let side_idx = pos.side_to_move() as usize;
-                let from_idx = m.square_from() as usize;
-                let to_idx = m.square_to() as usize;
-                ctx.history_table[side_idx][from_idx][to_idx] += (depth as i32) * (depth as i32);
-            }
-            break; // Beta cutoff
-        }
-    }
-
-    // Cache search results to Transposition Table
-    if !ctx.stop.load(Ordering::Relaxed) {
-        let flag = if best_score >= window.beta {
-            TranspositionTableFlag::Beta
-        } else if best_score <= alpha_orig {
-            TranspositionTableFlag::Alpha
-        } else {
-            TranspositionTableFlag::Exact
-        };
-        ctx.transposition_table.store(
-            pos.zobrist_hash(),
-            ply,
-            tt_value!(best_score, flag, best_move, depth, ctx.age),
-        );
-    }
-
-    best_score
 }
 
 #[cfg(test)]
@@ -746,29 +742,29 @@ mod tests {
 
         // Call negamax with depth=1, we should get 0 (draw)
         let stop = Arc::new(AtomicBool::new(false));
-        let mut nodes = 0;
         let mut transposition_table = TranspositionTable::new(1);
-        let mut killers = [[Move::null(); 2]; MAX_PLY];
+        let killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
-        let mut max_ply = 0;
-        let mut ctx = SearchContext {
-            stop: &stop,
-            nodes: &mut nodes,
+        let mut ctx = Search {
+            pos: pos.clone(),
+            stop,
+            nodes: 0,
             start_time: Instant::now(),
-            time_limit: None,
+            allocated_time: None,
             transposition_table: &mut transposition_table,
             age: 1,
-            killers: &mut killers,
+            killers,
             history_table: &mut history_table,
-            max_ply: &mut max_ply,
+            max_ply: 0,
+            tx: std::sync::mpsc::channel().0, /* dummy sender since we won't be sending UCI info
+                                               * in this test */
         };
-        let score = negamax(
-            &mut pos,
+        let score = ctx.negamax(
             1,
             6,
-            SearchWindow::new(-Value::INFINITY, Value::INFINITY),
-            SearchExtension::default(),
-            &mut ctx,
+            -Value::INFINITY,
+            Value::INFINITY,
+            SearchContext::default(),
         );
         assert_eq!(score.raw(), 0);
     }
@@ -815,29 +811,29 @@ mod tests {
         // Black should win because White is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)
         let stop = Arc::new(AtomicBool::new(false));
-        let mut nodes = 0;
         let mut transposition_table = TranspositionTable::new(1);
-        let mut killers = [[Move::null(); 2]; MAX_PLY];
+        let killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
-        let mut max_ply = 0;
-        let mut ctx = SearchContext {
-            stop: &stop,
-            nodes: &mut nodes,
+        let mut ctx = Search {
+            pos,
+            stop,
+            nodes: 0,
             start_time: Instant::now(),
-            time_limit: None,
+            allocated_time: None,
             transposition_table: &mut transposition_table,
             age: 1,
-            killers: &mut killers,
+            killers,
             history_table: &mut history_table,
-            max_ply: &mut max_ply,
+            max_ply: 0,
+            tx: std::sync::mpsc::channel().0, /* dummy sender since we won't be sending UCI info
+                                               * in this test */
         };
-        let score = negamax(
-            &mut pos,
+        let score = ctx.negamax(
             1,
             5,
-            SearchWindow::new(-Value::INFINITY, Value::INFINITY),
-            SearchExtension::default(),
-            &mut ctx,
+            -Value::INFINITY,
+            Value::INFINITY,
+            SearchContext::default(),
         );
         assert_eq!(score, Value::mate_in(5));
     }
@@ -849,12 +845,19 @@ mod tests {
             .unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
         let mut tt = TranspositionTable::new(1);
-        let params = GoParameters {
-            depth: Some(2),
-            ..GoParameters::default()
-        };
+        let stop = Arc::new(AtomicBool::new(false));
 
-        let (best_move, _score, _nodes) = search(pos, params, &mut tt, 1, tx, None);
+        let mut history_table = [[[0; 90]; 90]; 2];
+        let (_score, best_move, _nodes) = Search::start_search(SearchParameters {
+            pos,
+            allocated_time: None,
+            stop,
+            max_depth: 2,
+            transposition_table: &mut tt,
+            history_table: &mut history_table,
+            tx,
+            age: 0,
+        });
 
         assert!(!best_move.is_null());
 
