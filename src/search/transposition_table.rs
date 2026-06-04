@@ -23,9 +23,10 @@ use strum::FromRepr;
 use crate::core::{Move, TranspositionTableKey, Value};
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr, Default)]
 #[repr(u8)]
 pub enum TranspositionTableFlag {
+    #[default]
     Empty,
     /// Score is exact/precise.
     Exact,
@@ -35,27 +36,35 @@ pub enum TranspositionTableFlag {
     Beta,
 }
 
+#[derive(Default, Debug, Clone)]
 /// Represents an entry inside the Transposition Table.
-#[derive(Clone, Debug, Default)]
-struct TranspositionTableEntry {
-    /// Zobrist board hash key.
-    pub key: TranspositionTableKey,
+pub struct TranspositionTableValue {
     /// The evaluation score (may be relative to mate).
     pub score: Value,
     /// The best move found at this position. The upper bits of this Move encode
     /// the TranspositionTableFlag, which denotes the entry's bound type (and
     /// validity; a flag of Empty indicates an invalid/empty entry).
     pub best_move: Move,
+    /// The type of bound this entry's score represents.
+    pub flag: TranspositionTableFlag,
     /// The search depth this score was evaluated to.
-    pub depth: u8,
+    /// Negative depth is Quiescence search, non-negative is regular search depth.
+    pub depth: i8,
     /// The search sequence generation/age to track relevance.
     pub age: u8,
 }
 
+#[derive(Clone, Debug, Default)]
+struct TranspositionTableEntry {
+    /// Zobrist board hash key.
+    pub key: TranspositionTableKey,
+    pub value: TranspositionTableValue,
+}
+
 #[macro_export]
-macro_rules! tt_entry_value {
+macro_rules! tt_value {
     ($score:expr, $flag:expr, $best_move:expr, $depth:expr, $age:expr) => {
-        TranspositionTableEntryValue {
+        TranspositionTableValue {
             score: $score,
             flag: $flag,
             best_move: $best_move,
@@ -65,14 +74,6 @@ macro_rules! tt_entry_value {
     };
 }
 
-impl TranspositionTableEntry {
-    /// The type of bound this entry's score represents
-    #[inline]
-    pub const fn flag(&self) -> TranspositionTableFlag {
-        self.best_move.flag()
-    }
-}
-
 /// A cache structure storing previously evaluated search nodes to speed up
 /// alpha-beta pruning.
 pub struct TranspositionTable {
@@ -80,14 +81,6 @@ pub struct TranspositionTable {
     table: Vec<TranspositionTableEntry>,
     /// Size mask to perform O(1) fast bitwise modulo logic.
     size_mask: usize,
-}
-
-pub struct TranspositionTableEntryValue {
-    pub score: Value,
-    pub flag: TranspositionTableFlag,
-    pub best_move: Move,
-    pub depth: u8,
-    pub age: u8,
 }
 
 impl Default for TranspositionTable {
@@ -141,23 +134,18 @@ impl TranspositionTable {
 
     /// Probes the table for an entry matching the given Zobrist key.
     /// Returns `Some` if a valid entry exists, `None` otherwise.
-    pub fn probe(
-        &self,
-        key: TranspositionTableKey,
-        ply: u8,
-    ) -> Option<TranspositionTableEntryValue> {
-        if self.table.is_empty() {
-            return None;
-        }
+    #[inline]
+    pub fn probe(&self, key: TranspositionTableKey, ply: u8) -> Option<TranspositionTableValue> {
+        assert!(
+            !self.table.is_empty(),
+            "Transposition Table is not initialized. Call resize() with a positive MB size."
+        );
         let index = (key as usize) & self.size_mask;
         let entry = &self.table[index];
-        if entry.key == key && entry.flag() != TranspositionTableFlag::Empty {
-            Some(TranspositionTableEntryValue {
-                flag: entry.best_move.flag(),
-                score: entry.score.ply_dependent(ply),
-                best_move: entry.best_move.no_flag(),
-                depth: entry.depth,
-                age: entry.age,
+        if entry.key == key && entry.value.flag != TranspositionTableFlag::Empty {
+            Some(TranspositionTableValue {
+                score: entry.value.score.ply_dependent(ply),
+                ..entry.value
             })
         } else {
             None
@@ -167,34 +155,29 @@ impl TranspositionTable {
     /// Stores search details into the Transposition Table using a
     /// Depth-Preferred and Age-Preferred replacement strategy.
     #[inline]
-    pub fn store(
-        &mut self,
-        key: TranspositionTableKey,
-        ply: u8,
-        value: TranspositionTableEntryValue,
-    ) {
+    pub fn store(&mut self, key: TranspositionTableKey, ply: u8, value: TranspositionTableValue) {
         if self.table.is_empty() {
             return;
         }
         let index = (key as usize) & self.size_mask;
         let existing = &mut self.table[index];
 
-        let is_empty = existing.flag() == TranspositionTableFlag::Empty;
+        let is_empty = existing.value.flag == TranspositionTableFlag::Empty;
         let is_collision = existing.key != key;
-        let is_deeper = value.depth >= existing.depth;
+        let is_deeper = value.depth >= existing.value.depth;
         // Since age is wrapping u8, we can consider an entry "older" if its age is
         // different from the current age.
-        let is_older = value.age != existing.age;
+        let is_older = value.age != existing.value.age;
 
         // Store if the slot is unused, a different board position collided,
         // this search is deeper/better, or the existing entry is stale (old age).
         if is_empty || is_collision || is_deeper || is_older {
             *existing = TranspositionTableEntry {
                 key,
-                depth: value.depth,
-                score: value.score.ply_independent(ply),
-                best_move: value.best_move.with_flag(value.flag),
-                age: value.age,
+                value: TranspositionTableValue {
+                    score: value.score.ply_independent(ply),
+                    ..value
+                },
             };
         }
     }
@@ -207,7 +190,7 @@ impl TranspositionTable {
         let sample_size = self.table.len().min(1000);
         let mut filled = 0;
         for i in 0..sample_size {
-            if self.table[i].flag() != TranspositionTableFlag::Empty {
+            if self.table[i].value.flag != TranspositionTableFlag::Empty {
                 filled += 1;
             }
         }
@@ -229,7 +212,7 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_entry_value!(
+            tt_value!(
                 value!(100),
                 TranspositionTableFlag::Exact,
                 Move::null(),
@@ -254,7 +237,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_entry_value!(
+            tt_value!(
                 value!(80),
                 TranspositionTableFlag::Exact,
                 Move::null(),
@@ -268,7 +251,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_entry_value!(
+            tt_value!(
                 value!(90),
                 TranspositionTableFlag::Exact,
                 Move::null(),
@@ -283,7 +266,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_entry_value!(
+            tt_value!(
                 value!(120),
                 TranspositionTableFlag::Exact,
                 Move::null(),
@@ -298,7 +281,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_entry_value!(
+            tt_value!(
                 value!(200),
                 TranspositionTableFlag::Alpha,
                 Move::null(),
@@ -321,7 +304,7 @@ mod tests {
         tt.store(
             100,
             ply,
-            tt_entry_value!(
+            tt_value!(
                 mate_score,
                 TranspositionTableFlag::Exact,
                 Move::null(),
@@ -343,7 +326,7 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_entry_value!(
+            tt_value!(
                 value!(100),
                 TranspositionTableFlag::Exact,
                 Move::null(),

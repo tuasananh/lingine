@@ -38,7 +38,7 @@ use crate::core::{
 };
 use crate::eval::evaluate;
 use crate::uci::{GoParameters, UciInfo, UciScore, UciScoreBound};
-use crate::{tt_entry_value, value};
+use crate::{tt_value, value};
 
 mod transposition_table;
 pub use transposition_table::*;
@@ -175,7 +175,7 @@ fn sort_moves(pos: &Position, moves: &mut [Move], tt_move: Move, ctx: &SearchCon
 fn extract_pv(
     pos: &Position,
     tt: &TranspositionTable,
-    depth: u8,
+    depth: i8,
     best_move: Move,
 ) -> Option<Vec<Move>> {
     if best_move.is_null() {
@@ -190,7 +190,7 @@ fn extract_pv(
     let mut visited = std::collections::HashSet::new();
     visited.insert(current_pos.zobrist_hash());
 
-    for ply in 1..depth {
+    for ply in 1..depth as u8 {
         if let Some(entry) = tt.probe(current_pos.zobrist_hash(), ply) {
             if entry.flag == TranspositionTableFlag::Empty {
                 break;
@@ -226,7 +226,7 @@ pub fn search(
     let start_time = Instant::now();
     let mut nodes = 0u64;
 
-    let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as u8;
+    let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
 
     let mut best_move = Move::null();
     let mut last_depth_score = -Value::INFINITY;
@@ -497,14 +497,14 @@ fn quiescence(
 
 /// Calculates the margin threshold required for singular extensions.
 #[inline]
-fn singular_margin(depth: u8) -> Value {
-    value!(2 * depth as i32)
+fn singular_margin(depth: i8) -> Value {
+    value!(2 * depth as i16)
 }
 
 /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
 fn negamax(
     pos: &mut Position,
-    depth: u8,
+    depth: i8,
     ply: u8,
     mut window: SearchWindow,
     mut ext_control: SearchExtension,
@@ -543,18 +543,19 @@ fn negamax(
     let alpha_orig = window.alpha;
 
     let mut is_singular = false;
-    let tt_move = if let Some(entry) = ctx.transposition_table.probe(pos.zobrist_hash(), ply) {
-        if entry.depth >= depth {
-            match entry.flag {
-                TranspositionTableFlag::Exact => return entry.score,
+    let tt_value = ctx.transposition_table.probe(pos.zobrist_hash(), ply);
+    if let Some(value) = &tt_value {
+        if value.depth >= depth {
+            match value.flag {
+                TranspositionTableFlag::Exact => return value.score,
                 TranspositionTableFlag::Alpha => {
-                    if entry.score <= window.alpha {
-                        return entry.score;
+                    if value.score <= window.alpha {
+                        return value.score;
                     }
                 }
                 TranspositionTableFlag::Beta => {
-                    if entry.score >= window.beta {
-                        return entry.score;
+                    if value.score >= window.beta {
+                        return value.score;
                     }
                 }
                 TranspositionTableFlag::Empty => {
@@ -567,18 +568,18 @@ fn negamax(
         if depth >= 8
             && ext_control.excluded_move.is_null()
             && ext_control.extensions < 6
-            && entry.depth >= depth - 3
-            && entry.flag != TranspositionTableFlag::Alpha
-            && !entry.score.abs().is_winning()
+            && value.depth >= depth - 3
+            && value.flag != TranspositionTableFlag::Alpha
+            && !value.score.abs().is_winning()
         {
             let rdepth = depth - 3;
-            let rbeta = entry.score - singular_margin(depth);
+            let rbeta = value.score - singular_margin(depth);
             let score = negamax(
                 pos,
                 rdepth,
                 ply,
                 SearchWindow::new(rbeta - value!(1), rbeta),
-                SearchExtension::new(ext_control.extensions, entry.best_move),
+                SearchExtension::new(ext_control.extensions, value.best_move),
                 ctx,
             );
             if score < rbeta {
@@ -586,7 +587,7 @@ fn negamax(
             }
         }
 
-        entry.best_move
+        value.best_move
     } else {
         Move::null()
     };
@@ -620,7 +621,13 @@ fn negamax(
 
     // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
     // prioritized first, killers, and history
-    sort_moves(pos, &mut moves, tt_move, ctx, ply);
+    sort_moves(
+        pos,
+        &mut moves,
+        tt_value.as_ref().map(|x| x.best_move).unwrap_or_default(),
+        ctx,
+        ply,
+    );
 
     let mut best_score = -Value::INFINITY;
     let mut best_move = Move::null();
@@ -632,14 +639,17 @@ fn negamax(
 
         let mut ext = 0;
 
-        if m == tt_move && is_singular {
+        if let Some(value) = &tt_value
+            && m == value.best_move
+            && is_singular
+        {
             ext = 1;
         }
 
         pos.do_move(m);
         let score = -negamax(
             pos,
-            depth - 1 + ext,
+            depth - 1 + ext as i8,
             ply + 1,
             window.negate(),
             SearchExtension::new(ext_control.extensions + ext, Move::null()),
@@ -689,7 +699,7 @@ fn negamax(
         ctx.transposition_table.store(
             pos.zobrist_hash(),
             ply,
-            tt_entry_value!(best_score, flag, best_move, depth, ctx.age),
+            tt_value!(best_score, flag, best_move, depth, ctx.age),
         );
     }
 

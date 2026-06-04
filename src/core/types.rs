@@ -41,7 +41,7 @@ pub type MoveScore = i32;
     MulAssign,
     Default,
 )]
-pub struct Value(i32);
+pub struct Value(i16);
 
 #[macro_export]
 macro_rules! value {
@@ -53,10 +53,10 @@ macro_rules! value {
 impl Value {
     pub const ZERO: Value = Value(0);
     pub const DRAW: Value = Value(0);
-    pub const MATE: Value = Value(100_000);
-    pub const INFINITY: Value = Value(10_000_000);
-    pub const MATE_IN_MAX_PLY: Value = Value(Self::MATE.0 - MAX_PLY as i32);
-    pub const MATED_IN_MAX_PLY: Value = Value(-Self::MATE.0 + MAX_PLY as i32);
+    pub const MATE: Value = Value(32_000);
+    pub const INFINITY: Value = Value(32_001);
+    pub const MATE_IN_MAX_PLY: Value = Value(Self::MATE.0 - MAX_PLY as i16);
+    pub const MATED_IN_MAX_PLY: Value = Value(-Self::MATE.0 + MAX_PLY as i16);
 
     /// Checks whether the score is winning (mate in some plies)
     #[inline]
@@ -75,9 +75,9 @@ impl Value {
     #[inline]
     pub const fn ply_independent(&self, ply: u8) -> Self {
         if self.is_winning() {
-            Self(self.0 + ply as i32)
+            Self(self.0 + ply as i16)
         } else if self.is_losing() {
-            Self(self.0 - ply as i32)
+            Self(self.0 - ply as i16)
         } else {
             *self
         }
@@ -88,9 +88,9 @@ impl Value {
     #[inline]
     pub const fn ply_dependent(self, ply: u8) -> Self {
         if self.is_winning() {
-            Self(self.0 - ply as i32)
+            Self(self.0 - ply as i16)
         } else if self.is_losing() {
-            Self(self.0 + ply as i32)
+            Self(self.0 + ply as i16)
         } else {
             self
         }
@@ -111,24 +111,24 @@ impl Value {
     /// Value for mate in some ply
     #[inline]
     pub const fn mate_in(ply: u8) -> Self {
-        Value(Self::MATE.0 - ply as i32)
+        Value(Self::MATE.0 - ply as i16)
     }
 
     /// Value for mated in some ply
     #[inline]
     pub const fn mated_in(ply: u8) -> Self {
-        Value(-Self::MATE.0 + ply as i32)
+        Value(-Self::MATE.0 + ply as i16)
     }
 
-    /// Gets the value from a raw [`i32`]
+    /// Gets the value from a raw [`i16`]
     #[inline]
-    pub const fn from_raw(val: i32) -> Self {
+    pub const fn from_raw(val: i16) -> Self {
         Value(val)
     }
 
-    /// Turns into a i32
+    /// Turns into a i16
     #[inline]
-    pub const fn raw(&self) -> i32 {
+    pub const fn raw(&self) -> i16 {
         self.0
     }
 
@@ -463,10 +463,10 @@ mod tests {
     }
 
     #[test]
-    fn test_value_display_as_i32() {
+    fn test_value_display_as_i16() {
         let v = Value(12345);
         assert_eq!(v.to_string(), "12345");
-        let v = Value(-67890);
-        assert_eq!(v.to_string(), "-67890");
+        let v = Value(-6790);
+        assert_eq!(v.to_string(), "-6790");
     }
 }
