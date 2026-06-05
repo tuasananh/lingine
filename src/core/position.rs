@@ -26,8 +26,8 @@ use crate::{
         Value,
         bitboard::Bitboard,
         movegen::{
-            KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks, ADVISOR_ATTACKS,
-            BISHOP_TABLE,
+            ADVISOR_ATTACKS, BISHOP_TABLE, FILE_TABLE, KNIGHT_TABLE, KNIGHT_TO_TABLE,
+            PAWN_ATTACKS_TO, RANK_TABLE, cannon_attacks, gather_file_bits, rook_attacks,
         },
         types::{Color, File, Move, Piece, PieceType, Rank, Square},
     },
@@ -208,11 +208,132 @@ impl Position {
             .unwrap_or(Value::ZERO)
     }
 
-    /// Get the complete evaluation score (material + piece-square table) of the
-    /// current position from White's perspective
+    /// Get the complete evaluation score (material + piece-square table +
+    /// positional features) of the current position from White's
+    /// perspective.
     #[inline]
     pub fn evaluate(&self) -> Value {
-        self.material_score() + self.piece_square_table_score()
+        let base_score = self.material_score() + self.piece_square_table_score();
+        base_score + self.evaluate_positional_features()
+    }
+
+    /// Evaluates dynamic positional features (mobility, king safety, pawn
+    /// threats). Returns a Value from White's perspective.
+    pub fn evaluate_positional_features(&self) -> Value {
+        let occupied = self.bitboard_by_color[Color::White as usize]
+            | self.bitboard_by_color[Color::Black as usize];
+
+        let mut score = 0;
+
+        // Mask for Palace Areas: files 2..6, ranks 0..2 (White) and ranks 7..9 (Black)
+        const PALACE_AREA_MASKS: [u128; 2] = [
+            0x1F0F87C,                                              // White
+            (0x7Cu128 << 63) | (0x7Cu128 << 72) | (0x7Cu128 << 81), // Black
+        ];
+
+        // Loop over both colors, accumulating features. White gets positive sign, Black
+        // gets negative.
+        for color in [Color::White, Color::Black] {
+            let sign = if color == Color::White { 1 } else { -1 };
+            let us_pieces = self.bitboard_by_color[color as usize];
+            let enemy_pieces = self.bitboard_by_color[color.opposite() as usize];
+
+            let mut side_score = 0;
+
+            // 1. Mobility: count legal target squares for major pieces
+            // Rooks (Chariots) mobility (+2 per square)
+            let mut rooks = self.bitboard_by_type(PieceType::Rook) & us_pieces;
+            while let Some(sq) = rooks.pop_lsb() {
+                let attacks = rook_attacks(sq, occupied) & !us_pieces;
+                side_score += attacks.count_ones() as i32 * 2;
+            }
+
+            // Knights (Horses) mobility (+3 per square, accounting for blocked legs)
+            let mut knights = self.bitboard_by_type(PieceType::Knight) & us_pieces;
+            while let Some(sq) = knights.pop_lsb() {
+                let entry = &KNIGHT_TABLE[sq as usize];
+                let mut occ_idx = 0;
+                for i in 0..4 {
+                    if let Some(eye_sq) = entry.eyes[i] {
+                        if occupied.is_occupied(eye_sq) {
+                            occ_idx |= 1 << i;
+                        }
+                    }
+                }
+                let attacks = entry.attacks[occ_idx] & !us_pieces;
+                side_score += attacks.count_ones() as i32 * 3;
+            }
+
+            // Cannons mobility (+2 per move, including quiet slides and leap captures)
+            let mut cannons = self.bitboard_by_type(PieceType::Cannon) & us_pieces;
+            while let Some(sq) = cannons.pop_lsb() {
+                let f = sq.file() as usize;
+                let r = sq.rank() as usize;
+
+                // Rank moves: quiet (same as Rook but not blocked) + leap captures (behind a
+                // screen)
+                let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+                let rank_quiet = RANK_TABLE[f].rook[rank_occ] & !rank_occ as u16;
+                let rank_captures = RANK_TABLE[f].cannon[rank_occ]
+                    & ((enemy_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
+
+                // File moves: quiet + leap captures
+                let file_occ = gather_file_bits(occupied.raw(), f);
+                let file_quiet =
+                    FILE_TABLE[r].rook[file_occ] & !gather_file_bits(occupied.raw(), f) as u16;
+                let file_captures =
+                    FILE_TABLE[r].cannon[file_occ] & gather_file_bits(enemy_pieces.raw(), f) as u16;
+
+                let mobility = (rank_quiet | rank_captures).count_ones()
+                    + (file_quiet | file_captures).count_ones();
+                side_score += mobility as i32 * 2;
+            }
+
+            // 2. Palace Defenders: reward having defensive shields (Advisors and Bishops)
+            let (adv_piece, bish_piece) = match color {
+                Color::White => (Piece::WhiteAdvisor, Piece::WhiteBishop),
+                Color::Black => (Piece::BlackAdvisor, Piece::BlackBishop),
+            };
+            side_score += match self.piece_count(adv_piece) {
+                2 => 30,
+                1 => 10,
+                _ => -30,
+            };
+            side_score += match self.piece_count(bish_piece) {
+                2 => 20,
+                1 => 5,
+                _ => -20,
+            };
+
+            // 3. King Ring Danger: penalize enemy attackers invading/occupying the palace
+            //    vicinity
+            let enemy_in_palace =
+                enemy_pieces & Bitboard::from_raw(PALACE_AREA_MASKS[color as usize]);
+            if !enemy_in_palace.is_empty() {
+                let rooks = (self.bitboard_by_type(PieceType::Rook) & enemy_in_palace).count_ones();
+                let cannons =
+                    (self.bitboard_by_type(PieceType::Cannon) & enemy_in_palace).count_ones();
+                let knights =
+                    (self.bitboard_by_type(PieceType::Knight) & enemy_in_palace).count_ones();
+                let pawns = (self.bitboard_by_type(PieceType::Pawn) & enemy_in_palace).count_ones();
+
+                let danger = rooks as i32 * 80
+                    + cannons as i32 * 50
+                    + knights as i32 * 40
+                    + pawns as i32 * 30;
+                side_score -= danger;
+            }
+
+            // 4. Advanced Pawn Threats: reward pawns invading the enemy's Palace
+            let enemy_palace = Bitboard::PALACE & Bitboard::side(color.opposite());
+            let pawns_in_enemy_palace =
+                (self.bitboard_by_type(PieceType::Pawn) & us_pieces & enemy_palace).count_ones();
+            side_score += pawns_in_enemy_palace as i32 * 30;
+
+            score += side_score * sign;
+        }
+
+        Value::from_raw(score as i16)
     }
 
     /// Computes the complete material and Piece-Square Table scores from
@@ -898,7 +1019,11 @@ impl Position {
         white_pieces: Bitboard,
         black_pieces: Bitboard,
     ) -> Bitboard {
-        let color_bb = if attacker == Color::White { white_pieces } else { black_pieces };
+        let color_bb = if attacker == Color::White {
+            white_pieces
+        } else {
+            black_pieces
+        };
         let opponent_pawns = self.bitboard_by_type(PieceType::Pawn) & color_bb;
         let opponent_knights = self.bitboard_by_type(PieceType::Knight) & color_bb;
         let opponent_rooks = self.bitboard_by_type(PieceType::Rook) & color_bb;
@@ -985,7 +1110,8 @@ impl Position {
             }
         };
 
-        let mut occupied = self.bitboard_by_color(Color::White) | self.bitboard_by_color(Color::Black);
+        let mut occupied =
+            self.bitboard_by_color(Color::White) | self.bitboard_by_color(Color::Black);
         let mut white_pieces = self.bitboard_by_color(Color::White);
         let mut black_pieces = self.bitboard_by_color(Color::Black);
 
@@ -1485,10 +1611,12 @@ mod tests {
         // Rook captures Pawn: should result in a loss of the Rook (-570)
         assert_eq!(pos.see(m1), -570);
 
-        // White also has a Cannon at A2 attacking A9 and an Advisor at A5 acting as a screen
+        // White also has a Cannon at A2 attacking A9 and an Advisor at A5 acting as a
+        // screen
         pos.set("pr7/9/9/9/a8/9/9/C8/9/R8 w").unwrap();
         // Rook captures Pawn: White Rook (600) captured by Black Rook (600),
-        // then White Cannon (285) captures Black Rook (600) using Advisor (A5) as screen -> net is 30 (pawn) - 600 (rook) + 600 (rook) = 30.
+        // then White Cannon (285) captures Black Rook (600) using Advisor (A5) as
+        // screen -> net is 30 (pawn) - 600 (rook) + 600 (rook) = 30.
         assert_eq!(pos.see(m1), 30);
     }
 }

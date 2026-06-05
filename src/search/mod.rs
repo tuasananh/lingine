@@ -553,8 +553,10 @@ impl<'a> Search<'a> {
             self.pos.do_move(m);
             // Principal Variation Search
             //
-            // We trust that our move ordering is good enough to ensure the first move searched to be the best move most of the time,
-            // so we only search the first move fully and all following moves with a zero width window (beta = alpha + 1).
+            // We trust that our move ordering is good enough to ensure the first move
+            // searched to be the best move most of the time, so we only search
+            // the first move fully and all following moves with a zero width window (beta =
+            // alpha + 1).
             //
             // See: https://www.chessprogramming.org/
             //
@@ -625,7 +627,8 @@ impl<'a> Search<'a> {
                         );
                     }
 
-                    // If it failed high on the null window search, we need to research with the full window to get the exact score
+                    // If it failed high on the null window search, we need to research with the
+                    // full window to get the exact score
                     if val > alpha && val < beta {
                         -self.negamax(
                             depth - 1 + ext as i8,

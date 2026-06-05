@@ -165,12 +165,12 @@ _Goal: Fast, selective tactical search and positional maturity._
   - **One-Reply Extensions**: If side to move has only one legal move, extend
     search by 1 ply.
 
-- [ ] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
+- [x] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
 - [x] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
       moves
-- [ ] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace
+- [x] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace
       safety scoring
-- [ ] **Pawn Structure**: Dynamic scoring for passed/crossed-river pawns
+- [x] **Pawn Structure**: Dynamic scoring for passed/crossed-river pawns
 - [ ] **Verification**: Custom bench suite in `src/benchmark/` to track search
       speeds (NPS) and node reductions
 
