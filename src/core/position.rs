@@ -217,6 +217,33 @@ impl Position {
         base_score + self.evaluate_positional_features()
     }
 
+    /// Performs a lazy evaluation. If the base score (material + PST) is far
+    /// enough outside the alpha-beta window that positional features couldn't
+    /// change the outcome, it simply returns the base score to save computation.
+    /// `alpha` and `beta` should be provided from the perspective of the side to move.
+    #[inline]
+    pub fn evaluate_lazy(&self, alpha: Value, beta: Value) -> Value {
+        let base_score = self.material_score() + self.piece_square_table_score();
+        // A generous margin for maximum possible positional swing in centipawns
+        let margin = Value::from_raw(200); 
+
+        // Convert side-to-move alpha/beta to White's perspective
+        let (alpha_white, beta_white) = if self.side_to_move == Color::White {
+            (alpha, beta)
+        } else {
+            (-beta, -alpha)
+        };
+
+        if base_score - margin >= beta_white {
+            return base_score; // Fails high anyway
+        }
+        if base_score + margin <= alpha_white {
+            return base_score; // Fails low anyway
+        }
+        
+        base_score + self.evaluate_positional_features()
+    }
+
     /// Evaluates dynamic positional features (mobility, king safety, pawn
     /// threats). Returns a Value from White's perspective.
     pub fn evaluate_positional_features(&self) -> Value {
@@ -225,14 +252,7 @@ impl Position {
 
         let mut score = 0;
 
-        // Mask for Palace Areas: files 2..6, ranks 0..2 (White) and ranks 7..9 (Black)
-        const PALACE_AREA_MASKS: [u128; 2] = [
-            0x1F0F87C,                                              // White
-            (0x7Cu128 << 63) | (0x7Cu128 << 72) | (0x7Cu128 << 81), // Black
-        ];
-
-        // Loop over both colors, accumulating features. White gets positive sign, Black
-        // gets negative.
+        // Loop over both colors, accumulating features. White gets positive sign, Black gets negative.
         for color in [Color::White, Color::Black] {
             let sign = if color == Color::White { 1 } else { -1 };
             let us_pieces = self.bitboard_by_color[color as usize];
@@ -240,15 +260,16 @@ impl Position {
 
             let mut side_score = 0;
 
-            // 1. Mobility: count legal target squares for major pieces
-            // Rooks (Chariots) mobility (+2 per square)
+            // 1. Mobility: count legal target squares for major pieces (+1 per square)
+            // Rooks (Chariots) mobility
             let mut rooks = self.bitboard_by_type(PieceType::Rook) & us_pieces;
             while let Some(sq) = rooks.pop_lsb() {
                 let attacks = rook_attacks(sq, occupied) & !us_pieces;
-                side_score += attacks.count_ones() as i32 * 2;
+                // Rook mobility is highly valued (weight * 3)
+                side_score += attacks.count_ones() as i32 * 3;
             }
 
-            // Knights (Horses) mobility (+3 per square, accounting for blocked legs)
+            // Knights (Horses) mobility
             let mut knights = self.bitboard_by_type(PieceType::Knight) & us_pieces;
             while let Some(sq) = knights.pop_lsb() {
                 let entry = &KNIGHT_TABLE[sq as usize];
@@ -261,17 +282,16 @@ impl Position {
                     }
                 }
                 let attacks = entry.attacks[occ_idx] & !us_pieces;
-                side_score += attacks.count_ones() as i32 * 3;
+                side_score += attacks.count_ones() as i32 * 1;
             }
 
-            // Cannons mobility (+2 per move, including quiet slides and leap captures)
+            // Cannons mobility (includes quiet slides and leap captures)
             let mut cannons = self.bitboard_by_type(PieceType::Cannon) & us_pieces;
             while let Some(sq) = cannons.pop_lsb() {
                 let f = sq.file() as usize;
                 let r = sq.rank() as usize;
 
-                // Rank moves: quiet (same as Rook but not blocked) + leap captures (behind a
-                // screen)
+                // Rank moves: quiet (same as Rook but not blocked) + leap captures (behind a screen)
                 let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
                 let rank_quiet = RANK_TABLE[f].rook[rank_occ] & !rank_occ as u16;
                 let rank_captures = RANK_TABLE[f].cannon[rank_occ]
@@ -279,14 +299,13 @@ impl Position {
 
                 // File moves: quiet + leap captures
                 let file_occ = gather_file_bits(occupied.raw(), f);
-                let file_quiet =
-                    FILE_TABLE[r].rook[file_occ] & !gather_file_bits(occupied.raw(), f) as u16;
-                let file_captures =
-                    FILE_TABLE[r].cannon[file_occ] & gather_file_bits(enemy_pieces.raw(), f) as u16;
+                let file_quiet = FILE_TABLE[r].rook[file_occ] & !gather_file_bits(occupied.raw(), f) as u16;
+                let file_captures = FILE_TABLE[r].cannon[file_occ]
+                    & gather_file_bits(enemy_pieces.raw(), f) as u16;
 
                 let mobility = (rank_quiet | rank_captures).count_ones()
                     + (file_quiet | file_captures).count_ones();
-                side_score += mobility as i32 * 2;
+                side_score += mobility as i32 * 1;
             }
 
             // 2. Palace Defenders: reward having defensive shields (Advisors and Bishops)
@@ -295,32 +314,29 @@ impl Position {
                 Color::Black => (Piece::BlackAdvisor, Piece::BlackBishop),
             };
             side_score += match self.piece_count(adv_piece) {
-                2 => 30,
-                1 => 10,
-                _ => -30,
+                2 => 15,
+                1 => 5,
+                _ => -15,
             };
             side_score += match self.piece_count(bish_piece) {
-                2 => 20,
-                1 => 5,
-                _ => -20,
+                2 => 10,
+                1 => 2,
+                _ => -10,
             };
 
-            // 3. King Ring Danger: penalize enemy attackers invading/occupying the palace
-            //    vicinity
-            let enemy_in_palace =
-                enemy_pieces & Bitboard::from_raw(PALACE_AREA_MASKS[color as usize]);
+            // 3. Palace Safety: penalize enemy attackers invading our actual Palace boundary
+            let our_palace = Bitboard::PALACE & Bitboard::side(color);
+            let enemy_in_palace = enemy_pieces & our_palace;
             if !enemy_in_palace.is_empty() {
                 let rooks = (self.bitboard_by_type(PieceType::Rook) & enemy_in_palace).count_ones();
-                let cannons =
-                    (self.bitboard_by_type(PieceType::Cannon) & enemy_in_palace).count_ones();
-                let knights =
-                    (self.bitboard_by_type(PieceType::Knight) & enemy_in_palace).count_ones();
+                let cannons = (self.bitboard_by_type(PieceType::Cannon) & enemy_in_palace).count_ones();
+                let knights = (self.bitboard_by_type(PieceType::Knight) & enemy_in_palace).count_ones();
                 let pawns = (self.bitboard_by_type(PieceType::Pawn) & enemy_in_palace).count_ones();
 
-                let danger = rooks as i32 * 80
-                    + cannons as i32 * 50
-                    + knights as i32 * 40
-                    + pawns as i32 * 30;
+                let danger = rooks as i32 * 40
+                    + cannons as i32 * 30
+                    + knights as i32 * 25
+                    + pawns as i32 * 20;
                 side_score -= danger;
             }
 
@@ -328,7 +344,17 @@ impl Position {
             let enemy_palace = Bitboard::PALACE & Bitboard::side(color.opposite());
             let pawns_in_enemy_palace =
                 (self.bitboard_by_type(PieceType::Pawn) & us_pieces & enemy_palace).count_ones();
-            side_score += pawns_in_enemy_palace as i32 * 30;
+            side_score += pawns_in_enemy_palace as i32 * 15;
+
+            // 5. Hollow Center: penalize if King is on the central file without protective pieces
+            let king_sq = self.king_squares[color as usize];
+            if king_sq.file() as u8 == 4 {
+                let friendly_on_center = gather_file_bits(us_pieces.raw(), 4);
+                // If count is 1, only the King is on the central file, leaving it completely hollow and exposed
+                if friendly_on_center.count_ones() == 1 {
+                    side_score -= 40;
+                }
+            }
 
             score += side_score * sign;
         }

@@ -44,8 +44,8 @@ mod tests {
         // Therefore, without this Rook, White loses:
         // - -600 material
         // - -5 positional PST value (net: -595)
-        // - -4 Rook mobility value (attacks A1, A2; net: -599)
-        assert_eq!(pos.evaluate(), value!(-599));
+        // - -6 Rook mobility value (attacks A1, A2; 2 * 3; net: -601)
+        assert_eq!(pos.evaluate(), value!(-601));
     }
 
     #[test]

@@ -464,8 +464,23 @@ impl<'a> Search<'a> {
             }
         };
 
+        let static_eval_white = self.pos.evaluate_lazy(alpha, beta);
+        let static_eval = if self.pos.side_to_move() == Color::White {
+            static_eval_white
+        } else {
+            -static_eval_white
+        };
+
+        // Reverse Futility Pruning (RFP)
+        if depth <= 4 && !in_check && !beta.abs().is_winning() && ctx.can_null {
+            let margin = value!(75 * depth as i16);
+            if static_eval - margin >= beta {
+                return static_eval;
+            }
+        }
+
         // Null Move Pruning (NMP)
-        if depth >= 3 && !in_check && is_null_window && ctx.can_null && !beta.abs().is_winning() {
+        if depth >= 3 && !in_check && is_null_window && ctx.can_null && !beta.abs().is_winning() && static_eval >= beta {
             let side = self.pos.side_to_move();
             let has_major_or_minor = !(self.pos.bitboard_by_type(PieceType::Rook)
                 & self.pos.bitboard_by_color(side))
@@ -551,6 +566,28 @@ impl<'a> Search<'a> {
             let is_quiet = self.pos.is_empty(m.square_to());
 
             self.pos.do_move(m);
+            let gives_check = self.pos.is_in_check(self.pos.side_to_move());
+
+            // Late Move Pruning (LMP)
+            if depth <= 3 && m_idx > 0 && is_quiet && !gives_check && !in_check && !alpha.abs().is_winning() {
+                let lmp_threshold = (3 + 2 * depth * depth) as usize;
+                if m_idx >= lmp_threshold {
+                    self.pos.undo_move(m);
+                    bad_quiets.push(m);
+                    continue;
+                }
+            }
+
+            // Futility Pruning (FP)
+            if depth <= 4 && m_idx > 0 && is_quiet && !gives_check && !in_check && !alpha.abs().is_winning() {
+                let fp_margin = value!(100 * depth as i16);
+                if static_eval + fp_margin <= alpha {
+                    self.pos.undo_move(m);
+                    bad_quiets.push(m);
+                    continue;
+                }
+            }
+
             // Principal Variation Search
             //
             // We trust that our move ordering is good enough to ensure the first move
@@ -724,7 +761,7 @@ impl<'a> Search<'a> {
         // Base case: to avoid infinite recursion and stack overflow from perpetual
         // checks
         if depth <= -12 {
-            let stand_pat = self.pos.evaluate();
+            let stand_pat = self.pos.evaluate_lazy(alpha, beta);
             return if self.pos.side_to_move() == Color::White {
                 stand_pat
             } else {
@@ -743,7 +780,7 @@ impl<'a> Search<'a> {
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
-            let stand_pat = self.pos.evaluate();
+            let stand_pat = self.pos.evaluate_lazy(alpha, beta);
             best_score = if self.pos.side_to_move() == Color::White {
                 stand_pat
             } else {
