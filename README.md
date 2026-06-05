@@ -104,7 +104,7 @@ victory margins.
 - `--options-b "OPTIONS"`: Custom UCI options passed to Engine B.
 - `-g`, `--games N`: Total number of games to play in the match (Default: `40`).
 - `-t`, `--tc TIMECONTROL`: Time control setting in minutes/increment format
-  (Default: `"10/10+0.1"`).
+  (Default: `"3+0.03"`).
 - `-c`, `--concurrency N`: Number of games to run in parallel (Default:
   automatically optimized to `Cores / 2`).
 - `-d`, `--depth N`: Opening book ply depth to feed engines before they start
@@ -166,7 +166,7 @@ of strength-limited standard baseline bots.
 - `--name NAME`: Display name for the target engine (Default: `Lingine`).
 - `-g`, `--games N`: Number of games to play against **each** ELO level
   (Default: `10`).
-- `-t`, `--tc TIMECONTROL`: Time control setting (Default: `"10/10+0.1"`).
+- `-t`, `--tc TIMECONTROL`: Time control setting (Default: `"3+0.03"`).
 - `-d`, `--depth N`: Opening book ply depth (Default: `12`).
 - `-e`, `--elos LIST`: Comma-separated list of Fairy-Stockfish ELO ratings to
   play against (Default: `"1200,1400,1600,1800,2000,2200"`).
@@ -245,7 +245,7 @@ but you can filter them:
 - `-v`, `--version <VER>`: Filters tasks to only run matches/gauntlets involving
   a specific historical version (e.g. `1.6.0a-check-extensions`).
 - `-t`, `--tc TIMECONTROL`: Custom time control setting to override default
-  `10/10+0.1`.
+  `3+0.03`.
 - `-c`, `--concurrency N`: Adjusts parallel game execution limit.
 - `-f`, `--force`: Overwrites any previous benchmark reports and forces a
   complete recalculation.

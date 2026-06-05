@@ -298,8 +298,8 @@ def main():
         "-t",
         "--tc",
         type=str,
-        default="10/10+0.1",
-        help="Time control setting in minutes/increment format (default: 10/10+0.1)",
+        default="3+0.03",
+        help="Time control setting (default: 3+0.03)",
     )
     parser.add_argument(
         "-d",

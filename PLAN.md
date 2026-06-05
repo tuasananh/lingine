@@ -232,7 +232,7 @@ cargo build --release
 ./tools/sylvan-cli \
   -engine cmd=./target/release/lingine name=Lingine \
   -engine cmd=./tools/fairy-stockfish_x86-64 name=Fairy-Stockfish option.UCI_LimitStrength=true option.UCI_Elo=1200 \
-  -each proto=uci tc=10/10+0.1 option.Hash=16 \
+  -each proto=uci tc=3+0.03 option.Hash=16 \
   -tournament round-robin -games 100 -concurrency 4 \
   -pgnout gauntlet.pgn -variant xiangqi
 ```
