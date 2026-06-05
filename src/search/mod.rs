@@ -707,6 +707,17 @@ impl<'a> Search<'a> {
                 let m = entry.best_move;
                 // Here we do not need to check for null move
                 // since we know that a non-empty TT entry must have a valid move.
+                let mut moves = MoveList::new();
+                generate_moves(&current_pos, MoveGenType::Legal, &mut moves);
+                // The TT move might be illegal
+                if !moves.contains(&m) {
+                    log::debug!(
+                        "PV extraction: TT move {} at ply {} is not legal in the current position, stopping PV extraction",
+                        m.to_uci_string(),
+                        ply
+                    );
+                    break;
+                }
                 pv.push(m);
                 current_pos.do_move(m);
 
