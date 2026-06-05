@@ -460,7 +460,7 @@ impl<'a> Search<'a> {
 
         // Base case: fall back to quiescence search
         if depth == 0 {
-            return self.quiescence(0, ply, alpha, beta);
+            return self.quiescence_search(0, ply, alpha, beta);
         }
 
         let mut moves = MoveList::new();
@@ -562,7 +562,7 @@ impl<'a> Search<'a> {
     ///
     /// Prevents the horizon effect by searching captures only until a quiet
     /// position is reached.
-    fn quiescence(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
+    fn quiescence_search(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
         self.update_analytics(ply);
 
         if self.should_stop_search() {
@@ -580,12 +580,19 @@ impl<'a> Search<'a> {
             };
         }
 
+        if let Some(rule_score) = self.pos.rule_judge(ply) {
+            return rule_score;
+        }
+
         let in_check = self.pos.is_in_check(self.pos.side_to_move());
+
+        let alpha_orig = alpha;
+        let mut best_score = -Value::INFINITY;
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
             let stand_pat = self.pos.evaluate();
-            let eval_side = if self.pos.side_to_move() == Color::White {
+            best_score = if self.pos.side_to_move() == Color::White {
                 stand_pat
             } else {
                 -stand_pat
@@ -596,13 +603,41 @@ impl<'a> Search<'a> {
             // essence of quiescence search: we only search captures if the
             // position is "noisy" (i.e. in check or has potential captures that
             // could change the evaluation significantly).
-            if eval_side >= beta {
-                return eval_side;
+            if best_score >= beta {
+                return best_score;
             }
-            if eval_side > alpha {
-                alpha = eval_side;
+            if best_score > alpha {
+                alpha = best_score;
             }
         }
+
+        let mut best_move = Move::null();
+
+        let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
+        if let Some(value) = &tt_value {
+            if value.depth >= depth {
+                match value.flag {
+                    TranspositionTableFlag::Exact => return value.score,
+                    TranspositionTableFlag::Alpha => {
+                        if value.score <= alpha {
+                            return value.score;
+                        }
+                    }
+                    TranspositionTableFlag::Beta => {
+                        if value.score >= beta {
+                            return value.score;
+                        }
+                    }
+                    TranspositionTableFlag::Empty => {
+                        unreachable!("Empty flag should not be returned by probe")
+                    }
+                }
+            } else {
+                // Even though the TT entry is not deep enough to be directly used, we can still
+                // use the best move for move ordering and singular extensions.
+                best_move = value.best_move;
+            }
+        };
 
         let mut moves = MoveList::new();
         generate_moves(
@@ -623,26 +658,44 @@ impl<'a> Search<'a> {
         }
 
         // Sort captures using MVV-LVA
-        self.sort_moves(&mut moves, Move::null(), ply);
+        self.sort_moves(&mut moves, best_move, ply);
 
         for m in moves {
             self.pos.do_move(m);
-            let score = -self.quiescence(depth - 1, ply + 1, -beta, -alpha);
+            let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
             self.pos.undo_move(m);
-
             if self.stop.load(Ordering::Relaxed) {
                 return Value::ZERO;
             }
-
-            if score >= beta {
-                return score;
+            if score > best_score {
+                best_score = score;
+                best_move = m;
             }
-            if score > alpha {
-                alpha = score;
+            if best_score > alpha {
+                alpha = best_score;
+            }
+            if alpha >= beta {
+                // beta cutoff
+                break;
             }
         }
 
-        alpha
+        if !self.stop.load(Ordering::Relaxed) {
+            let flag = if best_score >= beta {
+                TranspositionTableFlag::Beta
+            } else if best_score <= alpha_orig {
+                TranspositionTableFlag::Alpha
+            } else {
+                TranspositionTableFlag::Exact
+            };
+            self.transposition_table.store(
+                self.pos.zobrist_hash(),
+                ply,
+                tt_value!(best_score, flag, best_move, depth, self.age),
+            );
+        }
+
+        best_score
     }
 
     /// Sorts the moves based on their heuristic scores, prioritizing the

@@ -247,7 +247,7 @@ directly (e.g., 0 is weakest, 20 is max).
 
 ## Module Structure
 
-```
+```text
 src/
 ├── main.rs                    Entry point
 ├── lib.rs                     Declares library modules
