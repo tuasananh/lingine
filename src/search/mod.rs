@@ -379,6 +379,8 @@ impl<'a> Search<'a> {
             return rule_score;
         }
 
+        let is_null_window = alpha == beta - value!(1);
+
         let alpha_orig = alpha;
 
         let mut best_score = -Value::INFINITY;
@@ -484,7 +486,7 @@ impl<'a> Search<'a> {
         // prioritized first, killers, and history
         self.sort_moves(&mut moves, best_move, ply);
 
-        for m in moves {
+        for (m_idx, &m) in moves.iter().enumerate() {
             if m == ctx.excluded_move {
                 continue;
             }
@@ -499,13 +501,49 @@ impl<'a> Search<'a> {
             }
 
             self.pos.do_move(m);
-            let score = -self.negamax(
-                depth - 1 + ext as i8,
-                ply + 1,
-                -beta,
-                -alpha,
-                SearchContext::new(ctx.extensions + ext, Move::null()),
-            );
+            // Principal Variation Search
+            //
+            // We trust that our move ordering is good enough to ensure the first move searched to be the best move most of the time,
+            // so we only search the first move fully and all following moves with a zero width window (beta = alpha + 1).
+            //
+            // See: https://www.chessprogramming.org/Principal_Variation_Search
+            let score = if m_idx == 0 || is_null_window {
+                // It's the first move, we search it fully with the normal alpha-beta window.
+                // Or we are in a zero-width window, so we just search it normally
+                -self.negamax(
+                    depth - 1 + ext as i8,
+                    ply + 1,
+                    -beta,
+                    -alpha,
+                    SearchContext::new(ctx.extensions + ext, Move::null()),
+                )
+            } else {
+                let val = -self.negamax(
+                    depth - 1 + ext as i8,
+                    ply + 1,
+                    -alpha - value!(1),
+                    -alpha,
+                    SearchContext::new(ctx.extensions + ext, Move::null()),
+                );
+
+                // If value is greater than alpha, that means we have found a move that is better
+                // than our current best move.
+                //
+                // However, if it is >= beta, we don't need do a re-search since we know for sure
+                // that this move is good enough to cause a beta cutoff.
+                if val > alpha && val < beta {
+                    // Fail high on the null window search, we need to research with the full window to get the exact score.
+                    -self.negamax(
+                        depth - 1 + ext as i8,
+                        ply + 1,
+                        -beta,
+                        -alpha,
+                        SearchContext::new(ctx.extensions + ext, Move::null()),
+                    )
+                } else {
+                    val
+                }
+            };
             self.pos.undo_move(m);
 
             if self.stop.load(Ordering::Relaxed) {
