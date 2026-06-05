@@ -140,7 +140,7 @@ impl<'a> Search<'a> {
         for side in history_table.iter_mut() {
             for from in side.iter_mut() {
                 for to in from.iter_mut() {
-                    *to >>= 3;
+                    *to /= 3;
                 }
             }
         }
