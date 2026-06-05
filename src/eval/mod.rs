@@ -41,9 +41,11 @@ mod tests {
         pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/1HEAKAEHR w - - 0 1")
             .unwrap();
         // White is down a Rook (-600). The Rook at A0 has a PST value of -5.
-        // Therefore, without this Rook, White loses both -600 material and -5
-        // positional value, resulting in net: -600 - (-5) = -595.
-        assert_eq!(pos.evaluate(), value!(-595));
+        // Therefore, without this Rook, White loses:
+        // - -600 material
+        // - -5 positional PST value (net: -595)
+        // - -6 Rook mobility value (attacks A1, A2; 2 * 3; net: -601)
+        assert_eq!(pos.evaluate(), value!(-601));
     }
 
     #[test]
@@ -132,5 +134,22 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_positional_evaluation() {
+        let mut pos = Position::new();
+        // 1. Initial symmetric position: evaluate_positional_features must be 0
+        pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w - - 0 1")
+            .unwrap();
+        assert_eq!(pos.evaluate_positional_features(), Value::ZERO);
+
+        // 2. Symmetric custom position: evaluate_positional_features must be 0
+        pos.set("4k4/9/9/9/4r3p/4R3P/9/9/9/4K4 w - - 0 1").unwrap();
+        assert_eq!(pos.evaluate_positional_features(), Value::ZERO);
+
+        // 3. Asymmetric position: verify it does not crash and yields a non-zero value
+        pos.set("4k4/9/9/9/4r4/3R5/9/9/9/4K4 w - - 0 1").unwrap();
+        assert_ne!(pos.evaluate_positional_features(), Value::ZERO);
     }
 }

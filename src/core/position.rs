@@ -25,7 +25,10 @@ use crate::{
     core::{
         Value,
         bitboard::Bitboard,
-        movegen::{KNIGHT_TO_TABLE, PAWN_ATTACKS_TO, cannon_attacks, rook_attacks},
+        movegen::{
+            ADVISOR_ATTACKS, BISHOP_TABLE, FILE_TABLE, KNIGHT_TABLE, KNIGHT_TO_TABLE,
+            PAWN_ATTACKS_TO, RANK_TABLE, cannon_attacks, gather_file_bits, rook_attacks,
+        },
         types::{Color, File, Move, Piece, PieceType, Rank, Square},
     },
     eval::{piece_material_value, piece_square_table_value},
@@ -205,11 +208,167 @@ impl Position {
             .unwrap_or(Value::ZERO)
     }
 
-    /// Get the complete evaluation score (material + piece-square table) of the
-    /// current position from White's perspective
+    /// Get the complete evaluation score (material + piece-square table +
+    /// positional features) of the current position from White's
+    /// perspective.
     #[inline]
     pub fn evaluate(&self) -> Value {
-        self.material_score() + self.piece_square_table_score()
+        let base_score = self.material_score() + self.piece_square_table_score();
+        base_score + self.evaluate_positional_features()
+    }
+
+    /// Performs a lazy evaluation. If the base score (material + PST) is far
+    /// enough outside the alpha-beta window that positional features couldn't
+    /// change the outcome, it simply returns the base score to save
+    /// computation. `alpha` and `beta` should be provided from the
+    /// perspective of the side to move.
+    #[inline]
+    pub fn evaluate_lazy(&self, alpha: Value, beta: Value) -> Value {
+        let base_score = self.material_score() + self.piece_square_table_score();
+        // A generous margin for maximum possible positional swing in centipawns
+        let margin = Value::from_raw(200);
+
+        // Convert side-to-move alpha/beta to White's perspective
+        let (alpha_white, beta_white) = if self.side_to_move == Color::White {
+            (alpha, beta)
+        } else {
+            (-beta, -alpha)
+        };
+
+        if base_score - margin >= beta_white {
+            return base_score; // Fails high anyway
+        }
+        if base_score + margin <= alpha_white {
+            return base_score; // Fails low anyway
+        }
+
+        base_score + self.evaluate_positional_features()
+    }
+
+    /// Evaluates dynamic positional features (mobility, king safety, pawn
+    /// threats). Returns a Value from White's perspective.
+    pub fn evaluate_positional_features(&self) -> Value {
+        let occupied = self.bitboard_by_color[Color::White as usize]
+            | self.bitboard_by_color[Color::Black as usize];
+
+        let mut score = 0;
+
+        // Loop over both colors, accumulating features. White gets positive sign, Black
+        // gets negative.
+        for color in [Color::White, Color::Black] {
+            let sign = if color == Color::White { 1 } else { -1 };
+            let us_pieces = self.bitboard_by_color[color as usize];
+            let enemy_pieces = self.bitboard_by_color[color.opposite() as usize];
+
+            let mut side_score = 0;
+
+            // 1. Mobility: count legal target squares for major pieces (+1 per square)
+            // Rooks (Chariots) mobility
+            let mut rooks = self.bitboard_by_type(PieceType::Rook) & us_pieces;
+            while let Some(sq) = rooks.pop_lsb() {
+                let attacks = rook_attacks(sq, occupied) & !us_pieces;
+                // Rook mobility is highly valued (weight * 3)
+                side_score += attacks.count_ones() as i32 * 3;
+            }
+
+            // Knights (Horses) mobility
+            let mut knights = self.bitboard_by_type(PieceType::Knight) & us_pieces;
+            while let Some(sq) = knights.pop_lsb() {
+                let entry = &KNIGHT_TABLE[sq as usize];
+                let mut occ_idx = 0;
+                for i in 0..4 {
+                    if let Some(eye_sq) = entry.eyes[i]
+                        && occupied.is_occupied(eye_sq)
+                    {
+                        occ_idx |= 1 << i;
+                    }
+                }
+                let attacks = entry.attacks[occ_idx] & !us_pieces;
+                side_score += attacks.count_ones() as i32;
+            }
+
+            // Cannons mobility (includes quiet slides and leap captures)
+            let mut cannons = self.bitboard_by_type(PieceType::Cannon) & us_pieces;
+            while let Some(sq) = cannons.pop_lsb() {
+                let f = sq.file() as usize;
+                let r = sq.rank() as usize;
+
+                // Rank moves: quiet (same as Rook but not blocked) + leap captures (behind a
+                // screen)
+                let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+                let rank_quiet = RANK_TABLE[f].rook[rank_occ] & !rank_occ as u16;
+                let rank_captures = RANK_TABLE[f].cannon[rank_occ]
+                    & ((enemy_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
+
+                // File moves: quiet + leap captures
+                let file_occ = gather_file_bits(occupied.raw(), f);
+                let file_quiet =
+                    FILE_TABLE[r].rook[file_occ] & !gather_file_bits(occupied.raw(), f) as u16;
+                let file_captures =
+                    FILE_TABLE[r].cannon[file_occ] & gather_file_bits(enemy_pieces.raw(), f) as u16;
+
+                let mobility = (rank_quiet | rank_captures).count_ones()
+                    + (file_quiet | file_captures).count_ones();
+                side_score += mobility as i32;
+            }
+
+            // 2. Palace Defenders: reward having defensive shields (Advisors and Bishops)
+            let (adv_piece, bish_piece) = match color {
+                Color::White => (Piece::WhiteAdvisor, Piece::WhiteBishop),
+                Color::Black => (Piece::BlackAdvisor, Piece::BlackBishop),
+            };
+            side_score += match self.piece_count(adv_piece) {
+                2 => 15,
+                1 => 5,
+                _ => -15,
+            };
+            side_score += match self.piece_count(bish_piece) {
+                2 => 10,
+                1 => 2,
+                _ => -10,
+            };
+
+            // 3. Palace Safety: penalize enemy attackers invading our actual Palace
+            //    boundary
+            let our_palace = Bitboard::PALACE & Bitboard::side(color);
+            let enemy_in_palace = enemy_pieces & our_palace;
+            if !enemy_in_palace.is_empty() {
+                let rooks = (self.bitboard_by_type(PieceType::Rook) & enemy_in_palace).count_ones();
+                let cannons =
+                    (self.bitboard_by_type(PieceType::Cannon) & enemy_in_palace).count_ones();
+                let knights =
+                    (self.bitboard_by_type(PieceType::Knight) & enemy_in_palace).count_ones();
+                let pawns = (self.bitboard_by_type(PieceType::Pawn) & enemy_in_palace).count_ones();
+
+                let danger = rooks as i32 * 40
+                    + cannons as i32 * 30
+                    + knights as i32 * 25
+                    + pawns as i32 * 20;
+                side_score -= danger;
+            }
+
+            // 4. Advanced Pawn Threats: reward pawns invading the enemy's Palace
+            let enemy_palace = Bitboard::PALACE & Bitboard::side(color.opposite());
+            let pawns_in_enemy_palace =
+                (self.bitboard_by_type(PieceType::Pawn) & us_pieces & enemy_palace).count_ones();
+            side_score += pawns_in_enemy_palace as i32 * 15;
+
+            // 5. Hollow Center: penalize if King is on the central file without protective
+            //    pieces
+            let king_sq = self.king_squares[color as usize];
+            if king_sq.file() as u8 == 4 {
+                let friendly_on_center = gather_file_bits(us_pieces.raw(), 4);
+                // If count is 1, only the King is on the central file, leaving it completely
+                // hollow and exposed
+                if friendly_on_center.count_ones() == 1 {
+                    side_score -= 40;
+                }
+            }
+
+            score += side_score * sign;
+        }
+
+        Value::from_raw(score as i16)
     }
 
     /// Computes the complete material and Piece-Square Table scores from
@@ -549,6 +708,39 @@ impl Position {
         self.game_ply -= 1;
     }
 
+    /// Performs a null move (passing the turn).
+    #[inline]
+    pub fn do_null_move(&mut self) {
+        let last_state = self.history.last().expect("History stack is empty");
+        let rule60 = last_state.rule60;
+        let old_zobrist = self.zobrist_hash;
+        let material_score = last_state.material_score;
+        let piece_square_table_score = last_state.piece_square_table_score;
+
+        self.history.push(StateInfo {
+            last_move: Move::null(),
+            captured_piece: Piece::None,
+            old_zobrist,
+            rule60: rule60 + 1,
+            in_check: [false, false],
+            material_score,
+            piece_square_table_score,
+        });
+
+        self.zobrist_hash ^= ZOBRIST.side;
+        self.side_to_move = self.side_to_move.opposite();
+        self.game_ply += 1;
+    }
+
+    /// Undoes a null move.
+    #[inline]
+    pub fn undo_null_move(&mut self) {
+        let state = self.history.pop().expect("No state in history to undo");
+        self.zobrist_hash = state.old_zobrist;
+        self.side_to_move = self.side_to_move.opposite();
+        self.game_ply -= 1;
+    }
+
     /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
@@ -837,6 +1029,192 @@ impl Position {
         !self
             .checkers_to_after_move(square, occupied, attacker, from, to, moved_piece)
             .is_empty()
+    }
+
+    /// Finds all attacking squares of color `attacker` that attack `square`,
+    /// assuming the given board `occupied` bitboard. This includes Advisors
+    /// and Elephants/Bishops.
+    #[inline]
+    pub fn attackers_to(&self, square: Square, occupied: Bitboard, attacker: Color) -> Bitboard {
+        self.get_attackers_to(
+            square,
+            attacker,
+            occupied,
+            self.bitboard_by_color(Color::White),
+            self.bitboard_by_color(Color::Black),
+        )
+    }
+
+    /// Helper to find attackers under local simulated bitboards.
+    fn get_attackers_to(
+        &self,
+        square: Square,
+        attacker: Color,
+        occupied: Bitboard,
+        white_pieces: Bitboard,
+        black_pieces: Bitboard,
+    ) -> Bitboard {
+        let color_bb = if attacker == Color::White {
+            white_pieces
+        } else {
+            black_pieces
+        };
+        let opponent_pawns = self.bitboard_by_type(PieceType::Pawn) & color_bb;
+        let opponent_knights = self.bitboard_by_type(PieceType::Knight) & color_bb;
+        let opponent_rooks = self.bitboard_by_type(PieceType::Rook) & color_bb;
+        let opponent_cannons = self.bitboard_by_type(PieceType::Cannon) & color_bb;
+        let opponent_king = self.bitboard_by_type(PieceType::King) & color_bb;
+        let opponent_advisors = self.bitboard_by_type(PieceType::Advisor) & color_bb;
+        let opponent_bishops = self.bitboard_by_type(PieceType::Bishop) & color_bb;
+
+        // Pawn attacks
+        let them_color_idx = if attacker == Color::White { 0 } else { 1 };
+        let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize] & opponent_pawns;
+
+        // Knight attacks
+        let entry_n = &KNIGHT_TO_TABLE[square as usize];
+        let mut occ_idx_n = 0;
+        let mut i = 0;
+        while i < 6 {
+            if let Some(eye_sq) = entry_n.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx_n |= 1 << i;
+            }
+            i += 1;
+        }
+        let knight_attackers = entry_n.attacks[occ_idx_n] & opponent_knights;
+
+        // Rook & King attacks
+        let rook_atk = rook_attacks(square, occupied);
+        let rook_attackers = rook_atk & (opponent_rooks | opponent_king);
+
+        // Cannon attacks
+        let cannon_atk = cannon_attacks(square, occupied);
+        let cannon_attackers = cannon_atk & opponent_cannons;
+
+        // Advisor attacks
+        let advisor_attackers = ADVISOR_ATTACKS[square as usize] & opponent_advisors;
+
+        // Bishop (Elephant) attacks
+        let entry_b = &BISHOP_TABLE[square as usize];
+        let mut occ_idx_b = 0;
+        let mut i = 0;
+        while i < 4 {
+            if let Some(eye_sq) = entry_b.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx_b |= 1 << i;
+            }
+            i += 1;
+        }
+        let bishop_attackers = entry_b.attacks[occ_idx_b] & opponent_bishops;
+
+        pawn_attackers
+            | knight_attackers
+            | rook_attackers
+            | cannon_attackers
+            | advisor_attackers
+            | bishop_attackers
+    }
+
+    /// Evaluates the static exchange value of a move.
+    /// Returns the net material change score.
+    pub fn see(&self, m: Move) -> i16 {
+        let from = m.square_from();
+        let to = m.square_to();
+
+        let target_piece = self.piece_at(to);
+        let moving_piece = self.piece_at(from);
+
+        if moving_piece == Piece::None {
+            return 0;
+        }
+
+        // Helper to convert PieceType to base material value
+        let see_value = |pt: PieceType| -> i16 {
+            match pt {
+                PieceType::Pawn => 30,
+                PieceType::Advisor => 110,
+                PieceType::Bishop => 120, // Elephant
+                PieceType::Knight => 270, // Horse
+                PieceType::Cannon => 285,
+                PieceType::Rook => 600,
+                PieceType::King => 32000,
+                _ => 0,
+            }
+        };
+
+        let mut occupied =
+            self.bitboard_by_color(Color::White) | self.bitboard_by_color(Color::Black);
+        let mut white_pieces = self.bitboard_by_color(Color::White);
+        let mut black_pieces = self.bitboard_by_color(Color::Black);
+
+        // Clear moving piece from its starting square
+        let from_color = self.side_to_move();
+
+        occupied.clear_bit(from);
+        if from_color == Color::White {
+            white_pieces.clear_bit(from);
+        } else {
+            black_pieces.clear_bit(from);
+        }
+
+        let mut gain = [0i16; 32];
+        gain[0] = see_value(target_piece.piece_type());
+
+        let mut current_attacker_color = self.side_to_move().opposite();
+        let mut current_piece_value = see_value(moving_piece.piece_type());
+
+        let mut d = 1;
+        while d < 32 {
+            let attackers = self.get_attackers_to(
+                to,
+                current_attacker_color,
+                occupied,
+                white_pieces,
+                black_pieces,
+            );
+            if attackers.is_empty() {
+                break;
+            }
+
+            // Find the least valuable attacker
+            let mut best_attacker_sq = Square::A0;
+            let mut min_val = i16::MAX;
+            let mut temp_attackers = attackers;
+            while let Some(sq) = temp_attackers.pop_lsb() {
+                let val = see_value(self.piece_at(sq).piece_type());
+                if val < min_val {
+                    min_val = val;
+                    best_attacker_sq = sq;
+                }
+            }
+
+            // Clear the attacker from occupied
+            occupied.clear_bit(best_attacker_sq);
+
+            // Clear from color bitboards
+            if current_attacker_color == Color::White {
+                white_pieces.clear_bit(best_attacker_sq);
+            } else {
+                black_pieces.clear_bit(best_attacker_sq);
+            }
+
+            gain[d] = current_piece_value;
+            current_piece_value = min_val;
+
+            d += 1;
+            current_attacker_color = current_attacker_color.opposite();
+        }
+
+        // Backtrack minimax values
+        while d > 1 {
+            d -= 1;
+            gain[d - 1] -= gain[d].max(0);
+        }
+
+        gain[0]
     }
 
     /// Calculates the chase information for a given color, returning a 16-bit
@@ -1252,5 +1630,28 @@ mod tests {
         // rule60 counter should be exactly 120
         assert_eq!(pos.history.last().unwrap().rule60, 120);
         assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
+    }
+
+    #[test]
+    fn test_static_exchange_evaluation() {
+        let mut pos = Position::new();
+        // Setup initial position: White Rook at A0, Black Pawn at A9 (undefended)
+        pos.set("p8/9/9/9/9/9/9/9/9/R8 w").unwrap();
+        // Rook captures Pawn: should be a clean win of the Pawn (30)
+        let m1 = Move::new(Square::A0, Square::A9);
+        assert_eq!(pos.see(m1), 30);
+
+        // Black defends the Pawn with a Black Rook at B9
+        pos.set("pr7/9/9/9/9/9/9/9/9/R8 w").unwrap();
+        // Rook captures Pawn: should result in a loss of the Rook (-570)
+        assert_eq!(pos.see(m1), -570);
+
+        // White also has a Cannon at A2 attacking A9 and an Advisor at A5 acting as a
+        // screen
+        pos.set("pr7/9/9/9/a8/9/9/C8/9/R8 w").unwrap();
+        // Rook captures Pawn: White Rook (600) captured by Black Rook (600),
+        // then White Cannon (285) captures Black Rook (600) using Advisor (A5) as
+        // screen -> net is 30 (pawn) - 600 (rook) + 600 (rook) = 30.
+        assert_eq!(pos.see(m1), 30);
     }
 }

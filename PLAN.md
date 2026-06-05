@@ -18,7 +18,7 @@
 | Search enhancements      | Transposition Table + move ordering (TT/MVV-LVA/killers/history via Move flags) + null move pruning                                                                                      |
 | Protocol                 | UCI only (`uci`/`uciok`, standard move notation `a0b1`)                                                                                                                                  |
 | UCCI                     | Thin wrapper later if Chinese GUI support is needed (≈1 day effort)                                                                                                                      |
-| Threading                | Single-threaded first; Lazy SMP after search is stable                                                                                                                                   |
+| Threading                | Single-threaded only                                                                                                                                                                     |
 | Evaluation tuning        | Bootstrap from Eleeye values → SPSA/Texel tuning to reach 2400+                                                                                                                          |
 | Testing framework        | Perft tests per piece type + unit tests; sylvan-cli gauntlet vs Fairy-Stockfish for ELO                                                                                                  |
 | Move encoding            | `u16` encoding: 7 bits from, 7 bits to, 2 bits for transposition table flags (`TranspositionTableFlag`: Empty, Exact, Alpha, Beta) to save space inside the TT; query captures via board |
@@ -165,25 +165,30 @@ _Goal: Fast, selective tactical search and positional maturity._
   - **One-Reply Extensions**: If side to move has only one legal move, extend
     search by 1 ply.
 
-- [ ] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
-- [ ] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
+- [x] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
+- [x] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
       moves
-- [ ] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace
+- [x] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace
       safety scoring
-- [ ] **Pawn Structure**: Dynamic scoring for passed/crossed-river pawns
+- [x] **Pawn Structure**: Dynamic scoring for passed/crossed-river pawns
 - [ ] **Verification**: Custom bench suite in `src/benchmark/` to track search
       speeds (NPS) and node reductions
 
-#### Iteration 4: The Master (Target: ~2400+ ELO)
+#### Iteration 4: Advanced Search Heuristics (Target: ~2200+ ELO)
 
-_Goal: Super-Grandmaster strength with parallel search and tuned parameters._
+_Goal: Pikafish-style search efficiency and dynamic reductions._
 
-- [ ] **Lazy SMP**: Implement multi-threaded search sharing a single
-      Transposition Table
-- [ ] **Texel/SPSA Tuning**: Run automated parameter tuning on game databases to
-      optimize PST/material values
-- [ ] **Verification**: Gauntlet runs vs Fairy-Stockfish using
-      `./tools/sylvan-cli` to benchmark absolute ELO strength
+- [ ] **History-Aware LMR**: Calculate Late Move Reductions dynamically, reducing depth more for late moves but subtracting reduction if the move has a positive history score.
+- [ ] **Internal Iterative Reductions (IIR)**: If a position misses the TT, artificially reduce depth by 1 to quickly populate the TT and ensure good move ordering for the full search.
+- [ ] **TT-Based Static Evaluation**: Override static evaluation with TT scores when the TT depth is superior but failed to cause a cutoff, improving NMP and RFP accuracy.
+- [ ] **Tapered Evaluation**: Smoothly interpolate evaluation parameters (like PSTs) based on the game phase (material left).
+
+#### Iteration 5: The Master (Target: ~2500+ ELO)
+
+_Goal: Super-Grandmaster strength through extremely refined tuning._
+
+- [ ] **Texel/SPSA Tuning**: Run automated parameter tuning on game databases to optimize PST/material values
+- [ ] **Verification**: Gauntlet runs vs Fairy-Stockfish using `./tools/sylvan-cli` to benchmark absolute ELO strength
 
 ---
 
