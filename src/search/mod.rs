@@ -586,6 +586,7 @@ impl<'a> Search<'a> {
 
         let in_check = self.pos.is_in_check(self.pos.side_to_move());
 
+        let alpha_orig = alpha;
         let mut best_score = -Value::INFINITY;
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
@@ -610,6 +611,34 @@ impl<'a> Search<'a> {
             }
         }
 
+        let mut best_move = Move::null();
+
+        let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
+        if let Some(value) = &tt_value {
+            if value.depth >= depth {
+                match value.flag {
+                    TranspositionTableFlag::Exact => return value.score,
+                    TranspositionTableFlag::Alpha => {
+                        if value.score <= alpha {
+                            return value.score;
+                        }
+                    }
+                    TranspositionTableFlag::Beta => {
+                        if value.score >= beta {
+                            return value.score;
+                        }
+                    }
+                    TranspositionTableFlag::Empty => {
+                        unreachable!("Empty flag should not be returned by probe")
+                    }
+                }
+            } else {
+                // Even though the TT entry is not deep enough to be directly used, we can still
+                // use the best move for move ordering and singular extensions.
+                best_move = value.best_move;
+            }
+        };
+
         let mut moves = MoveList::new();
         generate_moves(
             &self.pos,
@@ -629,22 +658,41 @@ impl<'a> Search<'a> {
         }
 
         // Sort captures using MVV-LVA
-        self.sort_moves(&mut moves, Move::null(), ply);
+        self.sort_moves(&mut moves, best_move, ply);
 
         for m in moves {
             self.pos.do_move(m);
-            best_score = best_score.max(-self.quiescence_search(depth - 1, ply + 1, -beta, -alpha));
+            let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
             self.pos.undo_move(m);
-
             if self.stop.load(Ordering::Relaxed) {
                 return Value::ZERO;
             }
-            if best_score >= beta {
-                return best_score;
+            if score > best_score {
+                best_score = score;
+                best_move = m;
             }
             if best_score > alpha {
                 alpha = best_score;
             }
+            if alpha >= beta {
+                // beta cutoff
+                break;
+            }
+        }
+
+        if !self.stop.load(Ordering::Relaxed) {
+            let flag = if best_score >= beta {
+                TranspositionTableFlag::Beta
+            } else if best_score <= alpha_orig {
+                TranspositionTableFlag::Alpha
+            } else {
+                TranspositionTableFlag::Exact
+            };
+            self.transposition_table.store(
+                self.pos.zobrist_hash(),
+                ply,
+                tt_value!(best_score, flag, best_move, depth, self.age),
+            );
         }
 
         best_score
