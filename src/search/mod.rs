@@ -48,6 +48,7 @@ pub use transposition_table::*;
 struct SearchContext {
     pub excluded_move: Move,
     pub extensions: u8,
+    pub can_null: bool,
 }
 
 impl Default for SearchContext {
@@ -55,16 +56,18 @@ impl Default for SearchContext {
         Self {
             extensions: 0,
             excluded_move: Move::null(),
+            can_null: true,
         }
     }
 }
 
 impl SearchContext {
     /// Creates a new SearchExtension parameters set.
-    pub fn new(extensions: u8, excluded_move: Move) -> Self {
+    pub fn new(extensions: u8, excluded_move: Move, can_null: bool) -> Self {
         Self {
             extensions,
             excluded_move,
+            can_null,
         }
     }
 }
@@ -397,7 +400,8 @@ impl<'a> Search<'a> {
         // save the King.
         //
         // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+        let in_check = self.pos.is_in_check(self.pos.side_to_move());
+        if in_check && ctx.extensions < 6 {
             depth += 1;
             ctx.extensions += 1;
         }
@@ -448,7 +452,7 @@ impl<'a> Search<'a> {
                     ply,
                     rbeta - value!(1),
                     rbeta,
-                    SearchContext::new(ctx.extensions, value.best_move),
+                    SearchContext::new(ctx.extensions, value.best_move, false),
                 );
 
                 // Score fails low, that means the TT move is really good, and that the
@@ -459,6 +463,48 @@ impl<'a> Search<'a> {
                 }
             }
         };
+
+        // Null Move Pruning (NMP)
+        if depth >= 3 && !in_check && is_null_window && ctx.can_null && !beta.abs().is_winning() {
+            let side = self.pos.side_to_move();
+            let has_major_or_minor = !(self.pos.bitboard_by_type(PieceType::Rook)
+                & self.pos.bitboard_by_color(side))
+            .is_empty()
+                || !(self.pos.bitboard_by_type(PieceType::Cannon)
+                    & self.pos.bitboard_by_color(side))
+                .is_empty()
+                || !(self.pos.bitboard_by_type(PieceType::Knight)
+                    & self.pos.bitboard_by_color(side))
+                .is_empty();
+
+            if has_major_or_minor {
+                let r = if depth >= 6 { 3 } else { 2 };
+                let rdepth = depth - 1 - r;
+                if rdepth >= 0 {
+                    self.pos.do_null_move();
+                    let score = -self.negamax(
+                        rdepth,
+                        ply + 1,
+                        -beta,
+                        -beta + value!(1),
+                        SearchContext::new(ctx.extensions, Move::null(), false),
+                    );
+                    self.pos.undo_null_move();
+
+                    if self.stop.load(Ordering::Relaxed) {
+                        return Value::ZERO;
+                    }
+
+                    if score >= beta {
+                        if score >= Value::MATE_IN_MAX_PLY {
+                            return beta;
+                        } else {
+                            return score;
+                        }
+                    }
+                }
+            }
+        }
 
         // Base case: fall back to quiescence search
         if depth == 0 {
@@ -505,48 +551,92 @@ impl<'a> Search<'a> {
             let is_quiet = self.pos.is_empty(m.square_to());
 
             self.pos.do_move(m);
-
             // Principal Variation Search
             //
             // We trust that our move ordering is good enough to ensure the first move searched to be the best move most of the time,
             // so we only search the first move fully and all following moves with a zero width window (beta = alpha + 1).
             //
-            // See: https://www.chessprogramming.org/Principal_Variation_Search
-            let score = if m_idx == 0 || is_null_window {
-                // It's the first move, we search it fully with the normal alpha-beta window.
-                // Or we are in a zero-width window, so we just search it normally
+            // See: https://www.chessprogramming.org/
+            //
+            // Principal Variation Search with Late Move Reductions (LMR)
+            let score = if m_idx == 0 {
+                // First move is searched fully with the normal window.
                 -self.negamax(
                     depth - 1 + ext as i8,
                     ply + 1,
                     -beta,
                     -alpha,
-                    SearchContext::new(ctx.extensions + ext, Move::null()),
+                    SearchContext::new(ctx.extensions + ext, Move::null(), true),
                 )
             } else {
-                let val = -self.negamax(
-                    depth - 1 + ext as i8,
-                    ply + 1,
-                    -alpha - value!(1),
-                    -alpha,
-                    SearchContext::new(ctx.extensions + ext, Move::null()),
-                );
+                // Subsequent moves (might be reduced via LMR)
+                let mut r = 0;
+                if depth >= 3
+                    && m_idx >= 3
+                    && is_quiet
+                    && !in_check
+                    && m != self.killers[ply as usize][0]
+                    && m != self.killers[ply as usize][1]
+                {
+                    r = get_lmr_reduction(depth, m_idx);
+                    // Cap reduction to avoid reducing to non-positive depth
+                    r = r.clamp(0, depth - 2);
+                }
 
-                // If value is greater than alpha, that means we have found a move that is better
-                // than our current best move.
-                //
-                // However, if it is >= beta, we don't need do a re-search since we know for sure
-                // that this move is good enough to cause a beta cutoff.
-                if val > alpha && val < beta {
-                    // Fail high on the null window search, we need to research with the full window to get the exact score.
-                    -self.negamax(
-                        depth - 1 + ext as i8,
+                if is_null_window {
+                    // Null window search (non-PV node)
+                    let mut val = -self.negamax(
+                        depth - 1 - r + ext as i8,
                         ply + 1,
                         -beta,
                         -alpha,
-                        SearchContext::new(ctx.extensions + ext, Move::null()),
-                    )
-                } else {
+                        SearchContext::new(ctx.extensions + ext, Move::null(), true),
+                    );
+
+                    // Re-search at full depth if reduced search failed high
+                    if r > 0 && val > alpha {
+                        val = -self.negamax(
+                            depth - 1 + ext as i8,
+                            ply + 1,
+                            -beta,
+                            -alpha,
+                            SearchContext::new(ctx.extensions + ext, Move::null(), true),
+                        );
+                    }
                     val
+                } else {
+                    // PV node subsequent moves (zero-width window search first)
+                    let mut val = -self.negamax(
+                        depth - 1 - r + ext as i8,
+                        ply + 1,
+                        -alpha - value!(1),
+                        -alpha,
+                        SearchContext::new(ctx.extensions + ext, Move::null(), true),
+                    );
+
+                    // Re-search at full depth but still null window if reduced search failed high
+                    if r > 0 && val > alpha {
+                        val = -self.negamax(
+                            depth - 1 + ext as i8,
+                            ply + 1,
+                            -alpha - value!(1),
+                            -alpha,
+                            SearchContext::new(ctx.extensions + ext, Move::null(), true),
+                        );
+                    }
+
+                    // If it failed high on the null window search, we need to research with the full window to get the exact score
+                    if val > alpha && val < beta {
+                        -self.negamax(
+                            depth - 1 + ext as i8,
+                            ply + 1,
+                            -beta,
+                            -alpha,
+                            SearchContext::new(ctx.extensions + ext, Move::null(), true),
+                        )
+                    } else {
+                        val
+                    }
                 }
             };
             self.pos.undo_move(m);
@@ -873,6 +963,43 @@ fn singular_margin(depth: i8) -> Value {
     value!(2 * depth as i16)
 }
 
+/// Precomputed Late Move Reduction (LMR) table calculated at compile time.
+const LMR_TABLE: [[i8; 64]; 64] = {
+    let mut table = [[0; 64]; 64];
+
+    // Fixed point ln values scaled by 1000
+    const LN_1000: [i32; 64] = [
+        0, 0, 693, 1098, 1386, 1609, 1791, 1945, 2079, 2197, 2302, 2397, 2484, 2564, 2639, 2708,
+        2772, 2833, 2890, 2944, 2995, 3044, 3091, 3135, 3178, 3218, 3258, 3295, 3332, 3367, 3401,
+        3433, 3465, 3496, 3526, 3555, 3583, 3610, 3637, 3663, 3688, 3713, 3737, 3761, 3784, 3806,
+        3828, 3849, 3871, 3891, 3912, 3931, 3951, 3970, 3988, 4007, 4025, 4043, 4060, 4077, 4094,
+        4110, 4127, 4143,
+    ];
+
+    let mut d = 1;
+    while d < 64 {
+        let mut m = 1;
+        while m < 64 {
+            let ln_d = LN_1000[d];
+            let ln_m = LN_1000[m];
+            let r_fixed = 750 + (ln_d * ln_m) / 2250;
+            let r = (r_fixed + 500) / 1000;
+            table[d][m] = r as i8;
+            m += 1;
+        }
+        d += 1;
+    }
+    table
+};
+
+/// Helper to get LMR reduction clamp-bounded to the LMR_TABLE dimensions.
+#[inline]
+fn get_lmr_reduction(depth: i8, move_index: usize) -> i8 {
+    let d = (depth as usize).min(63);
+    let m = move_index.min(63);
+    LMR_TABLE[d][m]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1051,5 +1178,47 @@ mod tests {
         // Depth 2 search must reach at least ply 2 in negamax or quiescence
         assert!(max_seldepth >= 2, "max_seldepth was {}", max_seldepth);
         assert!(has_pv);
+    }
+
+    #[test]
+    fn test_null_move_execution() {
+        let mut pos = Position::new();
+        pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w")
+            .unwrap();
+        let orig_hash = pos.zobrist_hash();
+        let orig_side = pos.side_to_move();
+
+        pos.do_null_move();
+        assert_ne!(pos.zobrist_hash(), orig_hash);
+        assert_eq!(pos.side_to_move(), orig_side.opposite());
+
+        pos.undo_null_move();
+        assert_eq!(pos.zobrist_hash(), orig_hash);
+        assert_eq!(pos.side_to_move(), orig_side);
+    }
+
+    #[test]
+    fn test_search_with_nmp_lmr() {
+        let mut pos = Position::new();
+        pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w")
+            .unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut tt = TranspositionTable::new(1);
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let mut history_table = [[[0; 90]; 90]; 2];
+        // Search to depth 3 so that NMP and LMR are active
+        let (_score, best_move, _nodes) = Search::start_search(SearchParameters {
+            pos,
+            allocated_time: None,
+            stop,
+            max_depth: 3,
+            transposition_table: &mut tt,
+            history_table: &mut history_table,
+            tx,
+            age: 0,
+        });
+
+        assert!(!best_move.is_null());
     }
 }

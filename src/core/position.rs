@@ -549,6 +549,39 @@ impl Position {
         self.game_ply -= 1;
     }
 
+    /// Performs a null move (passing the turn).
+    #[inline]
+    pub fn do_null_move(&mut self) {
+        let last_state = self.history.last().expect("History stack is empty");
+        let rule60 = last_state.rule60;
+        let old_zobrist = self.zobrist_hash;
+        let material_score = last_state.material_score;
+        let piece_square_table_score = last_state.piece_square_table_score;
+
+        self.history.push(StateInfo {
+            last_move: Move::null(),
+            captured_piece: Piece::None,
+            old_zobrist,
+            rule60: rule60 + 1,
+            in_check: [false, false],
+            material_score,
+            piece_square_table_score,
+        });
+
+        self.zobrist_hash ^= ZOBRIST.side;
+        self.side_to_move = self.side_to_move.opposite();
+        self.game_ply += 1;
+    }
+
+    /// Undoes a null move.
+    #[inline]
+    pub fn undo_null_move(&mut self) {
+        let state = self.history.pop().expect("No state in history to undo");
+        self.zobrist_hash = state.old_zobrist;
+        self.side_to_move = self.side_to_move.opposite();
+        self.game_ply -= 1;
+    }
+
     /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
