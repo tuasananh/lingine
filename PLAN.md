@@ -8,23 +8,23 @@
 
 ## Decisions Agreed On
 
-| Topic                    | Decision                                                                                                                                            |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Move generation dispatch | Separate fns: `generate_legal`, `generate_captures`, `generate_quiets`, `generate_evasions`                                                         |
-| Sliding piece generation | On-the-fly ray scanning first; precomputed Rank/File Occupancy Lookup later after profiling (no magic bitboards needed for orthogonal-only sliding) |
-| Enum const generics      | Refactored to stable using standard `bool` const generics (`<const IS_WHITE: bool>`)                                                                |
-| Search                   | Alpha-Beta + Iterative Deepening + Perpetual Check/Chase detection                                                                                  |
-| Evaluation               | Material + PST (Eleeye values to start) + Mobility (updated incrementally as Pikafish-style accumulators inside `StateInfo` history stack)          |
-| Search enhancements      | Transposition Table + move ordering (TT/MVV-LVA/killers/history via Move flags) + null move pruning                                                 |
-| Protocol                 | UCI only (`uci`/`uciok`, standard move notation `a0b1`)                                                                                             |
-| UCCI                     | Thin wrapper later if Chinese GUI support is needed (≈1 day effort)                                                                                 |
-| Threading                | Single-threaded first; Lazy SMP after search is stable                                                                                              |
-| Evaluation tuning        | Bootstrap from Eleeye values → SPSA/Texel tuning to reach 2400+                                                                                     |
-| Testing framework        | Perft tests per piece type + unit tests; sylvan-cli gauntlet vs Fairy-Stockfish for ELO                                                             |
+| Topic                    | Decision                                                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Move generation dispatch | Separate fns: `generate_legal`, `generate_captures`, `generate_quiets`, `generate_evasions`                                                                                              |
+| Sliding piece generation | On-the-fly ray scanning first; precomputed Rank/File Occupancy Lookup later after profiling (no magic bitboards needed for orthogonal-only sliding)                                      |
+| Enum const generics      | Refactored to stable using standard `bool` const generics (`<const IS_WHITE: bool>`)                                                                                                     |
+| Search                   | Alpha-Beta + Iterative Deepening + Perpetual Check/Chase detection                                                                                                                       |
+| Evaluation               | Material + PST (Eleeye values to start) + Mobility (updated incrementally as Pikafish-style accumulators inside `StateInfo` history stack)                                               |
+| Search enhancements      | Transposition Table + move ordering (TT/MVV-LVA/killers/history via Move flags) + null move pruning                                                                                      |
+| Protocol                 | UCI only (`uci`/`uciok`, standard move notation `a0b1`)                                                                                                                                  |
+| UCCI                     | Thin wrapper later if Chinese GUI support is needed (≈1 day effort)                                                                                                                      |
+| Threading                | Single-threaded first; Lazy SMP after search is stable                                                                                                                                   |
+| Evaluation tuning        | Bootstrap from Eleeye values → SPSA/Texel tuning to reach 2400+                                                                                                                          |
+| Testing framework        | Perft tests per piece type + unit tests; sylvan-cli gauntlet vs Fairy-Stockfish for ELO                                                                                                  |
 | Move encoding            | `u16` encoding: 7 bits from, 7 bits to, 2 bits for transposition table flags (`TranspositionTableFlag`: Empty, Exact, Alpha, Beta) to save space inside the TT; query captures via board |
-| Board undo state         | Track backtracking using `StateInfo` struct (captured piece, previous hash, rule50, check status, evaluation accumulators)                          |
-| FEN parsing              | Robust parsing dynamically detecting token counts (4 vs 6 tokens) for correct halfmove/fullmove indices                                             |
-| Pondering                | Currently unsupported due to blocked search execution loop (ponderhit remains a deferred feature) |
+| Board undo state         | Track backtracking using `StateInfo` struct (captured piece, previous hash, rule50, check status, evaluation accumulators)                                                               |
+| FEN parsing              | Robust parsing dynamically detecting token counts (4 vs 6 tokens) for correct halfmove/fullmove indices                                                                                  |
+| Pondering                | Currently unsupported due to blocked search execution loop (ponderhit remains a deferred feature)                                                                                        |
 
 ---
 

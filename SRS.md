@@ -324,13 +324,14 @@ Lingine:
     placeholders and traditional clean Xiangqi FENs, avoiding incorrect default
     resets.
 - **Decision 8: Pondering Support**
-  - _Result_: Pondering is currently unsupported due to the search execution loop
-    blocking the engine actor thread. Non-blocking pondering support remains a
-    deferred feature.
+  - _Result_: Pondering is currently unsupported due to the search execution
+    loop blocking the engine actor thread. Non-blocking pondering support
+    remains a deferred feature.
 - **Decision 9: Move Flags Utility**
-  - _Result_: We will use the 2-bit flags in the 16-bit `Move` representation
-    to store the `TranspositionTableFlag` (Empty, Exact, Alpha, Beta) to save space inside the TT,
-    rather than for move classifications (which are queried from the board/move generator).
+  - _Result_: We will use the 2-bit flags in the 16-bit `Move` representation to
+    store the `TranspositionTableFlag` (Empty, Exact, Alpha, Beta) to save space
+    inside the TT, rather than for move classifications (which are queried from
+    the board/move generator).
 
 ---
 
