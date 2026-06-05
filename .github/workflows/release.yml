@@ -3,7 +3,7 @@ name: Release CD
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -18,15 +18,15 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             suffix: linux-x86_64
-            extension: ''
+            extension: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             suffix: windows-x86_64
-            extension: '.exe'
+            extension: ".exe"
           - os: macos-latest
             target: universal2-apple-darwin
             suffix: macos-universal
-            extension: ''
+            extension: ""
 
     steps:
       - name: Checkout repository
@@ -40,12 +40,16 @@ jobs:
       - name: Set artifact name
         id: artifact
         shell: bash
-        run: echo "NAME=lingine-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}${{ matrix.extension }}" >> $GITHUB_OUTPUT
+        run:
+          echo "NAME=lingine-${{ steps.version.outputs.VERSION }}-${{
+          matrix.suffix }}${{ matrix.extension }}" >> $GITHUB_OUTPUT
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target == 'universal2-apple-darwin' && 'x86_64-apple-darwin aarch64-apple-darwin' || matrix.target }}
+          targets:
+            ${{ matrix.target == 'universal2-apple-darwin' &&
+            'x86_64-apple-darwin aarch64-apple-darwin' || matrix.target }}
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2

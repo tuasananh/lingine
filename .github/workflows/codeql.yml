@@ -2,11 +2,11 @@ name: "CodeQL Security Scan"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   schedule:
-    - cron: '17 3 * * 4' # Weekly on Thursdays at 03:17 UTC
+    - cron: "17 3 * * 4" # Weekly on Thursdays at 03:17 UTC
 
 jobs:
   analyze:
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'rust' ]
+        language: ["rust"]
 
     steps:
       - name: Checkout repository

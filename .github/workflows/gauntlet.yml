@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       games:
-        description: 'Number of games to play against each opponent'
+        description: "Number of games to play against each opponent"
         required: true
-        default: '4'
+        default: "4"
         type: string
       cores:
-        description: 'Number of CPU cores/threads to use (0 for auto)'
+        description: "Number of CPU cores/threads to use (0 for auto)"
         required: true
-        default: '2'
+        default: "2"
         type: string
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install python dependencies (if any)
         run: |
