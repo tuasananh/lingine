@@ -197,7 +197,7 @@ impl<'a> Search<'a> {
             //
             // See: https://www.chessprogramming.org/Time_Management#Soft_Bound
             if let Some(limit) = self.allocated_time
-                && self.start_time.elapsed() > limit / 4
+                && self.start_time.elapsed() > limit / 2
             {
                 break;
             }
@@ -384,6 +384,22 @@ impl<'a> Search<'a> {
         let mut best_score = -Value::INFINITY;
         let mut best_move = Move::null();
 
+        let mut depth = depth;
+
+        // In general, we should do extensions before probing TT, since the depth might
+        // increase after extensions, and we want to probe TT with the correct depth.
+
+        // Check Extensions: If the side to move is in check,
+        // we extend the search depth by 1 ply to give the engine a better chance to
+        // find a defensive resource and avoid missing critical moves that could
+        // save the King.
+        //
+        // See: https://www.chessprogramming.org/Check_Extensions
+        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+            depth += 1;
+            ctx.extensions += 1;
+        }
+
         let mut is_singular = false;
         let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
@@ -455,19 +471,6 @@ impl<'a> Search<'a> {
             return Value::mated_in(ply);
         }
 
-        let mut depth = depth;
-
-        // Check Extensions: If the side to move is in check,
-        // we extend the search depth by 1 ply to give the engine a better chance to
-        // find a defensive resource and avoid missing critical moves that could
-        // save the King.
-        //
-        // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
-            depth += 1;
-            ctx.extensions += 1;
-        }
-
         // One Reply Extensions: If there is only one legal move available,
         // we extend the search, as it is likely a critical position.
         //
@@ -537,18 +540,20 @@ impl<'a> Search<'a> {
         }
 
         // Cache search results to Transposition Table
-        let flag = if best_score >= beta {
-            TranspositionTableFlag::Beta
-        } else if best_score <= alpha_orig {
-            TranspositionTableFlag::Alpha
-        } else {
-            TranspositionTableFlag::Exact
-        };
-        self.transposition_table.store(
-            self.pos.zobrist_hash(),
-            ply,
-            tt_value!(best_score, flag, best_move, depth, self.age),
-        );
+        if !self.stop.load(Ordering::Relaxed) {
+            let flag = if best_score >= beta {
+                TranspositionTableFlag::Beta
+            } else if best_score <= alpha_orig {
+                TranspositionTableFlag::Alpha
+            } else {
+                TranspositionTableFlag::Exact
+            };
+            self.transposition_table.store(
+                self.pos.zobrist_hash(),
+                ply,
+                tt_value!(best_score, flag, best_move, depth, self.age),
+            );
+        }
 
         best_score
     }
@@ -558,18 +563,9 @@ impl<'a> Search<'a> {
     /// Prevents the horizon effect by searching captures only until a quiet
     /// position is reached.
     fn quiescence(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
-        if self.stop.load(Ordering::Relaxed) {
-            return Value::ZERO;
-        }
-        self.nodes += 1;
-        self.max_ply = self.max_ply.max(ply);
+        self.update_analytics(ply);
 
-        // Check stop signals periodically
-        if self.nodes & 1023 == 0
-            && let Some(limit) = self.allocated_time
-            && self.start_time.elapsed() >= limit
-        {
-            self.stop.store(true, Ordering::Relaxed);
+        if self.should_stop_search() {
             return Value::ZERO;
         }
 
@@ -595,6 +591,11 @@ impl<'a> Search<'a> {
                 -stand_pat
             };
 
+            // If the static evaluation is already good enough to cause a beta cutoff, we
+            // can prune this node without searching captures. This is the
+            // essence of quiescence search: we only search captures if the
+            // position is "noisy" (i.e. in check or has potential captures that
+            // could change the evaluation significantly).
             if eval_side >= beta {
                 return eval_side;
             }
@@ -603,16 +604,20 @@ impl<'a> Search<'a> {
             }
         }
 
-        // Generate moves: if in check, we must search all legal evasions to save the
-        // King. Otherwise, we only search capture moves.
         let mut moves = MoveList::new();
-        if in_check {
-            generate_moves(&self.pos, MoveGenType::Legal, &mut moves)
-        } else {
-            generate_moves(&self.pos, MoveGenType::Captures, &mut moves)
-        };
+        generate_moves(
+            &self.pos,
+            // Generate moves: if in check, we must search all legal evasions to save the
+            // King. Otherwise, we only search capture moves.
+            if in_check {
+                MoveGenType::Legal
+            } else {
+                MoveGenType::Captures
+            },
+            &mut moves,
+        );
 
-        // Checkmate detection: in check with no legal moves = checkmate
+        // Checkmate detection: in check with no legal evasions = checkmate
         if in_check && moves.is_empty() {
             return Value::mated_in(ply);
         }
@@ -707,6 +712,17 @@ impl<'a> Search<'a> {
                 let m = entry.best_move;
                 // Here we do not need to check for null move
                 // since we know that a non-empty TT entry must have a valid move.
+                let mut moves = MoveList::new();
+                generate_moves(&current_pos, MoveGenType::Legal, &mut moves);
+                // The TT move might be illegal
+                if !moves.contains(&m) {
+                    log::debug!(
+                        "PV extraction: TT move {} at ply {} is not legal in the current position, stopping PV extraction",
+                        m.to_uci_string(),
+                        ply
+                    );
+                    break;
+                }
                 pv.push(m);
                 current_pos.do_move(m);
 
