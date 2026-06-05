@@ -72,7 +72,7 @@ show_help() {
   echo -e "                          (e.g., --version 1.6.0a-check-extensions)"
   echo ""
   echo -e "${BOLD}Evaluation Tuning Options:${NC}"
-  echo -e "  -t, --tc TIMECONTROL    Time control setting (Passed down, e.g., \"10/10+0.1\")"
+  echo -e "  -t, --tc TIMECONTROL    Time control setting (Passed down, e.g., \"3+0.03\")"
   echo -e "  -c, --concurrency N     Number of parallel games (Passed down)"
   echo -e "  -f, --force             Overwrite existing results (Disable auto-resume/skip)"
   echo -e "  -d, --dry-run           Show what would be run without executing"
@@ -266,7 +266,7 @@ echo -e "${CYAN}================================================================
 if [ -n "$FILTER_VERSION" ]; then
   echo -e "Filtering to version: ${GREEN}${FILTER_VERSION}${NC}"
 fi
-echo -e "Time Control: ${BOLD}${TC:-"10/10+0.1 (default)"}${NC}"
+echo -e "Time Control: ${BOLD}${TC:-"3+0.03 (default)"}${NC}"
 echo -e "Concurrency:  ${BOLD}${CONCURRENCY:-"auto (default)"}${NC}"
 echo -e "Force Re-run: ${BOLD}${FORCE}${NC}"
 echo -e "Dry Run:      ${BOLD}${DRY_RUN}${NC}"
@@ -513,3 +513,27 @@ if [ ${#SKIPPED_ITEMS[@]} -gt 0 ]; then
   done
 fi
 echo -e "${CYAN}======================================================================${NC}"
+
+# Compile comprehensive reports for the processed versions
+if [ "$DRY_RUN" = true ]; then
+  echo -e "\n${CYAN}[DRY-RUN] Generating comprehensive version reports...${NC}"
+  if [ -n "$FILTER_VERSION" ]; then
+    echo -e "          Would compile report for version: ${GREEN}$FILTER_VERSION${NC}"
+  else
+    for ver in "${CLEAN_NAMES[@]}"; do
+      echo -e "          Would compile report for version: ${GREEN}$ver${NC}"
+    done
+  fi
+else
+  echo -e "\n${CYAN}Generating comprehensive version reports...${NC}"
+  if [ -n "$FILTER_VERSION" ]; then
+    python3 scripts/compile_version_report.py --version "$FILTER_VERSION"
+  else
+    # Compile report for each version discovered
+    for ver in "${CLEAN_NAMES[@]}"; do
+      if [ -d "matches/historical/gauntlets/$ver" ] || [ -d "matches/historical/base_matches/$ver-vs-${CLEAN_NAMES[0]}" ]; then
+        python3 scripts/compile_version_report.py --version "$ver"
+      fi
+    done
+  fi
+fi

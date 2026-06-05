@@ -1073,7 +1073,7 @@
           losses: 0,
           win_rate: 0.0,
           color_stats: {},
-          opponents: [],
+          opponents: []
         };
 
         // 1. Bot Name
@@ -1098,7 +1098,7 @@
 
         // 4. Global MLE ELO
         const eloMatch = content.match(
-          /-\s+\*\*Global MLE ELO Rating:\*\*\s+\*\*(\d+)\s+ELO\*\*/,
+          /-\s+\*\*Global MLE ELO Rating:\*\*\s+\*\*(\d+)\s+ELO\*\*/
         );
         if (eloMatch) {
           stats.global_elo = parseFloat(eloMatch[1]);
@@ -1106,7 +1106,7 @@
 
         // 5. Standard Error
         const seMatch = content.match(
-          /-\s+\*\*Standard Error:\*\*\s+±\s+([\d.]+)\s+ELO/,
+          /-\s+\*\*Standard Error:\*\*\s+±\s+([\d.]+)\s+ELO/
         );
         if (seMatch) {
           stats.standard_error = parseFloat(seMatch[1]);
@@ -1114,7 +1114,7 @@
 
         // 6. Confidence Interval
         const ciMatch = content.match(
-          /-\s+\*\*95% Confidence Interval:\*\*\s+(\d+)\s+-\s+(\d+)\s+ELO/,
+          /-\s+\*\*95% Confidence Interval:\*\*\s+(\d+)\s+-\s+(\d+)\s+ELO/
         );
         if (ciMatch) {
           stats.ci_low = parseFloat(ciMatch[1]);
@@ -1123,7 +1123,7 @@
 
         // 7. Overall Record
         const recordMatch = content.match(
-          /-\s+\*\*Overall Record:\*\*\s+(\d+)W,\s+(\d+)D,\s+(\d+)L\s+\(([\d.]+)%\s+score\s+rate\)/,
+          /-\s+\*\*Overall Record:\*\*\s+(\d+)W,\s+(\d+)D,\s+(\d+)L\s+\(([\d.]+)%\s+score\s+rate\)/
         );
         if (recordMatch) {
           stats.wins = parseInt(recordMatch[1], 10);
@@ -1134,11 +1134,11 @@
 
         // 8. Color Stats
         const redMatch = content.match(
-          /\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+/,
+          /\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+/
         );
         if (!redMatch) {
           const fallbackRed = content.match(
-            /\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/,
+            /\|\s+\*\*Red \(First\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/
           );
           if (fallbackRed) {
             stats.color_stats.red = {
@@ -1146,7 +1146,7 @@
               wins: parseInt(fallbackRed[2], 10),
               draws: parseInt(fallbackRed[3], 10),
               losses: parseInt(fallbackRed[4], 10),
-              score_pct: parseFloat(fallbackRed[5]),
+              score_pct: parseFloat(fallbackRed[5])
             };
           }
         } else {
@@ -1155,16 +1155,16 @@
             wins: parseInt(redMatch[2], 10),
             draws: parseInt(redMatch[3], 10),
             losses: parseInt(redMatch[4], 10),
-            score_pct: parseFloat(redMatch[5]),
+            score_pct: parseFloat(redMatch[5])
           };
         }
 
         const blackMatch = content.match(
-          /\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+/,
+          /\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+/
         );
         if (!blackMatch) {
           const fallbackBlack = content.match(
-            /\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/,
+            /\|\s+\*\*Black \(Second\)\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|\s+([\d.]+)%\s+\|/
           );
           if (fallbackBlack) {
             stats.color_stats.black = {
@@ -1172,7 +1172,7 @@
               wins: parseInt(fallbackBlack[2], 10),
               draws: parseInt(fallbackBlack[3], 10),
               losses: parseInt(fallbackBlack[4], 10),
-              score_pct: parseFloat(fallbackBlack[5]),
+              score_pct: parseFloat(fallbackBlack[5])
             };
           }
         } else {
@@ -1181,7 +1181,7 @@
             wins: parseInt(blackMatch[2], 10),
             draws: parseInt(blackMatch[3], 10),
             losses: parseInt(blackMatch[4], 10),
-            score_pct: parseFloat(blackMatch[5]),
+            score_pct: parseFloat(blackMatch[5])
           };
         }
 
@@ -1199,7 +1199,7 @@
             losses: parseInt(match[6], 10),
             score_pct: parseFloat(match[7]),
             elo_diff: parseInt(match[8], 10),
-            est_elo: parseInt(match[9], 10),
+            est_elo: parseInt(match[9], 10)
           });
         }
 
@@ -1227,12 +1227,12 @@
           draw_rate: 0.0,
           win_streak: 0,
           loss_streak: 0,
-          avg_ply: "N/A",
+          avg_ply: "N/A"
         };
 
         // 1. Engine Names from Title
         const titleMatch = content.match(
-          /^#\s+Match Report:\s+(.+?)\s+vs\s+(.+)$/m,
+          /^#\s+Match Report:\s+(.+?)\s+vs\s+(.+)$/m
         );
         if (titleMatch) {
           stats.engine1 = titleMatch[1].trim();
@@ -1262,47 +1262,47 @@
 
         // 4. Record, Elo Diff, CI, standard error, etc.
         const wMatch = content.match(
-          /\|\s+\*\*Wins\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/,
+          /\|\s+\*\*Wins\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/
         );
         if (wMatch) {
           stats.e1_wins = parseInt(wMatch[1], 10);
         }
         const dMatch = content.match(
-          /\|\s+\*\*Draws\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/,
+          /\|\s+\*\*Draws\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/
         );
         if (dMatch) {
           stats.e1_draws = parseInt(dMatch[1], 10);
         }
         const lMatch = content.match(
-          /\|\s+\*\*Losses\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/,
+          /\|\s+\*\*Losses\*\*\s+\|\s+(\d+)\s+\|\s+(\d+)\s+\|/
         );
         if (lMatch) {
           stats.e1_losses = parseInt(lMatch[1], 10);
         }
 
         const ptsMatch = content.match(
-          /\|\s+\*\*Points\*\*\s+\|\s+[\d.]+\s+\/\s+\d+\s+\(([\d.]+)%\)\s+\|/,
+          /\|\s+\*\*Points\*\*\s+\|\s+[\d.]+\s+\/\s+\d+\s+\(([\d.]+)%\)\s+\|/
         );
         if (ptsMatch) {
           stats.score_pct = parseFloat(ptsMatch[1]);
         }
 
         const eloMatch = content.match(
-          /\|\s+\*\*Elo Diff\*\*\s+\|\s+\*\*([+-]?[\d.]+)\*\*\s+\|/,
+          /\|\s+\*\*Elo Diff\*\*\s+\|\s+\*\*([+-]?[\d.]+)\*\*\s+\|/
         );
         if (eloMatch) {
           stats.elo_diff = parseFloat(eloMatch[1]);
         }
 
         const seMatch = content.match(
-          /\|\s+\*\*Standard Error\*\*\s+\|\s+±\s+([\d.]+)\s+\|/,
+          /\|\s+\*\*Standard Error\*\*\s+\|\s+±\s+([\d.]+)\s+\|/
         );
         if (seMatch) {
           stats.standard_error = parseFloat(seMatch[1]);
         }
 
         const ciMatch = content.match(
-          /\|\s+\*\*95% Confidence Interval\*\*\s+\|\s+\[([+-]?[\d.]+),\s*([+-]?[\d.]+)\]\s+\|/,
+          /\|\s+\*\*95% Confidence Interval\*\*\s+\|\s+\[([+-]?[\d.]+),\s*([+-]?[\d.]+)\]\s+\|/
         );
         if (ciMatch) {
           stats.ci_low = parseFloat(ciMatch[1]);
@@ -1310,14 +1310,14 @@
         }
 
         const losMatch = content.match(
-          /\|\s+\*\*LOS \(Likelihood of Superiority\)\*\*\s+\|\s+([\d.]+%)\s+\|/,
+          /\|\s+\*\*LOS \(Likelihood of Superiority\)\*\*\s+\|\s+([\d.]+%)\s+\|/
         );
         if (losMatch) {
           stats.los = losMatch[1];
         }
 
         const drMatch = content.match(
-          /\|\s+\*\*Draw Rate\*\*\s+\|\s+([\d.]+%)\s+\|/,
+          /\|\s+\*\*Draw Rate\*\*\s+\|\s+([\d.]+%)\s+\|/
         );
         if (drMatch) {
           stats.draw_rate = parseFloat(drMatch[1]);
@@ -1325,13 +1325,13 @@
 
         // 5. Streaks
         const winStreakMatch = content.match(
-          /-\s+\*\*Longest Win Streak:\*\*\s+(\d+)\s+games/,
+          /-\s+\*\*Longest Win Streak:\*\*\s+(\d+)\s+games/
         );
         if (winStreakMatch) {
           stats.win_streak = parseInt(winStreakMatch[1], 10);
         }
         const lossStreakMatch = content.match(
-          /-\s+\*\*Longest Loss Streak:\*\*\s+(\d+)\s+games/,
+          /-\s+\*\*Longest Loss Streak:\*\*\s+(\d+)\s+games/
         );
         if (lossStreakMatch) {
           stats.loss_streak = parseInt(lossStreakMatch[1], 10);
@@ -1339,7 +1339,7 @@
 
         // 6. Avg Ply
         const plyMatch = content.match(
-          /-\s+\*\*Ply Count:\*\*\s+Average:\s+([\d.]+)\s+plies/,
+          /-\s+\*\*Ply Count:\*\*\s+Average:\s+([\d.]+)\s+plies/
         );
         if (plyMatch) {
           stats.avg_ply = parseFloat(plyMatch[1]);
@@ -1374,7 +1374,7 @@
 
             try {
               const summaryResponse = await fetch(
-                `../matches/${folder}/summary.md`,
+                `../matches/${folder}/summary.md`
               );
               if (summaryResponse.ok) {
                 const mdContent = await summaryResponse.text();
@@ -1392,7 +1392,7 @@
               }
             } catch (err) {
               console.warn(
-                `Bypassed summary.md read for active run: ${folder}`,
+                `Bypassed summary.md read for active run: ${folder}`
               );
             }
           }
@@ -1405,12 +1405,12 @@
           try {
             // 1. Crawl Historical Gauntlets
             const histGauntletFolders = await fetchSubfolders(
-              "../matches/historical/gauntlets/",
+              "../matches/historical/gauntlets/"
             );
             for (let f of histGauntletFolders) {
               try {
                 const res = await fetch(
-                  `../matches/historical/gauntlets/${f}/summary.md`,
+                  `../matches/historical/gauntlets/${f}/summary.md`
                 );
                 if (res.ok) {
                   const text = await res.text();
@@ -1426,12 +1426,12 @@
 
             // 2. Crawl Base comparison matches
             const histBaseFolders = await fetchSubfolders(
-              "../matches/historical/base_matches/",
+              "../matches/historical/base_matches/"
             );
             for (let f of histBaseFolders) {
               try {
                 const res = await fetch(
-                  `../matches/historical/base_matches/${f}/summary.md`,
+                  `../matches/historical/base_matches/${f}/summary.md`
                 );
                 if (res.ok) {
                   const text = await res.text();
@@ -1448,12 +1448,12 @@
 
             // 3. Crawl Consecutive Upgrade comparisons
             const histNeighborFolders = await fetchSubfolders(
-              "../matches/historical/neighbor_matches/",
+              "../matches/historical/neighbor_matches/"
             );
             for (let f of histNeighborFolders) {
               try {
                 const res = await fetch(
-                  `../matches/historical/neighbor_matches/${f}/summary.md`,
+                  `../matches/historical/neighbor_matches/${f}/summary.md`
                 );
                 if (res.ok) {
                   const text = await res.text();
@@ -1470,7 +1470,7 @@
           } catch (histErr) {
             console.warn(
               "Historical subdirectory crawl encountered errors:",
-              histErr,
+              histErr
             );
           }
 
@@ -1609,7 +1609,7 @@
         const topBot = gauntletData[0];
         const totalGamesPlayed = gauntletData.reduce(
           (acc, curr) => acc + curr.total_games,
-          0,
+          0
         );
         const avgWinRate = (
           gauntletData.reduce((acc, curr) => acc + curr.win_rate, 0) / totalRuns
@@ -1689,10 +1689,10 @@
 
         // Dynamically calculate y-axis limits to prevent error bars from getting clipped
         const validCiLows = ciLows.filter(
-          (val) => typeof val === "number" && !isNaN(val),
+          (val) => typeof val === "number" && !isNaN(val)
         );
         const validCiHighs = ciHighs.filter(
-          (val) => typeof val === "number" && !isNaN(val),
+          (val) => typeof val === "number" && !isNaN(val)
         );
         let yMin = undefined;
         let yMax = undefined;
@@ -1708,7 +1708,7 @@
           afterDatasetsDraw(chart) {
             const {
               ctx,
-              scales: { x, y },
+              scales: { x, y }
             } = chart;
             ctx.save();
             ctx.strokeStyle = "#a5b4fc";
@@ -1734,7 +1734,7 @@
               ctx.stroke();
             });
             ctx.restore();
-          },
+          }
         };
 
         if (chartInstance) {
@@ -1753,9 +1753,9 @@
                 borderColor: "#6366f1",
                 borderWidth: 2,
                 borderRadius: 8,
-                maxBarThickness: 60,
-              },
-            ],
+                maxBarThickness: 60
+              }
+            ]
           },
           options: {
             responsive: true,
@@ -1768,16 +1768,16 @@
                 grid: { color: "rgba(255, 255, 255, 0.05)" },
                 ticks: {
                   color: "#9ca3af",
-                  font: { family: "Plus Jakarta Sans" },
-                },
+                  font: { family: "Plus Jakarta Sans" }
+                }
               },
               x: {
                 grid: { display: false },
                 ticks: {
                   color: "#9ca3af",
-                  font: { family: "Plus Jakarta Sans", weight: "600" },
-                },
-              },
+                  font: { family: "Plus Jakarta Sans", weight: "600" }
+                }
+              }
             },
             plugins: {
               legend: { display: false },
@@ -1786,12 +1786,12 @@
                   label: function (context) {
                     const bot = gauntletData[context.dataIndex];
                     return ` MLE Elo: ${bot.global_elo} (95% CI: ${bot.ci_low} - ${bot.ci_high})`;
-                  },
-                },
-              },
-            },
+                  }
+                }
+              }
+            }
           },
-          plugins: [errorBarPlugin],
+          plugins: [errorBarPlugin]
         });
       }
 
@@ -1841,7 +1841,7 @@
               win_rate: opp.score_pct,
               est_elo: opp.est_elo,
               elo_diff: opp.elo_diff,
-              record: `${opp.wins}W / ${opp.draws}D / ${opp.losses}L`,
+              record: `${opp.wins}W / ${opp.draws}D / ${opp.losses}L`
             });
           }
         });
@@ -1903,7 +1903,7 @@
 
         const totalGames = matchData.reduce(
           (acc, curr) => acc + curr.total_games,
-          0,
+          0
         );
 
         // Find most dominant match result (highest Elo diff absolute value)
@@ -1949,7 +1949,7 @@
 
         // Sort matches chronologically/by folder name descending (newest matches first)
         const sortedMatches = [...matchData].sort((a, b) =>
-          b.folder.localeCompare(a.folder),
+          b.folder.localeCompare(a.folder)
         );
 
         container.innerHTML = "";
@@ -2055,14 +2055,14 @@
 
         // Sort matches chronologically
         historicalBaseMatches.sort((a, b) =>
-          compareVersions(a.engine1, b.engine1),
+          compareVersions(a.engine1, b.engine1)
         );
 
         historicalBaseMatches.forEach((match) => {
           const ver = extractVersion(match.engine1);
           const stage = match.engine1.replace(
             /^(lingine-)?\d+\.\d+\.\d+[a-z]?-?/,
-            "",
+            ""
           );
           const cleanStage = stage
             .split("-")
@@ -2102,7 +2102,7 @@
 
         // Sort Neighbor matches chronologically
         historicalNeighborMatches.sort((a, b) =>
-          compareVersions(a.engine1, b.engine1),
+          compareVersions(a.engine1, b.engine1)
         );
 
         historicalNeighborMatches.forEach((match) => {
@@ -2143,7 +2143,7 @@
 
         // Sort gauntlets by Elo descending (leaderboard)
         const sortedHistGauntlets = [...historicalGauntletData].sort(
-          (a, b) => b.global_elo - a.global_elo,
+          (a, b) => b.global_elo - a.global_elo
         );
 
         sortedHistGauntlets.forEach((bot, index) => {
@@ -2157,7 +2157,7 @@
           const ver = extractVersion(bot.bot_name);
           const stage = bot.bot_name.replace(
             /^(lingine-)?\d+\.\d+\.\d+[a-z]?-?/,
-            "",
+            ""
           );
           const cleanStage = stage
             .split("-")
@@ -2196,14 +2196,14 @@
 
         // Sort gauntlets chronologically for progression plotting
         historicalGauntletData.sort((a, b) =>
-          compareVersions(a.bot_name, b.bot_name),
+          compareVersions(a.bot_name, b.bot_name)
         );
 
         const labels = historicalGauntletData.map((bot) => {
           const ver = extractVersion(bot.bot_name);
           const stage = bot.bot_name.replace(
             /^(lingine-)?\d+\.\d+\.\d+[a-z]?-?/,
-            "",
+            ""
           );
           const cleanStage = stage
             .split("-")
@@ -2217,10 +2217,10 @@
         const ciHighs = historicalGauntletData.map((bot) => bot.ci_high);
 
         const validCiLows = ciLows.filter(
-          (val) => typeof val === "number" && !isNaN(val),
+          (val) => typeof val === "number" && !isNaN(val)
         );
         const validCiHighs = ciHighs.filter(
-          (val) => typeof val === "number" && !isNaN(val),
+          (val) => typeof val === "number" && !isNaN(val)
         );
         let yMin = undefined;
         let yMax = undefined;
@@ -2236,7 +2236,7 @@
           afterDatasetsDraw(chart) {
             const {
               ctx,
-              scales: { x, y },
+              scales: { x, y }
             } = chart;
             ctx.save();
             ctx.strokeStyle = "rgba(165, 180, 252, 0.4)";
@@ -2261,7 +2261,7 @@
               ctx.stroke();
             });
             ctx.restore();
-          },
+          }
         };
 
         if (historicalChartInstance) {
@@ -2285,9 +2285,9 @@
                 pointRadius: 6,
                 pointHoverRadius: 8,
                 tension: 0.25,
-                fill: true,
-              },
-            ],
+                fill: true
+              }
+            ]
           },
           options: {
             responsive: true,
@@ -2299,16 +2299,16 @@
                 grid: { color: "rgba(255, 255, 255, 0.05)" },
                 ticks: {
                   color: "#9ca3af",
-                  font: { family: "Plus Jakarta Sans" },
-                },
+                  font: { family: "Plus Jakarta Sans" }
+                }
               },
               x: {
                 grid: { display: false },
                 ticks: {
                   color: "#9ca3af",
-                  font: { family: "Plus Jakarta Sans", weight: "600" },
-                },
-              },
+                  font: { family: "Plus Jakarta Sans", weight: "600" }
+                }
+              }
             },
             plugins: {
               legend: { display: false },
@@ -2317,12 +2317,12 @@
                   label: function (context) {
                     const bot = historicalGauntletData[context.dataIndex];
                     return ` MLE Elo: ${bot.global_elo} (95% CI: ${bot.ci_low} - ${bot.ci_high})`;
-                  },
-                },
-              },
-            },
+                  }
+                }
+              }
+            }
           },
-          plugins: [errorBarPlugin],
+          plugins: [errorBarPlugin]
         });
       }
 
