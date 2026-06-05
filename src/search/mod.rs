@@ -860,10 +860,16 @@ impl<'a> Search<'a> {
             } else {
                 let to_piece = self.pos.piece_at(m.square_to());
                 if to_piece != Piece::None {
-                    // Capture: 10000 + victim_rank * 100 - attacker_rank
-                    let victim = get_piece_value_rank(to_piece);
-                    let attacker = get_piece_value_rank(self.pos.piece_at(m.square_from()));
-                    1_000_000_000 + victim * 10_000_000 - attacker * 100_000
+                    let see_score = self.pos.see(m);
+                    if see_score >= 0 {
+                        // Capture: 10000 + victim_rank * 100 - attacker_rank
+                        let victim = get_piece_value_rank(to_piece);
+                        let attacker = get_piece_value_rank(self.pos.piece_at(m.square_from()));
+                        1_000_000_000 + victim * 10_000_000 - attacker * 100_000
+                    } else {
+                        // Bad/losing capture: deprioritize below killer and good quiet moves
+                        100_000_000 + see_score as i32
+                    }
                 } else {
                     // Quiet move
                     let ply_idx = ply as usize;

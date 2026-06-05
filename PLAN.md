@@ -166,7 +166,7 @@ _Goal: Fast, selective tactical search and positional maturity._
     search by 1 ply.
 
 - [ ] **Search Pruning**: Null move pruning (NMP) + Late move reductions (LMR)
-- [ ] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
+- [x] **Move Ordering Heuristics**: Add History heuristic for sorting quiet
       moves
 - [ ] **Mobility & Safety**: Add mobility evaluation bonus and basic king/palace
       safety scoring
