@@ -486,6 +486,8 @@ impl<'a> Search<'a> {
         // prioritized first, killers, and history
         self.sort_moves(&mut moves, best_move, ply);
 
+        let mut bad_quiets = MoveList::new();
+
         for (m_idx, &m) in moves.iter().enumerate() {
             if m == ctx.excluded_move {
                 continue;
@@ -500,7 +502,10 @@ impl<'a> Search<'a> {
                 ext = 1;
             }
 
+            let is_quiet = self.pos.is_empty(m.square_to());
+
             self.pos.do_move(m);
+
             // Principal Variation Search
             //
             // We trust that our move ordering is good enough to ensure the first move searched to be the best move most of the time,
@@ -559,7 +564,7 @@ impl<'a> Search<'a> {
             }
             if alpha >= beta {
                 // Update killers and history for quiet moves
-                if self.pos.piece_at(m.square_to()) == Piece::None {
+                if is_quiet {
                     let ply_idx = ply as usize;
                     // We do not check for ply_idx out of bounds since
                     // ply should not exceed MAX_PLY in normal circumstances
@@ -570,10 +575,26 @@ impl<'a> Search<'a> {
                     let side_idx = self.pos.side_to_move() as usize;
                     let from_idx = m.square_from() as usize;
                     let to_idx = m.square_to() as usize;
+                    // History Heuristic Bonus
+                    // We add a bonus to quiet moves that cause beta cutoffs,
+                    // so that they get prioritized higher in move ordering in later searches.
                     self.history_table[side_idx][from_idx][to_idx] +=
                         (depth as i32) * (depth as i32);
+
+                    // History Heuristic Malus
+                    // We also penalize previous quiet moves that didn't cause cutoffs
+                    for bad_quiet in bad_quiets {
+                        let from_idx = bad_quiet.square_from() as usize;
+                        let to_idx = bad_quiet.square_to() as usize;
+                        self.history_table[side_idx][from_idx][to_idx] -=
+                            (depth as i32) * (depth as i32);
+                    }
                 }
                 break; // Beta cutoff
+            }
+
+            if is_quiet {
+                bad_quiets.push(m);
             }
         }
 
