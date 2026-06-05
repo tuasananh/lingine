@@ -384,6 +384,22 @@ impl<'a> Search<'a> {
         let mut best_score = -Value::INFINITY;
         let mut best_move = Move::null();
 
+        let mut depth = depth;
+
+        // In general, we should do extensions before probing TT, since the depth might
+        // increase after extensions, and we want to probe TT with the correct depth.
+
+        // Check Extensions: If the side to move is in check,
+        // we extend the search depth by 1 ply to give the engine a better chance to
+        // find a defensive resource and avoid missing critical moves that could
+        // save the King.
+        //
+        // See: https://www.chessprogramming.org/Check_Extensions
+        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+            depth += 1;
+            ctx.extensions += 1;
+        }
+
         let mut is_singular = false;
         let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
@@ -453,19 +469,6 @@ impl<'a> Search<'a> {
         // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
         if moves.is_empty() {
             return Value::mated_in(ply);
-        }
-
-        let mut depth = depth;
-
-        // Check Extensions: If the side to move is in check,
-        // we extend the search depth by 1 ply to give the engine a better chance to
-        // find a defensive resource and avoid missing critical moves that could
-        // save the King.
-        //
-        // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
-            depth += 1;
-            ctx.extensions += 1;
         }
 
         // One Reply Extensions: If there is only one legal move available,
@@ -586,10 +589,11 @@ impl<'a> Search<'a> {
                 -stand_pat
             };
 
-            // If the static evaluation is already good enough to cause a beta cutoff, we can
-            // prune this node without searching captures. This is the essence of quiescence search:
-            // we only search captures if the position is "noisy" (i.e. in check or has potential
-            // captures that could change the evaluation significantly).
+            // If the static evaluation is already good enough to cause a beta cutoff, we
+            // can prune this node without searching captures. This is the
+            // essence of quiescence search: we only search captures if the
+            // position is "noisy" (i.e. in check or has potential captures that
+            // could change the evaluation significantly).
             if eval_side >= beta {
                 return eval_side;
             }
@@ -612,7 +616,8 @@ impl<'a> Search<'a> {
         );
 
         // Checkmate detection: in check with no legal moves = checkmate
-        // Stalemate detection: not in check with no legal moves = stalemate (which is a loss for the side to move in Xiangqi)
+        // Stalemate detection: not in check with no legal moves = stalemate (which is a
+        // loss for the side to move in Xiangqi)
         if moves.is_empty() {
             return Value::mated_in(ply);
         }
