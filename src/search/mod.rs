@@ -197,7 +197,7 @@ impl<'a> Search<'a> {
             //
             // See: https://www.chessprogramming.org/Time_Management#Soft_Bound
             if let Some(limit) = self.allocated_time
-                && self.start_time.elapsed() > limit / 4
+                && self.start_time.elapsed() > limit / 2
             {
                 break;
             }
@@ -540,18 +540,20 @@ impl<'a> Search<'a> {
         }
 
         // Cache search results to Transposition Table
-        let flag = if best_score >= beta {
-            TranspositionTableFlag::Beta
-        } else if best_score <= alpha_orig {
-            TranspositionTableFlag::Alpha
-        } else {
-            TranspositionTableFlag::Exact
-        };
-        self.transposition_table.store(
-            self.pos.zobrist_hash(),
-            ply,
-            tt_value!(best_score, flag, best_move, depth, self.age),
-        );
+        if !self.stop.load(Ordering::Relaxed) {
+            let flag = if best_score >= beta {
+                TranspositionTableFlag::Beta
+            } else if best_score <= alpha_orig {
+                TranspositionTableFlag::Alpha
+            } else {
+                TranspositionTableFlag::Exact
+            };
+            self.transposition_table.store(
+                self.pos.zobrist_hash(),
+                ply,
+                tt_value!(best_score, flag, best_move, depth, self.age),
+            );
+        }
 
         best_score
     }
@@ -615,10 +617,8 @@ impl<'a> Search<'a> {
             &mut moves,
         );
 
-        // Checkmate detection: in check with no legal moves = checkmate
-        // Stalemate detection: not in check with no legal moves = stalemate (which is a
-        // loss for the side to move in Xiangqi)
-        if moves.is_empty() {
+        // Checkmate detection: in check with no legal evasions = checkmate
+        if in_check && moves.is_empty() {
             return Value::mated_in(ply);
         }
 
