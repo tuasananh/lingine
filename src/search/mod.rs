@@ -460,7 +460,7 @@ impl<'a> Search<'a> {
 
         // Base case: fall back to quiescence search
         if depth == 0 {
-            return self.quiescence(0, ply, alpha, beta);
+            return self.quiescence_search(0, ply, alpha, beta);
         }
 
         let mut moves = MoveList::new();
@@ -562,7 +562,7 @@ impl<'a> Search<'a> {
     ///
     /// Prevents the horizon effect by searching captures only until a quiet
     /// position is reached.
-    fn quiescence(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
+    fn quiescence_search(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
         self.update_analytics(ply);
 
         if self.should_stop_search() {
@@ -580,12 +580,18 @@ impl<'a> Search<'a> {
             };
         }
 
+        if let Some(rule_score) = self.pos.rule_judge(ply) {
+            return rule_score;
+        }
+
         let in_check = self.pos.is_in_check(self.pos.side_to_move());
+
+        let mut best_score = -Value::INFINITY;
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
             let stand_pat = self.pos.evaluate();
-            let eval_side = if self.pos.side_to_move() == Color::White {
+            best_score = if self.pos.side_to_move() == Color::White {
                 stand_pat
             } else {
                 -stand_pat
@@ -596,11 +602,11 @@ impl<'a> Search<'a> {
             // essence of quiescence search: we only search captures if the
             // position is "noisy" (i.e. in check or has potential captures that
             // could change the evaluation significantly).
-            if eval_side >= beta {
-                return eval_side;
+            if best_score >= beta {
+                return best_score;
             }
-            if eval_side > alpha {
-                alpha = eval_side;
+            if best_score > alpha {
+                alpha = best_score;
             }
         }
 
@@ -627,22 +633,21 @@ impl<'a> Search<'a> {
 
         for m in moves {
             self.pos.do_move(m);
-            let score = -self.quiescence(depth - 1, ply + 1, -beta, -alpha);
+            best_score = best_score.max(-self.quiescence_search(depth - 1, ply + 1, -beta, -alpha));
             self.pos.undo_move(m);
 
             if self.stop.load(Ordering::Relaxed) {
                 return Value::ZERO;
             }
-
-            if score >= beta {
-                return score;
+            if best_score >= beta {
+                return best_score;
             }
-            if score > alpha {
-                alpha = score;
+            if best_score > alpha {
+                alpha = best_score;
             }
         }
 
-        alpha
+        best_score
     }
 
     /// Sorts the moves based on their heuristic scores, prioritizing the
