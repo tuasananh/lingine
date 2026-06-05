@@ -219,13 +219,14 @@ impl Position {
 
     /// Performs a lazy evaluation. If the base score (material + PST) is far
     /// enough outside the alpha-beta window that positional features couldn't
-    /// change the outcome, it simply returns the base score to save computation.
-    /// `alpha` and `beta` should be provided from the perspective of the side to move.
+    /// change the outcome, it simply returns the base score to save
+    /// computation. `alpha` and `beta` should be provided from the
+    /// perspective of the side to move.
     #[inline]
     pub fn evaluate_lazy(&self, alpha: Value, beta: Value) -> Value {
         let base_score = self.material_score() + self.piece_square_table_score();
         // A generous margin for maximum possible positional swing in centipawns
-        let margin = Value::from_raw(200); 
+        let margin = Value::from_raw(200);
 
         // Convert side-to-move alpha/beta to White's perspective
         let (alpha_white, beta_white) = if self.side_to_move == Color::White {
@@ -240,7 +241,7 @@ impl Position {
         if base_score + margin <= alpha_white {
             return base_score; // Fails low anyway
         }
-        
+
         base_score + self.evaluate_positional_features()
     }
 
@@ -252,7 +253,8 @@ impl Position {
 
         let mut score = 0;
 
-        // Loop over both colors, accumulating features. White gets positive sign, Black gets negative.
+        // Loop over both colors, accumulating features. White gets positive sign, Black
+        // gets negative.
         for color in [Color::White, Color::Black] {
             let sign = if color == Color::White { 1 } else { -1 };
             let us_pieces = self.bitboard_by_color[color as usize];
@@ -275,14 +277,14 @@ impl Position {
                 let entry = &KNIGHT_TABLE[sq as usize];
                 let mut occ_idx = 0;
                 for i in 0..4 {
-                    if let Some(eye_sq) = entry.eyes[i] {
-                        if occupied.is_occupied(eye_sq) {
-                            occ_idx |= 1 << i;
-                        }
+                    if let Some(eye_sq) = entry.eyes[i]
+                        && occupied.is_occupied(eye_sq)
+                    {
+                        occ_idx |= 1 << i;
                     }
                 }
                 let attacks = entry.attacks[occ_idx] & !us_pieces;
-                side_score += attacks.count_ones() as i32 * 1;
+                side_score += attacks.count_ones() as i32;
             }
 
             // Cannons mobility (includes quiet slides and leap captures)
@@ -291,7 +293,8 @@ impl Position {
                 let f = sq.file() as usize;
                 let r = sq.rank() as usize;
 
-                // Rank moves: quiet (same as Rook but not blocked) + leap captures (behind a screen)
+                // Rank moves: quiet (same as Rook but not blocked) + leap captures (behind a
+                // screen)
                 let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
                 let rank_quiet = RANK_TABLE[f].rook[rank_occ] & !rank_occ as u16;
                 let rank_captures = RANK_TABLE[f].cannon[rank_occ]
@@ -299,13 +302,14 @@ impl Position {
 
                 // File moves: quiet + leap captures
                 let file_occ = gather_file_bits(occupied.raw(), f);
-                let file_quiet = FILE_TABLE[r].rook[file_occ] & !gather_file_bits(occupied.raw(), f) as u16;
-                let file_captures = FILE_TABLE[r].cannon[file_occ]
-                    & gather_file_bits(enemy_pieces.raw(), f) as u16;
+                let file_quiet =
+                    FILE_TABLE[r].rook[file_occ] & !gather_file_bits(occupied.raw(), f) as u16;
+                let file_captures =
+                    FILE_TABLE[r].cannon[file_occ] & gather_file_bits(enemy_pieces.raw(), f) as u16;
 
                 let mobility = (rank_quiet | rank_captures).count_ones()
                     + (file_quiet | file_captures).count_ones();
-                side_score += mobility as i32 * 1;
+                side_score += mobility as i32;
             }
 
             // 2. Palace Defenders: reward having defensive shields (Advisors and Bishops)
@@ -324,13 +328,16 @@ impl Position {
                 _ => -10,
             };
 
-            // 3. Palace Safety: penalize enemy attackers invading our actual Palace boundary
+            // 3. Palace Safety: penalize enemy attackers invading our actual Palace
+            //    boundary
             let our_palace = Bitboard::PALACE & Bitboard::side(color);
             let enemy_in_palace = enemy_pieces & our_palace;
             if !enemy_in_palace.is_empty() {
                 let rooks = (self.bitboard_by_type(PieceType::Rook) & enemy_in_palace).count_ones();
-                let cannons = (self.bitboard_by_type(PieceType::Cannon) & enemy_in_palace).count_ones();
-                let knights = (self.bitboard_by_type(PieceType::Knight) & enemy_in_palace).count_ones();
+                let cannons =
+                    (self.bitboard_by_type(PieceType::Cannon) & enemy_in_palace).count_ones();
+                let knights =
+                    (self.bitboard_by_type(PieceType::Knight) & enemy_in_palace).count_ones();
                 let pawns = (self.bitboard_by_type(PieceType::Pawn) & enemy_in_palace).count_ones();
 
                 let danger = rooks as i32 * 40
@@ -346,11 +353,13 @@ impl Position {
                 (self.bitboard_by_type(PieceType::Pawn) & us_pieces & enemy_palace).count_ones();
             side_score += pawns_in_enemy_palace as i32 * 15;
 
-            // 5. Hollow Center: penalize if King is on the central file without protective pieces
+            // 5. Hollow Center: penalize if King is on the central file without protective
+            //    pieces
             let king_sq = self.king_squares[color as usize];
             if king_sq.file() as u8 == 4 {
                 let friendly_on_center = gather_file_bits(us_pieces.raw(), 4);
-                // If count is 1, only the King is on the central file, leaving it completely hollow and exposed
+                // If count is 1, only the King is on the central file, leaving it completely
+                // hollow and exposed
                 if friendly_on_center.count_ones() == 1 {
                     side_score -= 40;
                 }
@@ -1067,10 +1076,10 @@ impl Position {
         let mut occ_idx_n = 0;
         let mut i = 0;
         while i < 6 {
-            if let Some(eye_sq) = entry_n.eyes[i] {
-                if occupied.is_occupied(eye_sq) {
-                    occ_idx_n |= 1 << i;
-                }
+            if let Some(eye_sq) = entry_n.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx_n |= 1 << i;
             }
             i += 1;
         }
@@ -1092,10 +1101,10 @@ impl Position {
         let mut occ_idx_b = 0;
         let mut i = 0;
         while i < 4 {
-            if let Some(eye_sq) = entry_b.eyes[i] {
-                if occupied.is_occupied(eye_sq) {
-                    occ_idx_b |= 1 << i;
-                }
+            if let Some(eye_sq) = entry_b.eyes[i]
+                && occupied.is_occupied(eye_sq)
+            {
+                occ_idx_b |= 1 << i;
             }
             i += 1;
         }
@@ -1202,7 +1211,7 @@ impl Position {
         // Backtrack minimax values
         while d > 1 {
             d -= 1;
-            gain[d - 1] = gain[d - 1] - gain[d].max(0);
+            gain[d - 1] -= gain[d].max(0);
         }
 
         gain[0]

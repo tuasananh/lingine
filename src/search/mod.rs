@@ -480,7 +480,13 @@ impl<'a> Search<'a> {
         }
 
         // Null Move Pruning (NMP)
-        if depth >= 3 && !in_check && is_null_window && ctx.can_null && !beta.abs().is_winning() && static_eval >= beta {
+        if depth >= 3
+            && !in_check
+            && is_null_window
+            && ctx.can_null
+            && !beta.abs().is_winning()
+            && static_eval >= beta
+        {
             let side = self.pos.side_to_move();
             let has_major_or_minor = !(self.pos.bitboard_by_type(PieceType::Rook)
                 & self.pos.bitboard_by_color(side))
@@ -569,7 +575,13 @@ impl<'a> Search<'a> {
             let gives_check = self.pos.is_in_check(self.pos.side_to_move());
 
             // Late Move Pruning (LMP)
-            if depth <= 3 && m_idx > 0 && is_quiet && !gives_check && !in_check && !alpha.abs().is_winning() {
+            if depth <= 3
+                && m_idx > 0
+                && is_quiet
+                && !gives_check
+                && !in_check
+                && !alpha.abs().is_winning()
+            {
                 let lmp_threshold = (3 + 2 * depth * depth) as usize;
                 if m_idx >= lmp_threshold {
                     self.pos.undo_move(m);
@@ -579,7 +591,13 @@ impl<'a> Search<'a> {
             }
 
             // Futility Pruning (FP)
-            if depth <= 4 && m_idx > 0 && is_quiet && !gives_check && !in_check && !alpha.abs().is_winning() {
+            if depth <= 4
+                && m_idx > 0
+                && is_quiet
+                && !gives_check
+                && !in_check
+                && !alpha.abs().is_winning()
+            {
                 let fp_margin = value!(100 * depth as i16);
                 if static_eval + fp_margin <= alpha {
                     self.pos.undo_move(m);
