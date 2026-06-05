@@ -558,18 +558,9 @@ impl<'a> Search<'a> {
     /// Prevents the horizon effect by searching captures only until a quiet
     /// position is reached.
     fn quiescence(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
-        if self.stop.load(Ordering::Relaxed) {
-            return Value::ZERO;
-        }
-        self.nodes += 1;
-        self.max_ply = self.max_ply.max(ply);
+        self.update_analytics(ply);
 
-        // Check stop signals periodically
-        if self.nodes & 1023 == 0
-            && let Some(limit) = self.allocated_time
-            && self.start_time.elapsed() >= limit
-        {
-            self.stop.store(true, Ordering::Relaxed);
+        if self.should_stop_search() {
             return Value::ZERO;
         }
 
@@ -595,6 +586,10 @@ impl<'a> Search<'a> {
                 -stand_pat
             };
 
+            // If the static evaluation is already good enough to cause a beta cutoff, we can
+            // prune this node without searching captures. This is the essence of quiescence search:
+            // we only search captures if the position is "noisy" (i.e. in check or has potential
+            // captures that could change the evaluation significantly).
             if eval_side >= beta {
                 return eval_side;
             }
@@ -603,17 +598,22 @@ impl<'a> Search<'a> {
             }
         }
 
-        // Generate moves: if in check, we must search all legal evasions to save the
-        // King. Otherwise, we only search capture moves.
         let mut moves = MoveList::new();
-        if in_check {
-            generate_moves(&self.pos, MoveGenType::Legal, &mut moves)
-        } else {
-            generate_moves(&self.pos, MoveGenType::Captures, &mut moves)
-        };
+        generate_moves(
+            &self.pos,
+            // Generate moves: if in check, we must search all legal evasions to save the
+            // King. Otherwise, we only search capture moves.
+            if in_check {
+                MoveGenType::Legal
+            } else {
+                MoveGenType::Captures
+            },
+            &mut moves,
+        );
 
         // Checkmate detection: in check with no legal moves = checkmate
-        if in_check && moves.is_empty() {
+        // Stalemate detection: not in check with no legal moves = stalemate (which is a loss for the side to move in Xiangqi)
+        if moves.is_empty() {
             return Value::mated_in(ply);
         }
 
