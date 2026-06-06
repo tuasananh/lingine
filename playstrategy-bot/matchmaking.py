@@ -2,11 +2,13 @@ import random
 import time
 import logging
 
+from lichess import Lichess
+
 logger = logging.getLogger(__name__)
 
 
 class Matchmaking:
-    def __init__(self, li, config, username):
+    def __init__(self, li: Lichess, config, username):
         self.li = li
         self.variants = list(
             filter(
@@ -46,6 +48,9 @@ class Matchmaking:
         )
 
     def create_challenge(self, username, base_time, increment, days, variant):
+        logger.debug(
+            f"Creating challenge for {username} with base_time={base_time}, increment={increment}, days={days}, variant={variant}."
+        )
         mode = self.matchmaking_cfg.get("challenge_mode") or "random"
         if mode == "random":
             mode = random.choice(["casual", "rated"])
@@ -56,6 +61,9 @@ class Matchmaking:
         else:
             params["clock.limit"] = base_time
             params["clock.increment"] = increment
+            params["clock.byoyomi"] = 0
+            params["clock.periods"] = 0
+            params["clock.delay"] = 0
         challenge_id = (
             self.li.challenge(username, params).get("challenge", {}).get("id")
         )

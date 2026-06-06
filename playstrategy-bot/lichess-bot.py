@@ -2,6 +2,7 @@ import argparse
 import chess
 import chess.pgn
 from chess.variant import find_variant
+from lichess import Lichess
 import chess.polyglot
 import chess.engine
 import engine_wrapper
@@ -95,7 +96,9 @@ class CustomVariantBoard(chess.Board):
 
     def root(self):
         return CustomVariantBoard(
-            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant  # type: ignore
+            fen=self._fen,
+            chess960=self.chess960,
+            variant_name=self.uci_variant,  # type: ignore
         )
 
     def push_uci(self, uci_str):  # type: ignore
@@ -134,7 +137,9 @@ class CustomVariantBoard(chess.Board):
 
     def copy(self, stack=True):  # type: ignore
         copied = CustomVariantBoard(
-            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant  # type: ignore
+            fen=self._fen,
+            chess960=self.chess960,
+            variant_name=self.uci_variant,  # type: ignore
         )
         if stack:
             copied.move_stack = self.move_stack.copy()
@@ -233,7 +238,14 @@ def game_logging_configurer(queue, level):
     root.setLevel(level)
 
 
-def start(li, user_profile, config, logging_level, log_filename, one_game=False):
+def start(
+    li: Lichess,
+    user_profile,
+    config,
+    logging_level,
+    log_filename,
+    one_game=False,
+):
     challenge_config = config["challenge"]
     max_games = challenge_config.get("concurrency", 1)
     logger.info(f"You're now connected to {config['url']} and awaiting challenges.")
@@ -254,10 +266,10 @@ def start(li, user_profile, config, logging_level, log_filename, one_game=False)
     correspondence_queue = manager.Queue()
     correspondence_queue.put("")
     startup_correspondence_games = [
-        game["gameId"]
+        game["gameId"]  # type: ignore
         for game in li.get_ongoing_games()
-        if game["perf"] == "correspondence"
-    ]
+        if game["perf"] == "correspondence"  # type: ignore
+    ]  # type: ignore
     wait_for_correspondence_ping = False
     matchmaker = matchmaking.Matchmaking(li, config, user_profile["username"])
 

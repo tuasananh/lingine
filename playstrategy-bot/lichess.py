@@ -29,9 +29,15 @@ ENDPOINTS = {
 
 logger = logging.getLogger(__name__)
 
+
 # docs: https://lichess.org/api
 def is_final(exception):
-    return isinstance(exception, HTTPError) and exception.response is not None and exception.response.status_code < 500
+    return (
+        isinstance(exception, HTTPError)
+        and exception.response is not None
+        and exception.response.status_code < 500
+    )
+
 
 class Lichess:
     def __init__(self, token, url, version, logging_level):
@@ -58,7 +64,9 @@ class Lichess:
         logger.debug(f"API GET {url} params={params}")
         try:
             response = self.session.get(url, timeout=2, params=params)
-            logger.debug(f"API GET response {url} status={response.status_code} body={response.text[:200]}")
+            logger.debug(
+                f"API GET response {url} status={response.status_code} body={response.text[:200]}"
+            )
             if raise_for_status:
                 response.raise_for_status()
             response.encoding = "utf-8"
@@ -87,12 +95,16 @@ class Lichess:
     ):
         logging.getLogger("backoff").setLevel(self.logging_level)
         url = urljoin(self.baseUrl, path)
-        logger.debug(f"API POST {url} data={data} headers={headers} params={params} json={payload}")
+        logger.debug(
+            f"API POST {url} data={data} headers={headers} params={params} json={payload}"
+        )
         try:
             response = self.session.post(
                 url, data=data, headers=headers, params=params, json=payload, timeout=2
             )
-            logger.debug(f"API POST response {url} status={response.status_code} body={response.text[:200]}")
+            logger.debug(
+                f"API POST response {url} status={response.status_code} body={response.text[:200]}"
+            )
             if raise_for_status:
                 response.raise_for_status()
             return response.json()
@@ -170,11 +182,14 @@ class Lichess:
         return list(map(lambda bot: json.loads(bot), online_bots))
 
     def challenge(self, username, params):
-        return self.api_post(
+        logger.debug(f"Challenging {username} with params={params}")
+        result = self.api_post(
             ENDPOINTS["challenge"].format(username),
             payload=params,
             raise_for_status=False,
         )
+        logger.debug(f"Challenge result: {result}")
+        return result
 
     def cancel(self, challenge_id):
         return self.api_post(
