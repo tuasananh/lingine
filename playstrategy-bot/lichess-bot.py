@@ -93,7 +93,9 @@ class CustomVariantBoard(chess.Board):
         return self._fen
 
     def root(self):
-        return CustomVariantBoard(fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant)
+        return CustomVariantBoard(
+            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant
+        )
 
     def push_uci(self, uci_str):
         move = CustomMove(uci_str, variant_name=self.uci_variant)
@@ -130,14 +132,18 @@ class CustomVariantBoard(chess.Board):
         return False
 
     def copy(self, stack=True):
-        copied = CustomVariantBoard(fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant)
+        copied = CustomVariantBoard(
+            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant
+        )
         if stack:
             copied.move_stack = self.move_stack.copy()
         copied.turn = self.turn
         return copied
 
     def variation_san(self, moves):
-        return " ".join(move.uci() if hasattr(move, "uci") else str(move) for move in moves)
+        return " ".join(
+            move.uci() if hasattr(move, "uci") else str(move) for move in moves
+        )
 
     @property
     def occupied(self):
@@ -1123,7 +1129,9 @@ def setup_board(game):
             VariantBoard = find_variant(game.variant_name)
             board = VariantBoard()
         except ValueError:
-            board = CustomVariantBoard(fen=game.initial_fen, variant_name=game.variant_name.lower())
+            board = CustomVariantBoard(
+                fen=game.initial_fen, variant_name=game.variant_name.lower()
+            )
 
     if game.white_starts:
         board.turn = chess.WHITE
