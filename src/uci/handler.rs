@@ -206,7 +206,7 @@ fn run_actor<T: Engine>(
                     Ok(b) => b,
                     Err(e) => {
                         log::error!("go failed: {e:?}");
-                        BestMove::null()
+                        BestMove::NULL
                     }
                 };
 

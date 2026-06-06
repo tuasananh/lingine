@@ -11,7 +11,7 @@ use crate::uci::{
 /// end-to-end before the real search engine is written.
 ///
 /// Every method is a no-op or log statement. `go` always returns
-/// [`BestMove::null()`] (`"bestmove null"`).
+/// [`BestMove::NULL`] (`"bestmove null"`).
 #[derive(Default)]
 pub struct PrintBot;
 

@@ -168,7 +168,7 @@ impl Position {
         };
         // Setup initial empty history state
         pos.history.push(StateInfo {
-            last_move: Move::null(),
+            last_move: Move::NULL,
             captured_piece: Piece::None,
             old_zobrist: 0,
             rule60: 0,
@@ -428,7 +428,7 @@ impl Position {
         ];
         let (material_score, piece_square_table_score) = self.compute_evaluation_scores();
         self.history.push(StateInfo {
-            last_move: Move::null(),
+            last_move: Move::NULL,
             captured_piece: Piece::None,
             old_zobrist: self.zobrist_hash,
             rule60,

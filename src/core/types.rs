@@ -301,6 +301,9 @@ impl Display for Move {
 }
 
 impl Move {
+    /// Represents an empty/non-existent move.
+    pub const NULL: Self = Self(0);
+
     /// Constructs a basic quiet or capture move from an origin and destination
     /// square.
     #[inline]
@@ -347,12 +350,6 @@ impl Move {
     #[inline]
     pub const fn no_flag(&self) -> Self {
         Self(self.0 & 0x3FFF)
-    }
-
-    /// Represents an empty/non-existent move.
-    #[inline]
-    pub const fn null() -> Self {
-        Self(0)
     }
 
     /// Checks if the move is null.
@@ -456,7 +453,7 @@ mod tests {
         assert_eq!(m_flags.flag(), TranspositionTableFlag::Beta);
         assert!(!m_flags.is_null());
 
-        let m_none = Move::null();
+        let m_none = Move::NULL;
         assert!(m_none.is_null());
 
         assert_eq!(format!("{}", m_quiet), "A0 to I9");

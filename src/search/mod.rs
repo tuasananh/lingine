@@ -27,7 +27,7 @@ impl Default for SearchContext {
     fn default() -> Self {
         Self {
             extensions: 0,
-            excluded_move: Move::null(),
+            excluded_move: Move::NULL,
         }
     }
 }
@@ -126,7 +126,7 @@ impl<'a> Searcher<'a> {
             allocated_time,
             transposition_table,
             age,
-            killers: [[Move::null(); 2]; MAX_PLY],
+            killers: [[Move::NULL; 2]; MAX_PLY],
             history_table,
             max_ply: 0,
             tx,
@@ -144,14 +144,14 @@ impl<'a> Searcher<'a> {
         let mut best_move = self
             .transposition_table
             .probe(self.pos.zobrist_hash(), 0)
-            .map_or(Move::null(), |entry| entry.best_move);
+            .map_or(Move::NULL, |entry| entry.best_move);
         let mut last_depth_score = -Value::INFINITY;
 
         let mut moves = MoveList::new();
         generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
 
         if moves.is_empty() {
-            return (last_depth_score, Move::null(), 0);
+            return (last_depth_score, Move::NULL, 0);
         }
 
         // Iterative deepening: This helps to find good moves faster and allows us to
@@ -205,7 +205,7 @@ impl<'a> Searcher<'a> {
 
                 let mut curr_alpha = search_alpha;
                 best_score = -Value::INFINITY;
-                depth_best_move = Move::null();
+                depth_best_move = Move::NULL;
 
                 for m in moves.iter().copied() {
                     if self.stop.load(Ordering::Relaxed) {
@@ -355,7 +355,7 @@ impl<'a> Searcher<'a> {
         let alpha_orig = alpha;
 
         let mut best_score = -Value::INFINITY;
-        let mut best_move = Move::null();
+        let mut best_move = Move::NULL;
 
         let mut depth = depth;
 
@@ -477,7 +477,7 @@ impl<'a> Searcher<'a> {
                 ply + 1,
                 -beta,
                 -alpha,
-                SearchContext::new(ctx.extensions + ext, Move::null()),
+                SearchContext::new(ctx.extensions + ext, Move::NULL),
             );
             self.pos.undo_move(m);
 
@@ -584,7 +584,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        let mut best_move = Move::null();
+        let mut best_move = Move::NULL;
 
         let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
@@ -828,7 +828,7 @@ mod tests {
         // Call negamax with depth=1, we should get 0 (draw)
         let stop = Arc::new(AtomicBool::new(false));
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = [[Move::null(); 2]; MAX_PLY];
+        let killers = [[Move::NULL; 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
         let mut ctx = Searcher {
             pos: pos.clone(),
@@ -897,7 +897,7 @@ mod tests {
         // negamax should return a win score (MATE_VALUE - ply)
         let stop = Arc::new(AtomicBool::new(false));
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = [[Move::null(); 2]; MAX_PLY];
+        let killers = [[Move::NULL; 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
         let mut ctx = Searcher {
             pos,

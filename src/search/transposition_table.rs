@@ -213,13 +213,7 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_value!(
-                value!(100),
-                TranspositionTableFlag::Exact,
-                Move::null(),
-                5,
-                1
-            ),
+            tt_value!(value!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
         );
         let result = tt.probe(42, 0).unwrap();
         assert_eq!(result.depth, 5);
@@ -238,13 +232,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(
-                value!(80),
-                TranspositionTableFlag::Exact,
-                Move::null(),
-                4,
-                1
-            ),
+            tt_value!(value!(80), TranspositionTableFlag::Exact, Move::NULL, 4, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 80);
 
@@ -252,13 +240,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(
-                value!(90),
-                TranspositionTableFlag::Exact,
-                Move::null(),
-                2,
-                1
-            ),
+            tt_value!(value!(90), TranspositionTableFlag::Exact, Move::NULL, 2, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().depth, 4); // Kept depth 4
         assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 80);
@@ -267,13 +249,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(
-                value!(120),
-                TranspositionTableFlag::Exact,
-                Move::null(),
-                6,
-                1
-            ),
+            tt_value!(value!(120), TranspositionTableFlag::Exact, Move::NULL, 6, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().depth, 6);
         assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 120);
@@ -282,13 +258,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(
-                value!(200),
-                TranspositionTableFlag::Alpha,
-                Move::null(),
-                6,
-                2
-            ),
+            tt_value!(value!(200), TranspositionTableFlag::Alpha, Move::NULL, 6, 2),
         );
         let entry = tt.probe(100, 0).unwrap();
         assert_eq!(entry.score.raw(), 200);
@@ -305,13 +275,7 @@ mod tests {
         tt.store(
             100,
             ply,
-            tt_value!(
-                mate_score,
-                TranspositionTableFlag::Exact,
-                Move::null(),
-                6,
-                1
-            ),
+            tt_value!(mate_score, TranspositionTableFlag::Exact, Move::NULL, 6, 1),
         );
         let result = tt.probe(100, ply).unwrap();
         // The stored mate score should be correctly adjusted for the ply when probed.
@@ -327,13 +291,7 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_value!(
-                value!(100),
-                TranspositionTableFlag::Exact,
-                Move::null(),
-                5,
-                1
-            ),
+            tt_value!(value!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
         );
 
         let h = tt.hashfull();
