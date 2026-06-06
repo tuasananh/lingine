@@ -8,7 +8,7 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 
-@backoff.on_exception(backoff.expo, BaseException, max_time=120)
+@backoff.on_exception(backoff.expo, Exception, max_time=120)
 def create_engine(config):
     cfg = config["engine"]
     engine_path = os.path.join(cfg["dir"], cfg["name"])
@@ -38,7 +38,7 @@ def create_engine(config):
 
 def remove_managed_options(config):
     def is_managed(key):
-        return chess.engine.Option(key, None, None, None, None, None).is_managed()
+        return chess.engine.Option(key, "", None, None, None, None).is_managed()  # type: ignore
 
     return {name: value for (name, value) in config.items() if not is_managed(name)}
 
@@ -93,6 +93,7 @@ class EngineWrapper:
         self.last_move_info = {}
         self.move_commentary = []
         self.comment_start_index = None
+        self.engine: chess.engine.SimpleEngine  # type: ignore
 
     def search_for(self, board, movetime, ponder, draw_offered):
         return self.search(
@@ -172,7 +173,7 @@ class EngineWrapper:
             )
         )
         result = self.offer_draw_or_resign(result, board)
-        self.last_move_info["ponderpv"] = board.variation_san(
+        self.last_move_info["ponderpv"] = board.variation_san(  # type: ignore
             self.last_move_info.get("pv", [])
         )
         self.print_stats()
@@ -212,14 +213,14 @@ class EngineWrapper:
                 if stat in info and stat != "ponderpv"
             ]
             len_bot_stats = len(", ".join(bot_stats)) + PONDERPV_CHARACTERS
-            ponder_pv = info["ponderpv"]
+            ponder_pv = info["ponderpv"]  # type: ignore
             ponder_pv = ponder_pv.split()
             try:
                 while len(" ".join(ponder_pv)) + len_bot_stats > MAX_CHAT_MESSAGE_LEN:
                     ponder_pv.pop()
                 if ponder_pv[-1].endswith("."):
                     ponder_pv.pop()
-                info["ponderpv"] = " ".join(ponder_pv)
+                info["ponderpv"] = " ".join(ponder_pv)  # type: ignore
             except IndexError:
                 pass
         return [f"{stat}: {info[stat]}" for stat in stats if stat in info]
@@ -253,7 +254,7 @@ class UCIEngine(EngineWrapper):
 
     def get_opponent_info(self, game):
         name = game.opponent.name
-        if name and "UCI_Opponent" in self.engine.protocol.config:
+        if name and "UCI_Opponent" in self.engine.protocol.config:  # type: ignore
             rating = (
                 game.opponent.rating if game.opponent.rating is not None else "none"
             )
@@ -264,7 +265,7 @@ class UCIEngine(EngineWrapper):
             )
 
     def report_game_result(self, game, board):
-        self.engine.protocol._position(board)
+        self.engine.protocol._position(board)  # type: ignore
 
 
 class XBoardEngine(EngineWrapper):
@@ -274,7 +275,7 @@ class XBoardEngine(EngineWrapper):
             commands, stderr=stderr, **popen_args
         )
         egt_paths = options.pop("egtpath", {}) or {}
-        features = self.engine.protocol.features
+        features = self.engine.protocol.features  # type: ignore
         egt_types_from_engine = features["egt"].split(",") if "egt" in features else []
         for egt_type in egt_types_from_engine:
             if egt_type in egt_paths:
@@ -285,7 +286,7 @@ class XBoardEngine(EngineWrapper):
 
     def report_game_result(self, game, board):
         # Send final moves, if any, to engine
-        self.engine.protocol._new(board, None, {})
+        self.engine.protocol._new(board, None, {})  # type: ignore
 
         winner = game.state.get("winner")
         termination = game.state.get("status")
@@ -309,7 +310,7 @@ class XBoardEngine(EngineWrapper):
         self.engine.protocol.send_line("?")
 
     def get_opponent_info(self, game):
-        if game.opponent.name and self.engine.protocol.features.get("name", True):
+        if game.opponent.name and self.engine.protocol.features.get("name", True):  # type: ignore
             title = f"{game.opponent.title} " if game.opponent.title else ""
             self.engine.protocol.send_line(f"name {title}{game.opponent.name}")
         if game.me.rating is not None and game.opponent.rating is not None:

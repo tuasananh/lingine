@@ -27,7 +27,7 @@ def add_coloring_to_emit_windows(fn):
     def _out_handle(self):
         import ctypes
 
-        return ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)
+        return ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)  # type: ignore
 
     # noinspection PyUnusedLocal
     out_handle = property(_out_handle)  # noqa: F841
@@ -37,8 +37,8 @@ def add_coloring_to_emit_windows(fn):
 
         # Constants from the Windows API
         self.STD_OUTPUT_HANDLE = -11
-        hdl = ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)
-        ctypes.windll.kernel32.SetConsoleTextAttribute(hdl, code)
+        hdl = ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)  # type: ignore
+        ctypes.windll.kernel32.SetConsoleTextAttribute(hdl, code)  # type: ignore
 
     setattr(logging.StreamHandler, "_set_color", _set_color)
 
@@ -134,12 +134,12 @@ def add_coloring_to_emit_ansi(fn):
 def enable_color_logging(debug_lvl=logging.DEBUG):
     if platform.system() == "Windows":
         # Windows does not support ANSI escapes and we are using API calls to set the console color
-        logging.StreamHandler.emit = add_coloring_to_emit_windows(
+        logging.StreamHandler.emit = add_coloring_to_emit_windows(  # type: ignore
             logging.StreamHandler.emit
         )
     else:
         # all non-Windows platforms are supporting ANSI escapes so we use them
-        logging.StreamHandler.emit = add_coloring_to_emit_ansi(
+        logging.StreamHandler.emit = add_coloring_to_emit_ansi(  # type: ignore
             logging.StreamHandler.emit
         )
 

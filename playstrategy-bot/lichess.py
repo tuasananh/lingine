@@ -30,6 +30,9 @@ ENDPOINTS = {
 logger = logging.getLogger(__name__)
 
 # docs: https://lichess.org/api
+def is_final(exception):
+    return isinstance(exception, HTTPError) and exception.response is not None and exception.response.status_code < 500
+
 class Lichess:
     def __init__(self, token, url, version, logging_level):
         self.version = version
@@ -39,9 +42,6 @@ class Lichess:
         self.session.headers.update(self.header)
         self.set_user_agent("?")
         self.logging_level = logging_level
-
-    def is_final(exception):
-        return isinstance(exception, HTTPError) and exception.response.status_code < 500
 
     @backoff.on_exception(
         backoff.constant,
@@ -141,11 +141,11 @@ class Lichess:
 
     def get_profile(self):
         profile = self.api_get(ENDPOINTS["profile"])
-        self.set_user_agent(profile["username"])
+        self.set_user_agent(profile["username"])  # type: ignore
         return profile
 
     def get_ongoing_games(self):
-        ongoing_games = self.api_get(ENDPOINTS["playing"])["nowPlaying"]
+        ongoing_games = self.api_get(ENDPOINTS["playing"])["nowPlaying"]  # type: ignore
         return ongoing_games
 
     def resign(self, game_id):

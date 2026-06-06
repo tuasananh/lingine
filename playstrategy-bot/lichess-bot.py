@@ -3,6 +3,7 @@ import chess
 import chess.pgn
 from chess.variant import find_variant
 import chess.polyglot
+import chess.engine
 import engine_wrapper
 import model
 import matchmaking
@@ -80,7 +81,7 @@ STARTING_FENS = {
 
 class CustomVariantBoard(chess.Board):
     def __init__(self, fen=None, chess960=False, variant_name="xiangqi"):
-        self.uci_variant = variant_name
+        self.uci_variant = variant_name or "xiangqi"  # type: ignore
         self.chess960 = chess960
         self.move_stack = []
         if fen == "startpos" or not fen:
@@ -89,37 +90,37 @@ class CustomVariantBoard(chess.Board):
             self._fen = fen
         self.turn = chess.WHITE
 
-    def fen(self, shredder=False, en_passant="fen"):
+    def fen(self, shredder=False, en_passant="fen", promoted=None):  # type: ignore
         return self._fen
 
     def root(self):
         return CustomVariantBoard(
-            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant
+            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant  # type: ignore
         )
 
-    def push_uci(self, uci_str):
-        move = CustomMove(uci_str, variant_name=self.uci_variant)
-        self.move_stack.append(move)
+    def push_uci(self, uci_str):  # type: ignore
+        move = CustomMove(uci_str, variant_name=self.uci_variant)  # type: ignore
+        self.move_stack.append(move)  # type: ignore
         self.turn = chess.BLACK if self.turn == chess.WHITE else chess.WHITE
         return move
 
-    def parse_uci(self, uci_str):
-        return CustomMove(uci_str, variant_name=self.uci_variant)
+    def parse_uci(self, uci_str):  # type: ignore
+        return CustomMove(uci_str, variant_name=self.uci_variant)  # type: ignore
 
     def push(self, move):
         if isinstance(move, str):
-            move = CustomMove(move, variant_name=self.uci_variant)
+            move = CustomMove(move, variant_name=self.uci_variant)  # type: ignore
         elif hasattr(move, "uci"):
-            move = CustomMove(move.uci(), variant_name=self.uci_variant)
-        self.move_stack.append(move)
+            move = CustomMove(move.uci(), variant_name=self.uci_variant)  # type: ignore
+        self.move_stack.append(move)  # type: ignore
         self.turn = chess.BLACK if self.turn == chess.WHITE else chess.WHITE
 
-    def pop(self):
+    def pop(self):  # type: ignore
         if self.move_stack:
             self.move_stack.pop()
             self.turn = chess.BLACK if self.turn == chess.WHITE else chess.WHITE
 
-    def is_game_over(self):
+    def is_game_over(self, claim_draw=False):  # type: ignore
         return False
 
     def is_check(self):
@@ -128,19 +129,19 @@ class CustomVariantBoard(chess.Board):
     def is_fifty_moves(self):
         return False
 
-    def is_repetition(self):
+    def is_repetition(self):  # type: ignore
         return False
 
-    def copy(self, stack=True):
+    def copy(self, stack=True):  # type: ignore
         copied = CustomVariantBoard(
-            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant
+            fen=self._fen, chess960=self.chess960, variant_name=self.uci_variant  # type: ignore
         )
         if stack:
             copied.move_stack = self.move_stack.copy()
         copied.turn = self.turn
         return copied
 
-    def variation_san(self, moves):
+    def variation_san(self, moves):  # type: ignore
         return " ".join(
             move.uci() if hasattr(move, "uci") else str(move) for move in moves
         )
@@ -150,7 +151,7 @@ class CustomVariantBoard(chess.Board):
         return 0
 
     @property
-    def castling_rights(self):
+    def castling_rights(self):  # type: ignore
         return 0
 
 
@@ -457,7 +458,7 @@ def start(li, user_profile, config, logging_level, log_filename, one_game=False)
     logging_listener.join()
 
 
-@backoff.on_exception(backoff.expo, BaseException, max_time=600, giveup=is_final)
+@backoff.on_exception(backoff.expo, Exception, max_time=600, giveup=is_final)
 def play_game(
     li,
     game_id,
@@ -677,7 +678,7 @@ def play_game(
                     wb = "w" if board.turn == chess.WHITE else "b"
                     game.ping(
                         config.get("abort_time", 20),
-                        (upd[f"{wb}time"] + upd[f"{wb}inc"]) / 1000 + 60,
+                        (upd[f"{wb}time"] + upd[f"{wb}inc"]) / 1000 + 60,  # type: ignore
                         correspondence_disconnect_time,
                     )
                 elif u_type == "ping":
@@ -787,6 +788,7 @@ def get_book_move(board, polyglot_cfg):
 
     for book in books:
         with chess.polyglot.open_reader(book) as reader:
+            move = None
             try:
                 selection = polyglot_cfg.get("selection", "weighted_random")
                 if selection == "weighted_random":
@@ -1211,38 +1213,43 @@ def print_pgn_game_record(li, config, game, board, engine):
     game_path = os.path.join(game_directory, game_file_name)
 
     lichess_game_record = chess.pgn.read_game(io.StringIO(li.get_game_pgn(game.id)))
+    if lichess_game_record is None:
+        return
     try:
         # Recall previously written PGN file to retain engine evaluations.
         with open(game_path) as game_data:
             game_record = chess.pgn.read_game(game_data)
-        game_record.headers.update(lichess_game_record.headers)
+        if game_record is None:
+            game_record = lichess_game_record
+        else:
+            game_record.headers.update(lichess_game_record.headers)
     except FileNotFoundError:
         game_record = lichess_game_record
 
-    current_node = game_record.game()
-    lichess_node = lichess_game_record.game()
-    for index, move in enumerate(board.move_stack):
-        if current_node.is_end() or current_node.next().move != move:
-            current_node = current_node.add_main_variation(move)
+    current_node = game_record.game()  # type: ignore
+    lichess_node = lichess_game_record.game()  # type: ignore
+    for index, move in enumerate(board.move_stack):  # type: ignore
+        if current_node.is_end() or current_node.next().move != move:  # type: ignore
+            current_node = current_node.add_main_variation(move)  # type: ignore
         else:
-            current_node = current_node.next()
+            current_node = current_node.next()  # type: ignore
 
-        if not lichess_node.is_end():
-            lichess_node = lichess_node.next()
-            current_node.set_clock(lichess_node.clock())
-            if lichess_node.comment:
-                if current_node.comment:
-                    if current_node.comment != lichess_node.comment:
-                        current_node.comment = (
-                            f"{current_node.comment} {lichess_node.comment}"
+        if not lichess_node.is_end():  # type: ignore
+            lichess_node = lichess_node.next()  # type: ignore
+            current_node.set_clock(lichess_node.clock())  # type: ignore
+            if lichess_node.comment:  # type: ignore
+                if current_node.comment:  # type: ignore
+                    if current_node.comment != lichess_node.comment:  # type: ignore
+                        current_node.comment = (  # type: ignore
+                            f"{current_node.comment} {lichess_node.comment}"  # type: ignore
                         )
                 else:
-                    current_node.comment = lichess_node.comment
+                    current_node.comment = lichess_node.comment  # type: ignore
 
-        commentary = engine.comment_for_board_index(index)
+        commentary = engine.comment_for_board_index(index)  # type: ignore
         if commentary is not None:
-            pv_node = current_node.parent.add_line(commentary.get("pv", []))
-            pv_node.set_eval(commentary.get("score"), commentary.get("depth"))
+            pv_node = current_node.parent.add_line(commentary.get("pv", []))  # type: ignore
+            pv_node.set_eval(commentary.get("score"), commentary.get("depth"))  # type: ignore
 
     with open(game_path, "w") as game_record_destination:
         pgn_writer = chess.pgn.FileExporter(game_record_destination)
@@ -1292,8 +1299,8 @@ if __name__ == "__main__":
     li = lichess.Lichess(CONFIG["token"], CONFIG["url"], __version__, logging_level)
 
     user_profile = li.get_profile()
-    username = user_profile["username"]
-    is_bot = user_profile.get("title") == "BOT"
+    username = user_profile["username"]  # type: ignore
+    is_bot = user_profile.get("title") == "BOT"  # type: ignore
     logger.info(f"Welcome {username}!")
 
     if args.u and not is_bot:
