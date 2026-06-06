@@ -9,6 +9,7 @@ import argparse
 
 import utils
 
+
 def check_dependencies():
     required_files = {
         "tools/sylvan-cli": "Tournament coordinator sylvan-cli",
@@ -21,7 +22,11 @@ def check_dependencies():
 def run_tournament(args):
     """Execute the gauntlet tournament via sylvan-cli with configured options."""
     concurrency = utils.get_optimal_concurrency(args.concurrency)
-    concurrency_msg = f"{concurrency} (User configured)" if args.concurrency is not None else f"{concurrency} (Auto-optimized)"
+    concurrency_msg = (
+        f"{concurrency} (User configured)"
+        if args.concurrency is not None
+        else f"{concurrency} (Auto-optimized)"
+    )
 
     # Parse opponent ELO list
     try:

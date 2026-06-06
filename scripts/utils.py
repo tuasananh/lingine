@@ -1,12 +1,13 @@
 import os
 import sys
 import subprocess
-import shutil
+
 
 def print_header(title):
     print("=" * 70)
     print(f"   {title.upper()}   ")
     print("=" * 70)
+
 
 def check_dependencies(required_files):
     missing = []
@@ -23,6 +24,7 @@ def check_dependencies(required_files):
             print(item)
         print("=" * 70)
         sys.exit(1)
+
 
 def build_engine():
     print("\n[1/3] Compiling Lingine (cargo build --release)...")
@@ -43,6 +45,7 @@ def build_engine():
         print("Please make sure Rust (cargo) is installed on your system.")
         sys.exit(1)
 
+
 def get_optimal_concurrency(user_concurrency=None):
     if user_concurrency is not None:
         return user_concurrency
@@ -50,6 +53,7 @@ def get_optimal_concurrency(user_concurrency=None):
     # Optimize at 1 engine per core (2 engines per game, hence cores // 2)
     # Cap at 20 parallel threads to avoid OS process scheduling overhead
     return min(20, max(1, cores // 2))
+
 
 def format_time(seconds):
     seconds = int(seconds)
