@@ -7,7 +7,7 @@ use strum::EnumCount;
 use crate::core::{
     Color, File, MAX_DEPTH, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
 };
-use crate::search::{Search, SearchParameters, TranspositionTable};
+use crate::search::{Searcher, SearcherParameters, TranspositionTable};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
     UciId, UciInfo, UciOption,
@@ -199,7 +199,7 @@ impl Engine for Lingine {
 
         let mut history_table = [[[0i32; Square::COUNT]; Square::COUNT]; Color::COUNT];
 
-        let (_score, best_move, _nodes) = Search::start_search(SearchParameters {
+        let (_score, best_move, _nodes) = Searcher::start_search(SearcherParameters {
             pos: self.position.clone(),
             allocated_time: time_limit,
             stop: params.stop.clone(),

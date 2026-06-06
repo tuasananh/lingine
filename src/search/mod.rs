@@ -1,30 +1,3 @@
-//! Negamax Fail-Soft Alpha-Beta Search engine with selective search extensions.
-//!
-//! This module implements the main search logic used to determine the best
-//! moves:
-//! 1. **Fail-Soft Negamax Alpha-Beta Pruning**: Recursively searches the game
-//!    tree to find optimal moves while pruning branches that cannot impact the
-//!    search outcome.
-//! 2. **Aspiration Windows**: Minimizes the search space width around the
-//!    previous depth's best score. Widens boundaries progressively on fail-low
-//!    (fail-soft lower limit) or fail-high bounds.
-//! 3. **Move Ordering Heuristics**: Prioritizes the best transposition table
-//!    move, MVV-LVA (Most Valuable Victim - Least Valuable Attacker) capture
-//!    heuristics, killer moves, and history heuristic tables to trigger
-//!    beta-cutoffs as early as possible.
-//! 4. **Quiescence Search**: Solves the horizon effect by searching only
-//!    tactical capture sequences until a stable, quiet position is reached.
-//! 5. **Selective Search Extensions**:
-//!    - **Check Extensions**: Automatically extends the depth by 1 ply when in
-//!      check.
-//!    - **Singular Extensions**: Verifies if the transposition table move is
-//!      exceptionally superior compared to alternative moves at that node. If
-//!      so, extends the search by 1 ply. Requires a reduced-depth probe with an
-//!      aspiration-like threshold.
-//!    - **One-Reply Extensions**: If only a single legal move exists, extends
-//!      the depth by 1 ply to prevent arbitrary horizon cutoffs since there is
-//!      no branching factor.
-
 use std::cmp::Reverse;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,7 +43,7 @@ impl SearchContext {
 }
 
 /// Shared context parameters passed down the recursive search stack.
-pub struct Search<'a> {
+pub struct Searcher<'a> {
     pos: Position,
     /// Atomic flag set by Thread A to interrupt the search loop.
     stop: Arc<AtomicBool>,
@@ -94,7 +67,7 @@ pub struct Search<'a> {
     tx: Sender<UciInfo>,
 }
 
-pub struct SearchParameters<'a> {
+pub struct SearcherParameters<'a> {
     // We take ownership of the position here since we will be modifying it during search.
     pub pos: Position,
     // The time limit for this search
@@ -119,12 +92,12 @@ pub struct SearchParameters<'a> {
     pub age: u8,
 }
 
-impl<'a> Search<'a> {
+impl<'a> Searcher<'a> {
     /// Starts the iterative deepening search loop
     ///
     /// Returns the best move found, its score, and the total nodes searched.
-    pub fn start_search(params: SearchParameters) -> (Value, Move, u64) {
-        let SearchParameters {
+    pub fn start_search(params: SearcherParameters) -> (Value, Move, u64) {
+        let SearcherParameters {
             pos,
             allocated_time,
             stop,
@@ -145,7 +118,7 @@ impl<'a> Search<'a> {
             }
         }
 
-        let search = Search {
+        let search = Searcher {
             pos,
             stop,
             nodes: 0,
@@ -857,7 +830,7 @@ mod tests {
         let mut transposition_table = TranspositionTable::new(1);
         let killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
-        let mut ctx = Search {
+        let mut ctx = Searcher {
             pos: pos.clone(),
             stop,
             nodes: 0,
@@ -926,7 +899,7 @@ mod tests {
         let mut transposition_table = TranspositionTable::new(1);
         let killers = [[Move::null(); 2]; MAX_PLY];
         let mut history_table = [[[0; 90]; 90]; 2];
-        let mut ctx = Search {
+        let mut ctx = Searcher {
             pos,
             stop,
             nodes: 0,
@@ -960,7 +933,7 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
 
         let mut history_table = [[[0; 90]; 90]; 2];
-        let (_score, best_move, _nodes) = Search::start_search(SearchParameters {
+        let (_score, best_move, _nodes) = Searcher::start_search(SearcherParameters {
             pos,
             allocated_time: None,
             stop,
