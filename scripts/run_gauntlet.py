@@ -7,69 +7,26 @@ import math
 import argparse
 
 
-def print_header(title):
-    print("=" * 70)
-    print(f"   {title.upper()}   ")
-    print("=" * 70)
+import utils
 
 
 def check_dependencies():
-    """Verify that all required tool files and opening data are present."""
     required_files = {
         "tools/sylvan-cli": "Tournament coordinator sylvan-cli",
         "tools/fairy-stockfish_x86-64": "Fairy-Stockfish baseline opponent engine",
         "tools/xqdb_masters_40711_UCI_games.pgn": "Masters opening database PGN",
     }
-
-    missing = []
-    for filepath, description in required_files.items():
-        if not os.path.exists(filepath):
-            missing.append(f"- {description} ({filepath})")
-
-    if missing:
-        print_header("ERROR: MISSING TOOLS OR DATA")
-        print("Please run the installation script before starting the tournament:")
-        print("  ./scripts/setup_tools.sh\n")
-        print("Current missing components:")
-        for item in missing:
-            print(item)
-        print("=" * 70)
-        sys.exit(1)
-
-
-def build_engine():
-    """Compile the latest release version of Lingine."""
-    print("\n[1/3] Compiling Lingine (cargo build --release)...")
-    try:
-        result = subprocess.run(
-            ["cargo", "build", "--release"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode != 0:
-            print_header("RUST PROJECT COMPILATION ERROR")
-            print(result.stderr)
-            sys.exit(1)
-        print("=> Compilation successful: ./target/release/lingine")
-    except FileNotFoundError:
-        print_header("ERROR: RUST/CARGO NOT FOUND")
-        print("Please make sure Rust (cargo) is installed on your system.")
-        sys.exit(1)
+    utils.check_dependencies(required_files)
 
 
 def run_tournament(args):
     """Execute the gauntlet tournament via sylvan-cli with configured options."""
-    # Auto-detect CPU cores if user concurrency is not specified
-    if args.concurrency is None:
-        cores = os.cpu_count() or 4
-        # Optimize at 1 engine per core (2 engines per game, hence cores // 2)
-        # Cap at 20 parallel threads to avoid OS process scheduling overhead
-        concurrency = min(20, max(1, cores // 2))
-        concurrency_msg = f"{concurrency} (Auto-optimized for {cores} CPU threads)"
-    else:
-        concurrency = args.concurrency
-        concurrency_msg = f"{concurrency} (User configured)"
+    concurrency = utils.get_optimal_concurrency(args.concurrency)
+    concurrency_msg = (
+        f"{concurrency} (User configured)"
+        if args.concurrency is not None
+        else f"{concurrency} (Auto-optimized)"
+    )
 
     # Parse opponent ELO list
     try:
@@ -138,7 +95,7 @@ def run_tournament(args):
         subprocess.run(cmd, check=True)
         print("=> Gauntlet tournament completed successfully!")
     except subprocess.CalledProcessError as e:
-        print_header("SYLVAN-CLI EXECUTION ERROR")
+        utils.print_header("SYLVAN-CLI EXECUTION ERROR")
         print(
             f"Sylvan-CLI encountered an issue running the tournament. Exit code: {e.returncode}"
         )
@@ -291,8 +248,8 @@ def main():
         "-g",
         "--games",
         type=int,
-        default=10,
-        help="Number of games to play against each ELO tier opponent (default: 10)",
+        default=500,
+        help="Number of games to play against each ELO tier opponent (default: 500)",
     )
     parser.add_argument(
         "-t",
@@ -412,11 +369,11 @@ def main():
     args.engine = engine_path
     args.name = engine_name
 
-    print_header("LINGINE GAUNTLET TOURNAMENT & ELO EVALUATOR")
+    utils.print_header("LINGINE GAUNTLET TOURNAMENT & ELO EVALUATOR")
     check_dependencies()
 
     if not args.skip_build and args.engine == "./target/release/lingine":
-        build_engine()
+        utils.build_engine()
     else:
         print(
             f"\n[1/3] Skipped engine compilation (Main engine path: '{args.engine}')."
