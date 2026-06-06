@@ -26,7 +26,6 @@ pub struct Lingine {
     /// used in [`crate::search::TranspositionTable::store`] to determine
     /// whether to replace an existing entry.
     age: u8,
-    history_table: [[[i32; Square::COUNT]; Square::COUNT]; Color::COUNT],
 }
 
 impl Default for Lingine {
@@ -34,7 +33,6 @@ impl Default for Lingine {
         Self {
             position: Position::default(),
             transposition_table: TranspositionTable::new(16), // Default to 16 MB
-            history_table: [[[0; Square::COUNT]; Square::COUNT]; Color::COUNT],
             age: 0,
         }
     }
@@ -199,13 +197,15 @@ impl Engine for Lingine {
 
         let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
 
+        let mut history_table = [[[0i32; Square::COUNT]; Square::COUNT]; Color::COUNT];
+
         let (_score, best_move, _nodes) = Search::start_search(SearchParameters {
             pos: self.position.clone(),
             allocated_time: time_limit,
             stop: params.stop.clone(),
             max_depth,
             transposition_table: &mut self.transposition_table,
-            history_table: &mut self.history_table,
+            history_table: &mut history_table,
             tx,
             age: self.age,
         });
