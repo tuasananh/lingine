@@ -165,13 +165,15 @@ __version__ = "1.2.0"
 terminated = False
 
 
-def signal_handler(signal, frame):
+def signal_handler(sig, frame):
     global terminated
-    logger.debug("Recieved SIGINT. Terminating client.")
+    logger.debug(f"Received signal {sig}. Terminating client.")
     terminated = True
 
 
 signal.signal(signal.SIGINT, signal_handler)
+if hasattr(signal, "SIGTERM"):
+    signal.signal(signal.SIGTERM, signal_handler)
 
 
 def is_final(exception):
@@ -202,7 +204,14 @@ def watch_control_stream(control_queue, li):
                 else:
                     logger.debug("watch_control_stream: Received empty line (ping)")
                     control_queue.put_nowait({"type": "ping"})
-        except Exception:
+        except (BrokenPipeError, ConnectionResetError, EOFError):
+            logger.info("watch_control_stream: Control queue is broken (parent process likely exited). Exiting stream reader.")
+            break
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "broken pipe" in err_msg or "connection reset" in err_msg or "eof" in err_msg:
+                logger.info("watch_control_stream: Control queue is broken. Exiting stream reader.")
+                break
             logger.exception("watch_control_stream: Exception in stream reader loop")
             time.sleep(1)
 
@@ -210,7 +219,18 @@ def watch_control_stream(control_queue, li):
 def do_correspondence_ping(control_queue, period):
     while not terminated:
         time.sleep(period)
-        control_queue.put_nowait({"type": "correspondence_ping"})
+        try:
+            control_queue.put_nowait({"type": "correspondence_ping"})
+        except (BrokenPipeError, ConnectionResetError, EOFError):
+            logger.info("do_correspondence_ping: Control queue is broken. Exiting pinger.")
+            break
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "broken pipe" in err_msg or "connection reset" in err_msg or "eof" in err_msg:
+                logger.info("do_correspondence_ping: Control queue is broken. Exiting pinger.")
+                break
+            logger.exception("do_correspondence_ping: Exception in pinger loop")
+            time.sleep(1)
 
 
 def listener_configurer(level, filename):
@@ -255,6 +275,7 @@ def start(
     control_stream = multiprocessing.Process(
         target=watch_control_stream, args=[control_queue, li]
     )
+    control_stream.daemon = True
     control_stream.start()
     correspondence_cfg = config.get("correspondence") or {}
     correspondence_checkin_period = correspondence_cfg.get("checkin_period", 600)
@@ -262,6 +283,7 @@ def start(
         target=do_correspondence_ping,
         args=[control_queue, correspondence_checkin_period],
     )
+    correspondence_pinger.daemon = True
     correspondence_pinger.start()
     correspondence_queue = manager.Queue()
     correspondence_queue.put("")
@@ -281,6 +303,7 @@ def start(
         target=logging_listener_proc,
         args=(logging_queue, listener_configurer, logging_level, log_filename),
     )
+    logging_listener.daemon = True
     logging_listener.start()
 
     with logging_pool.LoggingPool(max_games + 1) as pool:
