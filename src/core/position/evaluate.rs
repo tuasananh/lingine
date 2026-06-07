@@ -1,7 +1,7 @@
 use strum::EnumCount;
 
 use crate::{
-    core::{Color, Position, Score, Square},
+    core::{Color, Position, Score, Square, score},
     eval::{piece_material_value, piece_square_table_value},
 };
 
@@ -12,7 +12,7 @@ impl Position {
         self.history
             .last()
             .map(|s| s.material_score)
-            .unwrap_or(Score::ZERO)
+            .unwrap_or(score::ZERO)
     }
 
     /// Get the on-the-fly calculated Piece Square Table score
@@ -23,7 +23,7 @@ impl Position {
         self.history
             .last()
             .map(|s| s.piece_square_table_score)
-            .unwrap_or(Score::ZERO)
+            .unwrap_or(score::ZERO)
     }
 
     /// Get the complete evaluation score (material + piece-square table) of the
@@ -36,8 +36,8 @@ impl Position {
     /// Computes the complete material and Piece-Square Table scores from
     /// scratch.
     pub fn compute_evaluation_scores(&self) -> (Score, Score) {
-        let mut material_score = Score::ZERO;
-        let mut piece_square_table_score = Score::ZERO;
+        let mut material_score = score::ZERO;
+        let mut piece_square_table_score = score::ZERO;
         for sq_idx in 0..Square::COUNT {
             let sq = Square::from_repr(sq_idx as u8).unwrap();
             if let Some(piece) = self.board[sq_idx] {

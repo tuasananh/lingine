@@ -1,17 +1,11 @@
 use crate::core::{Color, PieceType, Score, Square};
 
-macro_rules! scores {
-    ($($x:expr),* $(,)?) => {
-        [$(Score::from_raw($x)),*]
-    };
-}
-
 // Positional piece-square tables from White's (Red's) perspective on the
 // 90-square board. Square indices are 0 to 89, rank-major order (rank * 9 +
 // file).
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_KING: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_KING: [Score; 90] = [
     // Rank 0
     0, 0, 0,  -3,   0,  -3, 0, 0, 0,
     // Rank 1
@@ -29,7 +23,7 @@ const PIECE_SQUARE_TABLE_KING: [Score; 90] = scores![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_ADVISOR: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_ADVISOR: [Score; 90] = [
     // Rank 0
     0, 0, 0,   0,   0,   0, 0, 0, 0,
     // Rank 1
@@ -47,7 +41,7 @@ const PIECE_SQUARE_TABLE_ADVISOR: [Score; 90] = scores![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_BISHOP: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_BISHOP: [Score; 90] = [
     // Rank 0
     0, 0,   0, 0, 0, 0,   0, 0, 0, // C0, G0 are files 2, 6
     // Rank 1
@@ -67,7 +61,7 @@ const PIECE_SQUARE_TABLE_BISHOP: [Score; 90] = scores![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_KNIGHT: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_KNIGHT: [Score; 90] = [
     // Rank 0 (starting rank)
     -10, -10,  -5,  -5,  -5,  -5,  -5, -10, -10,
     // Rank 1
@@ -91,7 +85,7 @@ const PIECE_SQUARE_TABLE_KNIGHT: [Score; 90] = scores![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_ROOK: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_ROOK: [Score; 90] = [
     // Rank 0 (starting rank)
     -5,   0,   2,   5,   5,   5,   2,   0,  -5,
     // Rank 1
@@ -115,7 +109,7 @@ const PIECE_SQUARE_TABLE_ROOK: [Score; 90] = scores![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_CANNON: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_CANNON: [Score; 90] = [
     // Rank 0
     -5,   0,   0,   0,   0,   0,   0,   0,  -5,
     // Rank 1
@@ -139,7 +133,7 @@ const PIECE_SQUARE_TABLE_CANNON: [Score; 90] = scores![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_PAWN: [Score; 90] = scores![
+const PIECE_SQUARE_TABLE_PAWN: [Score; 90] = [
     // Ranks 0, 1, 2 (deep in own side)
     0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0,

@@ -13,8 +13,8 @@ use strum::{EnumCount, EnumIter, FromRepr};
 
 use crate::search::TranspositionTableFlag;
 
-mod score;
-pub use score::*;
+pub mod score;
+pub use score::Score;
 
 /// Represents the hash key for Zobrist position hashing.
 pub type TranspositionTableKey = u64;

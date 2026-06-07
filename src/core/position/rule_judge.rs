@@ -1,7 +1,7 @@
 use strum::EnumCount;
 
 use crate::core::{
-    Bitboard, Color, Move, Piece, PieceType, Score, Square, cannon_attacks, rook_attacks,
+    Bitboard, Color, Move, Piece, PieceType, Score, Square, cannon_attacks, rook_attacks, score,
 };
 
 impl super::Position {
@@ -173,7 +173,7 @@ impl super::Position {
     pub fn detect_chases(&mut self, d: usize, ply: u8) -> Score {
         let n = self.history.len();
         if n < d {
-            return Score::ZERO; // Draw
+            return score::ZERO; // Draw
         }
 
         // Grant each piece on board a unique ID for each side
@@ -212,7 +212,7 @@ impl super::Position {
             // chase or is a draw.
             let side_to_move_idx = self.side_to_move as usize;
             if state.in_check[side_to_move_idx] {
-                return Score::DRAW; // Draw
+                return score::DRAW; // Draw
             }
 
             let opposing_chase_mask = chase[self.side_to_move.opposite() as usize];
@@ -237,13 +237,13 @@ impl super::Position {
         let them_chasing = chase[opponent as usize] != 0;
 
         if us_chasing && them_chasing {
-            Score::DRAW // Mutual chase -> draw
+            score::DRAW // Mutual chase -> draw
         } else if us_chasing {
-            Score::mated_in(ply) // We perpetually chase -> we lose
+            score::mated_in(ply) // We perpetually chase -> we lose
         } else if them_chasing {
-            Score::mate_in(ply) // Opponent perpetually chases -> we win
+            score::mate_in(ply) // Opponent perpetually chases -> we win
         } else {
-            Score::DRAW // Normal draw
+            score::DRAW // Normal draw
         }
     }
 
@@ -260,7 +260,7 @@ impl super::Position {
         let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
         const RULE60_PLIES_THRESHOLD: u16 = 120;
         if rule60 >= RULE60_PLIES_THRESHOLD {
-            return Some(Score::DRAW);
+            return Some(score::DRAW);
         }
 
         // 2. Insufficient Material Draw
@@ -276,7 +276,7 @@ impl super::Position {
 
             if white_majors == 0 && black_majors == 0 {
                 // No Rooks, Cannons, or Knights remain on either side -> direct draw
-                return Some(Score::DRAW);
+                return Some(score::DRAW);
             }
 
             // Exactly one Cannon left on the entire board, and no Advisors left
@@ -288,7 +288,7 @@ impl super::Position {
                 && total_cannons == 1
                 && total_advisors == 0
             {
-                return Some(Score::DRAW);
+                return Some(score::DRAW);
             }
         }
 
@@ -334,11 +334,11 @@ impl super::Position {
 
                 if us_perpetual_check || them_perpetual_check {
                     if us_perpetual_check && them_perpetual_check {
-                        return Some(Score::DRAW); // Both check perpetually -> draw
+                        return Some(score::DRAW); // Both check perpetually -> draw
                     } else if us_perpetual_check {
-                        return Some(-Score::mate_in(ply)); // We check perpetually -> we lose
+                        return Some(-score::mate_in(ply)); // We check perpetually -> we lose
                     } else {
-                        return Some(Score::mate_in(ply)); // Opponent checks perpetually -> they lose
+                        return Some(score::mate_in(ply)); // Opponent checks perpetually -> they lose
                     }
                 } else {
                     // No perpetual check, check perpetual chase

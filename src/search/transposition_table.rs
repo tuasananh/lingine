@@ -1,26 +1,6 @@
-//! Transposition Table (TT) cache system to optimize search space exploration.
-//!
-//! The Transposition Table acts as an O(1) hash table mapping Zobrist position
-//! keys to previously evaluated search states. This allows the search algorithm
-//! to prune identical positions reached via different move sequences
-//! (transpositions).
-//!
-//! Key elements:
-//! 1. **Table Sizing**: Memory capacity allocated in Megabytes (MB). Elements
-//!    are restricted to the nearest smaller power-of-two count to support
-//!    ultra-fast bitwise masking modulo.
-//! 2. **Replacement Strategy**: Uses a hybrid Depth-Preferred and Age-Preferred
-//!    replacement policy to overwrite existing slots only when the new entry is
-//!    deeper, a different board position collided, or the existing entry is
-//!    stale (belongs to an older search age).
-//! 3. **Score Mapping**: Stored scores are converted to ply-independent values
-//!    inside the table, and converted back to ply-dependent values on probe
-//!    retrieval. This preserves correct mate-distance scores across different
-//!    branches of the search tree.
-
 use strum::FromRepr;
 
-use crate::core::{Move, Score, TranspositionTableKey};
+use crate::core::{Move, Score, TranspositionTableKey, score};
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr, Default)]
@@ -145,7 +125,7 @@ impl TranspositionTable {
         let entry = &self.table[index];
         if entry.key == key && entry.value.flag != TranspositionTableFlag::Empty {
             Some(TranspositionTableValue {
-                score: entry.value.score.ply_dependent(ply),
+                score: score::ply_dependent(entry.value.score, ply),
                 ..entry.value
             })
         } else {
@@ -176,7 +156,7 @@ impl TranspositionTable {
             *existing = TranspositionTableEntry {
                 key,
                 value: TranspositionTableValue {
-                    score: value.score.ply_independent(ply),
+                    score: score::ply_independent(value.score, ply),
                     ..value
                 },
             };
@@ -201,8 +181,6 @@ impl TranspositionTable {
 
 #[cfg(test)]
 mod tests {
-    use crate::score;
-
     use super::*;
 
     #[test]
@@ -213,11 +191,11 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_value!(score!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
+            tt_value!(100, TranspositionTableFlag::Exact, Move::NULL, 5, 1),
         );
         let result = tt.probe(42, 0).unwrap();
         assert_eq!(result.depth, 5);
-        assert_eq!(result.score, score!(100));
+        assert_eq!(result.score, 100);
         assert_eq!(result.flag, TranspositionTableFlag::Exact);
 
         tt.clear();
@@ -232,43 +210,43 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(score!(80), TranspositionTableFlag::Exact, Move::NULL, 4, 1),
+            tt_value!(80, TranspositionTableFlag::Exact, Move::NULL, 4, 1),
         );
-        assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 80);
+        assert_eq!(tt.probe(100, 0).unwrap().score, 80);
 
         // 2. Reject shallower entry
         tt.store(
             100,
             0,
-            tt_value!(score!(90), TranspositionTableFlag::Exact, Move::NULL, 2, 1),
+            tt_value!(90, TranspositionTableFlag::Exact, Move::NULL, 2, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().depth, 4); // Kept depth 4
-        assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 80);
+        assert_eq!(tt.probe(100, 0).unwrap().score, 80);
 
         // 3. Overwrite with deeper entry
         tt.store(
             100,
             0,
-            tt_value!(score!(120), TranspositionTableFlag::Exact, Move::NULL, 6, 1),
+            tt_value!(120, TranspositionTableFlag::Exact, Move::NULL, 6, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().depth, 6);
-        assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 120);
+        assert_eq!(tt.probe(100, 0).unwrap().score, 120);
 
         // 4. Overwrite same depth if older age
         tt.store(
             100,
             0,
-            tt_value!(score!(200), TranspositionTableFlag::Alpha, Move::NULL, 6, 2),
+            tt_value!(200, TranspositionTableFlag::Alpha, Move::NULL, 6, 2),
         );
         let entry = tt.probe(100, 0).unwrap();
-        assert_eq!(entry.score.raw(), 200);
+        assert_eq!(entry.score, 200);
         assert_eq!(entry.flag, TranspositionTableFlag::Alpha);
         assert_eq!(entry.age, 2);
     }
 
     #[test]
     fn test_transposition_table_mate_score_mapping() {
-        let mate_score = Score::mate_in(10); // Mate in 10 plies
+        let mate_score = score::mate_in(10); // Mate in 10 plies
         let ply = 5;
 
         let mut tt = TranspositionTable::new(1);
@@ -291,7 +269,7 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_value!(score!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
+            tt_value!(100, TranspositionTableFlag::Exact, Move::NULL, 5, 1),
         );
 
         let h = tt.hashfull();

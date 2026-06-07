@@ -320,7 +320,10 @@ impl Position {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::types::{Move, Square};
+    use crate::core::{
+        score,
+        types::{Move, Square},
+    };
 
     #[test]
     fn test_knight_leg_pin() {
@@ -341,16 +344,16 @@ mod tests {
         let mut pos = Position::new();
         // 1. Bare Kings
         pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(score::DRAW));
 
         // 2. Kings + Bishops & Advisors (no attacking pieces)
         pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1")
             .unwrap();
-        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(score::DRAW));
 
         // 3. Kings + 1 Cannon, no Advisors/Bishops
         pos.set("4k4/9/9/9/9/9/9/9/3C5/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(score::DRAW));
     }
 
     #[test]
@@ -373,7 +376,7 @@ mod tests {
 
         // rule60 counter should be exactly 120
         assert_eq!(pos.history.last().unwrap().rule60, 120);
-        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(score::DRAW));
     }
 
     #[test]
