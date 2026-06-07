@@ -18,29 +18,10 @@ pub use transposition_table::*;
 
 /// Tracks search extension and move exclusion parameters for the current
 /// branch.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 struct SearchContext {
     pub excluded_move: Move,
     pub extensions: u8,
-}
-
-impl Default for SearchContext {
-    fn default() -> Self {
-        Self {
-            extensions: 0,
-            excluded_move: Move::NULL,
-        }
-    }
-}
-
-impl SearchContext {
-    /// Creates a new SearchExtension parameters set.
-    pub fn new(extensions: u8, excluded_move: Move) -> Self {
-        Self {
-            extensions,
-            excluded_move,
-        }
-    }
 }
 
 /// Shared context parameters passed down the recursive search stack.
@@ -118,7 +99,7 @@ impl<'a> Searcher<'a> {
             allocated_time,
             transposition_table,
             age,
-            killer_moves: KillerMoves::default(),
+            killer_moves: KillerMoves::new(),
             history_moves,
             max_ply: 0,
         };
@@ -414,7 +395,10 @@ impl<'a> Searcher<'a> {
                     ply,
                     rbeta - value!(1),
                     rbeta,
-                    SearchContext::new(ctx.extensions, value.best_move),
+                    SearchContext {
+                        extensions: ctx.extensions,
+                        excluded_move: value.best_move,
+                    },
                 );
 
                 // Score fails low, that means the TT move is really good, and that the
@@ -472,7 +456,10 @@ impl<'a> Searcher<'a> {
                 ply + 1,
                 -beta,
                 -alpha,
-                SearchContext::new(ctx.extensions + ext, Move::NULL),
+                SearchContext {
+                    extensions: (ctx.extensions + ext),
+                    ..Default::default()
+                },
             );
             self.pos.undo_move(m);
 

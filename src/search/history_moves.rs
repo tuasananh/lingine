@@ -9,6 +9,12 @@ pub struct HistoryMoves {
 }
 
 impl HistoryMoves {
+    pub fn new() -> Self {
+        Self {
+            table: [[[0; Square::COUNT]; Square::COUNT]; Color::COUNT],
+        }
+    }
+
     pub fn get(&self, color: Color, mv: Move) -> i32 {
         self.table[color as usize][mv.from() as usize][mv.to() as usize]
     }
@@ -38,8 +44,6 @@ impl HistoryMoves {
 
 impl Default for HistoryMoves {
     fn default() -> Self {
-        Self {
-            table: [[[0; Square::COUNT]; Square::COUNT]; Color::COUNT],
-        }
+        Self::new()
     }
 }

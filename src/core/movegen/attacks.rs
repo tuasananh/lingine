@@ -50,7 +50,7 @@ pub fn rook_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     // 1. Rank attacks: Mask the 9 bits of the current rank (offset `r * 9`)
     let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
     let rank_attack_mask = RANK_TABLE[f].rook[rank_occ];
-    let mut attack_bb = Bitboard::from_raw((rank_attack_mask as u128) << (r * 9));
+    let mut attack_bb = unsafe { Bitboard::from_raw((rank_attack_mask as u128) << (r * 9)) };
 
     // 2. File attacks: Gather the 10 bits of the current file
     let file_occ = gather_file_bits(occupied.raw(), f);
@@ -72,7 +72,7 @@ pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     // 1. Rank attacks: Mask the 9 bits of the rank
     let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
     let rank_attack_mask = RANK_TABLE[f].cannon[rank_occ];
-    let mut attack_bb = Bitboard::from_raw((rank_attack_mask as u128) << (r * 9));
+    let mut attack_bb = unsafe { Bitboard::from_raw((rank_attack_mask as u128) << (r * 9)) };
 
     // 2. File attacks: Gather the 10 bits of the file
     let file_occ = gather_file_bits(occupied.raw(), f);
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn test_rook_attacks() {
         // Rook at A0 on empty board
-        let empty = Bitboard::from_raw(0);
+        let empty = Bitboard::new();
         let att_a0 = rook_attacks(Square::A0, empty);
         // Should attack B0..I0 (files 1..8 on rank 0) and A1..A9 (file 0 on ranks 1..9)
         let mut expected_mask = 0u128;
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(att_a0.raw(), expected_mask);
 
         // Rook at A0, blocked by a piece at A2 and B0
-        let blocked = Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << 1));
+        let blocked = unsafe { Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << 1)) };
         let att_a0_blocked = rook_attacks(Square::A0, blocked);
         // Should attack B0 (the blocker on rank 0) and A1, A2 (the blocker on rank 2).
         // No further.
@@ -142,12 +142,12 @@ mod tests {
     fn test_cannon_attacks() {
         // Cannon quiet attacks are 0 on an empty board (cannon_attacks only computes
         // leap captures)
-        let empty = Bitboard::from_raw(0);
+        let empty = Bitboard::new();
         let att_cannon_a0 = cannon_attacks(Square::A0, empty);
         assert_eq!(att_cannon_a0.raw(), 0);
 
         // Cannon at A0, blocker (screen) at A2, and enemy at A5
-        let occupied = Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << (5 * 9)));
+        let occupied = unsafe { Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << (5 * 9))) };
         let att_cannon_blocked = cannon_attacks(Square::A0, occupied);
         // Upwards file leap capture target behind screen A2: A5.
 

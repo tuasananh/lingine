@@ -46,7 +46,7 @@ pub struct Value(i16);
 #[macro_export]
 macro_rules! value {
     ($expr:expr) => {
-        Value::from_raw($expr)
+        Value::from($expr)
     };
 }
 
@@ -136,6 +136,13 @@ impl Value {
     #[inline]
     pub const fn abs(self) -> Self {
         Value(self.0.abs())
+    }
+}
+
+impl From<i16> for Value {
+    #[inline]
+    fn from(val: i16) -> Self {
+        Value(val)
     }
 }
 

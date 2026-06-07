@@ -11,6 +11,12 @@ pub struct KillerMoves {
 }
 
 impl KillerMoves {
+    pub fn new() -> Self {
+        Self {
+            table: [[Move::NULL; MOVE_COUNT_PER_PLY]; MAX_PLY],
+        }
+    }
+
     pub fn update(&mut self, mv: Move, ply: u8) {
         let ply_index = ply as usize;
 
@@ -28,8 +34,6 @@ impl KillerMoves {
 
 impl Default for KillerMoves {
     fn default() -> Self {
-        Self {
-            table: [[Move::NULL; MOVE_COUNT_PER_PLY]; MAX_PLY],
-        }
+        Self::new()
     }
 }
