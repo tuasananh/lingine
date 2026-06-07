@@ -177,9 +177,19 @@ class Lichess:
         )
 
     def get_online_bots(self):
-        online_bots = self.api_get(ENDPOINTS["online_bots"], get_raw_text=True)
-        online_bots = list(filter(bool, online_bots.split("\n")))
-        return list(map(lambda bot: json.loads(bot), online_bots))
+        try:
+            online_bots = self.api_get(ENDPOINTS["online_bots"], get_raw_text=True)
+            online_bots = list(filter(bool, online_bots.split("\n")))
+            bots = []
+            for bot in online_bots:
+                try:
+                    bots.append(json.loads(bot))
+                except Exception as e:
+                    logger.warning(f"Failed to parse online bot line: {e}")
+            return bots
+        except Exception as e:
+            logger.warning(f"Error fetching online bots: {e}")
+            return []
 
     def challenge(self, username, params):
         logger.debug(f"Challenging {username} with params={params}")

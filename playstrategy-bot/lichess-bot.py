@@ -479,8 +479,11 @@ def start(
                 and not challenge_queue
                 and matchmaker.should_create_challenge()
             ):
-                logger.info("Challenging a random bot")
-                matchmaker.challenge()
+                try:
+                    logger.info("Challenging a random bot")
+                    matchmaker.challenge()
+                except Exception as e:
+                    logger.exception(f"Error creating matchmaking challenge: {e}")
 
             control_queue.task_done()
 
