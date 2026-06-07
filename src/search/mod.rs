@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::core::{
-    Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, Score, generate_moves, score,
+    Move, MoveGenType, MoveList, MoveScore, Piece, PieceType, Position, Score, Side,
+    generate_moves, score,
 };
 use crate::tt_value;
 use crate::uci::{RunningStatus, UciInfo, UciScore, UciScoreBound};
@@ -15,6 +16,9 @@ mod transposition_table;
 pub use history_moves::*;
 pub use killer_moves::*;
 pub use transposition_table::*;
+
+pub const MAX_PLY: usize = 128;
+pub const MAX_DEPTH: usize = 64;
 
 /// Tracks search extension and move exclusion parameters for the current
 /// branch.
@@ -519,7 +523,7 @@ impl<'a> Searcher<'a> {
         // checks
         if depth <= -12 {
             let stand_pat = self.pos.evaluate();
-            return if self.pos.side_to_move() == Color::White {
+            return if self.pos.side_to_move() == Side::Red {
                 stand_pat
             } else {
                 -stand_pat
@@ -538,7 +542,7 @@ impl<'a> Searcher<'a> {
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
             let stand_pat = self.pos.evaluate();
-            best_score = if self.pos.side_to_move() == Color::White {
+            best_score = if self.pos.side_to_move() == Side::Red {
                 stand_pat
             } else {
                 -stand_pat
@@ -648,7 +652,7 @@ impl<'a> Searcher<'a> {
     /// transposition table best move, killers, and history.
     #[inline]
     fn sort_moves(&self, moves: &mut [Move], tt_move: Move, ply: u8) {
-        moves.sort_unstable_by_key(|&m| {
+        moves.sort_unstable_by_key(|&m| -> Reverse<MoveScore> {
             // Returns a heuristic move-ordering score. Captures are scored highly based
             // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
             // prioritized at the very top.
@@ -756,7 +760,7 @@ fn singular_margin(depth: i8) -> Score {
 mod tests {
     use super::*;
     use crate::core::Position;
-    use crate::core::{Color, Move, Square};
+    use crate::core::{Move, Side, Square};
     use std::sync::Arc;
     use std::time::Instant;
 
@@ -834,14 +838,14 @@ mod tests {
 
         // 1. White checks
         pos.do_move(r_check1);
-        assert!(pos.is_in_check(Color::Black));
+        assert!(pos.is_in_check(Side::Black));
 
         // 2. Black evades
         pos.do_move(k_move1);
 
         // 3. White checks again
         pos.do_move(r_check2);
-        assert!(pos.is_in_check(Color::Black));
+        assert!(pos.is_in_check(Side::Black));
 
         // 4. Black moves King back to D9
         pos.do_move(k_move2);
@@ -852,7 +856,7 @@ mod tests {
         // Now Black turn to move. White just gave the repeating check on all turns in
         // the loop.
         assert_eq!(pos.rule_judge(5), Some(score::mate_in(5)));
-        assert!(pos.is_in_check(Color::Black));
+        assert!(pos.is_in_check(Side::Black));
 
         // Black should win because White is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)

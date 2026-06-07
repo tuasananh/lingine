@@ -1,4 +1,4 @@
-use crate::core::MAX_PLY;
+use crate::search::MAX_PLY;
 
 pub type Score = i16;
 

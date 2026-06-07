@@ -1,5 +1,5 @@
 use crate::{
-    core::{Color, Move, Piece, PieceType, Position, Square, StateInfo, position::ZOBRIST},
+    core::{Move, Piece, PieceType, Position, Side, Square, StateInfo, position::ZOBRIST},
     eval::{piece_material_value, piece_square_table_value},
 };
 
@@ -53,37 +53,37 @@ impl Position {
         let piece = piece.expect("Cannot do_move with no piece at the source square");
 
         match piece.color() {
-            Color::White => {
+            Side::Red => {
                 material_score -= piece_material_value(piece, from);
                 piece_square_table_score -=
-                    piece_square_table_value(piece.piece_type(), Color::White, from);
+                    piece_square_table_value(piece.piece_type(), Side::Red, from);
                 material_score += piece_material_value(piece, to);
                 piece_square_table_score +=
-                    piece_square_table_value(piece.piece_type(), Color::White, to);
+                    piece_square_table_value(piece.piece_type(), Side::Red, to);
             }
-            Color::Black => {
+            Side::Black => {
                 material_score += piece_material_value(piece, from);
                 piece_square_table_score +=
-                    piece_square_table_value(piece.piece_type(), Color::Black, from);
+                    piece_square_table_value(piece.piece_type(), Side::Black, from);
 
                 material_score -= piece_material_value(piece, to);
                 piece_square_table_score -=
-                    piece_square_table_value(piece.piece_type(), Color::Black, to);
+                    piece_square_table_value(piece.piece_type(), Side::Black, to);
             }
         }
 
         // 2. Remove captured piece from to (if any)
         if let Some(piece) = captured {
             match piece.color() {
-                Color::White => {
+                Side::Red => {
                     material_score -= piece_material_value(piece, to);
                     piece_square_table_score -=
-                        piece_square_table_value(piece.piece_type(), Color::White, to);
+                        piece_square_table_value(piece.piece_type(), Side::Red, to);
                 }
-                Color::Black => {
+                Side::Black => {
                     material_score += piece_material_value(piece, to);
                     piece_square_table_score +=
-                        piece_square_table_value(piece.piece_type(), Color::Black, to);
+                        piece_square_table_value(piece.piece_type(), Side::Black, to);
                 }
             }
         }
@@ -97,10 +97,7 @@ impl Position {
         } else {
             rule60 + 1
         };
-        let in_check = [
-            self.is_in_check(Color::White),
-            self.is_in_check(Color::Black),
-        ];
+        let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
 
         // Push current state onto history stack
         self.history.push(StateInfo {

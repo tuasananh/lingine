@@ -12,7 +12,7 @@ use std::fmt::Display;
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use strum::EnumCount;
 
-use crate::core::types::{Color, File, Rank, Square};
+use crate::core::types::{File, Rank, Side, Square};
 
 /// Represents the occupancy or attack targets on the 90-square Xiangqi board.
 /// Packaged inside a `u128` wrapper where bits 0 to 89 correspond to the
@@ -173,14 +173,14 @@ impl Bitboard {
     ///
     /// * **White Side**: Ranks R0 to R4 (indices 0 to 44).
     /// * **Black Side**: Ranks R5 to R9 (indices 45 to 89).
-    pub const fn side(color: Color) -> Self {
+    pub const fn side(color: Side) -> Self {
         match color {
-            Color::White => Self::rank(Rank::R0)
+            Side::Red => Self::rank(Rank::R0)
                 .const_or(Self::rank(Rank::R1))
                 .const_or(Self::rank(Rank::R2))
                 .const_or(Self::rank(Rank::R3))
                 .const_or(Self::rank(Rank::R4)),
-            Color::Black => Self::rank(Rank::R5)
+            Side::Black => Self::rank(Rank::R5)
                 .const_or(Self::rank(Rank::R6))
                 .const_or(Self::rank(Rank::R7))
                 .const_or(Self::rank(Rank::R8))
@@ -201,11 +201,11 @@ impl Bitboard {
     /// Prior to crossing the river (opponent's side), Pawns can only move
     /// straight forward. Once they cross, they can move forward or
     /// horizontally sideways (left/right).
-    pub const fn pawn(color: Color) -> Self {
+    pub const fn pawn(color: Side) -> Self {
         let other_side = Self::side(color.opposite());
         let my_side = Self::PAWN_FILE.const_and(match color {
-            Color::White => Self::rank(Rank::R3).const_or(Self::rank(Rank::R4)),
-            Color::Black => Self::rank(Rank::R5).const_or(Self::rank(Rank::R6)),
+            Side::Red => Self::rank(Rank::R3).const_or(Self::rank(Rank::R4)),
+            Side::Black => Self::rank(Rank::R5).const_or(Self::rank(Rank::R6)),
         });
 
         my_side.const_or(other_side)
@@ -266,7 +266,7 @@ impl Display for Bitboard {
 mod tests {
     use crate::core::{
         bitboard::Bitboard,
-        types::{Color, File, Rank},
+        types::{File, Rank, Side},
     };
 
     #[test]
@@ -295,17 +295,17 @@ mod tests {
 
     #[test]
     fn test_print_white_side_bitboard() {
-        println!("{}", Bitboard::side(Color::White));
+        println!("{}", Bitboard::side(Side::Red));
     }
 
     #[test]
     fn test_print_black_side_bitboard() {
-        println!("{}", Bitboard::side(Color::Black));
+        println!("{}", Bitboard::side(Side::Black));
     }
 
     #[test]
     fn test_print_pawn_bitboard() {
-        println!("{}", Bitboard::pawn(Color::White));
-        println!("{}", Bitboard::pawn(Color::Black));
+        println!("{}", Bitboard::pawn(Side::Red));
+        println!("{}", Bitboard::pawn(Side::Black));
     }
 }

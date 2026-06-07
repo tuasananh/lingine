@@ -1,4 +1,4 @@
-use crate::core::{MAX_PLY, Move};
+use crate::{core::Move, search::MAX_PLY};
 
 const MOVE_COUNT_PER_PLY: usize = 2;
 

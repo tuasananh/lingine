@@ -1,31 +1,31 @@
 use strum::EnumCount;
 
-use crate::core::{Color, Move, Square};
+use crate::core::{Move, Side, Square};
 
 const DECAY_RATE: i32 = 8;
 
 pub struct HistoryMoves {
-    table: [[[i32; Square::COUNT]; Square::COUNT]; Color::COUNT],
+    table: [[[i32; Square::COUNT]; Square::COUNT]; Side::COUNT],
 }
 
 impl HistoryMoves {
     pub fn new() -> Self {
         Self {
-            table: [[[0; Square::COUNT]; Square::COUNT]; Color::COUNT],
+            table: [[[0; Square::COUNT]; Square::COUNT]; Side::COUNT],
         }
     }
 
-    pub fn get(&self, color: Color, mv: Move) -> i32 {
+    pub fn get(&self, color: Side, mv: Move) -> i32 {
         self.table[color as usize][mv.from() as usize][mv.to() as usize]
     }
 
-    pub fn increase(&mut self, color: Color, mv: Move, depth: i8) {
+    pub fn increase(&mut self, color: Side, mv: Move, depth: i8) {
         let depth = depth as i32;
         let bonus = depth * depth;
         self.table[color as usize][mv.from() as usize][mv.to() as usize] += bonus;
     }
 
-    pub fn decrease(&mut self, color: Color, mv: Move, depth: i8) {
+    pub fn decrease(&mut self, color: Side, mv: Move, depth: i8) {
         let depth = depth as i32;
         let bonus = depth * depth;
         self.table[color as usize][mv.from() as usize][mv.to() as usize] -= bonus;

@@ -1,19 +1,19 @@
 use strum::EnumCount;
 
 use crate::core::{
-    Bitboard, Color, Move, Piece, PieceType, Score, Square, cannon_attacks, rook_attacks, score,
+    Bitboard, Move, Piece, PieceType, Score, Side, Square, cannon_attacks, rook_attacks, score,
 };
 
 impl super::Position {
     /// Calculates the chase information for a given color, returning a 16-bit
     /// mask of chased pieces.
-    pub fn chased(&mut self, mover: Color, id_board: &[u8; Square::COUNT]) -> u16 {
+    pub fn chased(&mut self, mover: Side, id_board: &[u8; Square::COUNT]) -> u16 {
         use crate::core::movegen::{KNIGHT_TABLE, PAWN_ATTACKS};
 
         let mut chase = 0u16;
         let opponent = mover.opposite();
-        let occupied = self.bitboard_by_color[Color::White as usize]
-            | self.bitboard_by_color[Color::Black as usize];
+        let occupied = self.bitboard_by_color[Side::Red as usize]
+            | self.bitboard_by_color[Side::Black as usize];
 
         // 1. Target pieces that can be chased (excluding King):
         // Rooks, Cannons, Knights, Advisors, Bishops of the opponent,
@@ -70,7 +70,7 @@ impl super::Position {
                     entry.attacks[occ_idx]
                 }
                 PieceType::Pawn => {
-                    let color_idx = if mover == Color::White { 0 } else { 1 };
+                    let color_idx = if mover == Side::Red { 0 } else { 1 };
                     PAWN_ATTACKS[color_idx][from as usize]
                 }
                 _ => Bitboard::new(),
@@ -120,8 +120,8 @@ impl super::Position {
                     self.side_to_move = opponent;
 
                     // Now see if any of the opponent's pieces can legally recapture at `to`
-                    let recaptured_occupied = self.bitboard_by_color[Color::White as usize]
-                        | self.bitboard_by_color[Color::Black as usize];
+                    let recaptured_occupied = self.bitboard_by_color[Side::Red as usize]
+                        | self.bitboard_by_color[Side::Black as usize];
 
                     let mut recapturers = self.checkers_to(to, recaptured_occupied, opponent);
                     while let Some(s) = recapturers.pop_lsb() {
@@ -183,7 +183,7 @@ impl super::Position {
         for sq_idx in 0..Square::COUNT {
             let sq = Square::from_repr(sq_idx as u8).unwrap();
             if let Some(piece) = self.board[sq as usize] {
-                if piece.color() == Color::White {
+                if piece.color() == Side::Red {
                     id_board[sq as usize] = white_id;
                     white_id += 1;
                 } else {
@@ -316,9 +316,9 @@ impl super::Position {
                     let state = &self.history[j];
                     let player_who_moved = if (initial_game_ply + (j as u16) - 1).is_multiple_of(2)
                     {
-                        Color::White
+                        Side::Red
                     } else {
-                        Color::Black
+                        Side::Black
                     };
 
                     if player_who_moved == us {

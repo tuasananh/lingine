@@ -1,5 +1,5 @@
 use crate::core::{
-    Bitboard, Color, KNIGHT_TO_TABLE, Move, PAWN_ATTACKS_TO, Piece, PieceType, Position, Square,
+    Bitboard, KNIGHT_TO_TABLE, Move, PAWN_ATTACKS_TO, Piece, PieceType, Position, Side, Square,
     cannon_attacks, rook_attacks,
 };
 
@@ -20,8 +20,8 @@ impl Position {
             self.king_square(us)
         };
 
-        let mut occupied = self.bitboard_by_color[Color::White as usize]
-            | self.bitboard_by_color[Color::Black as usize];
+        let mut occupied = self.bitboard_by_color[Side::Red as usize]
+            | self.bitboard_by_color[Side::Black as usize];
         occupied.clear_bit(from);
         occupied.set_bit(to);
 
@@ -42,8 +42,8 @@ impl Position {
             self.board[from as usize].expect("No piece at the source square for gives_check");
         let them_king_sq = self.king_square(them);
 
-        let mut occupied = self.bitboard_by_color[Color::White as usize]
-            | self.bitboard_by_color[Color::Black as usize];
+        let mut occupied = self.bitboard_by_color[Side::Red as usize]
+            | self.bitboard_by_color[Side::Black as usize];
         occupied.clear_bit(from);
         occupied.set_bit(to);
 
@@ -54,9 +54,9 @@ impl Position {
 
     /// Checks whether a [`square`] is currently being attacked by [`attacker`]
     #[inline]
-    pub fn is_square_attacked(&self, square: Square, attacker: Color) -> bool {
-        let occupied = self.bitboard_by_color[Color::White as usize]
-            | self.bitboard_by_color[Color::Black as usize];
+    pub fn is_square_attacked(&self, square: Square, attacker: Side) -> bool {
+        let occupied = self.bitboard_by_color[Side::Red as usize]
+            | self.bitboard_by_color[Side::Black as usize];
         !self.checkers_to(square, occupied, attacker).is_empty()
     }
 
@@ -66,13 +66,13 @@ impl Position {
     pub fn is_square_attacked_after_move(
         &self,
         square: Square,
-        attacker: Color,
+        attacker: Side,
         from: Square,
         to: Square,
         moved_piece: Piece,
     ) -> bool {
-        let mut occupied = self.bitboard_by_color[Color::White as usize]
-            | self.bitboard_by_color[Color::Black as usize];
+        let mut occupied = self.bitboard_by_color[Side::Red as usize]
+            | self.bitboard_by_color[Side::Black as usize];
         occupied.clear_bit(from);
         occupied.set_bit(to);
 
@@ -104,7 +104,7 @@ impl Position {
         &self,
         square: Square,
         occupied: Bitboard,
-        attacker: Color,
+        attacker: Side,
     ) -> Bitboard {
         // --- Isolate attacker's piece bitboards by intersecting piece-type and color
         // masks --- Each variable holds bits only for attacker-colored pieces
@@ -124,7 +124,7 @@ impl Position {
         // Map attacker color to a table index (0 = White, 1 = Black).
         // White and Black Pawns attack in opposite directions, so each has its own
         // reverse-attack table.
-        let them_color_idx = if attacker == Color::White { 0 } else { 1 };
+        let them_color_idx = if attacker == Side::Red { 0 } else { 1 };
         // `PAWN_ATTACKS_TO[color][sq]` gives the set of squares FROM which a Pawn of
         // that color could have attacked `square`. AND with actual Pawn
         // positions to find real attackers.
@@ -189,7 +189,7 @@ impl Position {
         &self,
         square: Square,
         occupied: Bitboard,
-        attacker: Color,
+        attacker: Side,
         from: Square,
         to: Square,
         moved_piece: Piece,
@@ -248,7 +248,7 @@ impl Position {
             }
         }
 
-        let them_color_idx = if attacker == Color::White { 0 } else { 1 };
+        let them_color_idx = if attacker == Side::Red { 0 } else { 1 };
         let pawn_attackers = PAWN_ATTACKS_TO[them_color_idx][square as usize] & opponent_pawns;
 
         let entry = &KNIGHT_TO_TABLE[square as usize];

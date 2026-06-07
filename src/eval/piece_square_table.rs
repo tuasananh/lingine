@@ -1,4 +1,4 @@
-use crate::core::{Color, PieceType, Score, Square};
+use crate::core::{PieceType, Score, Side, Square};
 
 // Positional piece-square tables from White's (Red's) perspective on the
 // 90-square board. Square indices are 0 to 89, rank-major order (rank * 9 +
@@ -158,8 +158,8 @@ const PIECE_SQUARE_TABLE_PAWN: [Score; 90] = [
 /// and color on a specific square. For Black pieces, the position is
 /// automatically mirrored vertically.
 #[inline]
-pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square) -> Score {
-    let index = if color == Color::White {
+pub fn piece_square_table_value(piece_type: PieceType, color: Side, sq: Square) -> Score {
+    let index = if color == Side::Red {
         sq as usize
     } else {
         // Mirror rank vertically: 9 - rank, and file horizontally: 8 - file

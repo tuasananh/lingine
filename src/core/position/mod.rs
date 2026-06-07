@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::core::{
     Score,
     bitboard::Bitboard,
-    types::{Color, File, Move, Piece, PieceType, Rank, Square},
+    types::{File, Move, Piece, PieceType, Rank, Side, Square},
 };
 
 use zobrist_table::*;
@@ -29,7 +29,7 @@ pub struct StateInfo {
     /// on captures/pawn moves).
     pub rule60: u16,
     /// Whether each color [White, Black] was in check in this position state.
-    pub in_check: [bool; Color::COUNT],
+    pub in_check: [bool; Side::COUNT],
     /// Precalculated incremental material score (from White's perspective)
     pub material_score: Score,
     /// Precalculated incremental piece-square table positional score (from
@@ -47,7 +47,7 @@ pub struct Position {
     /// Precomputed bitboards showing piece placements grouped by `PieceType`.
     bitboard_by_type: [Bitboard; PieceType::COUNT],
     /// Precomputed bitboards showing piece placements grouped by `Color`.
-    bitboard_by_color: [Bitboard; Color::COUNT],
+    bitboard_by_color: [Bitboard; Side::COUNT],
 
     /// Active count of each piece category on the board.
     piece_count: [u8; Piece::COUNT],
@@ -57,13 +57,13 @@ pub struct Position {
     /// next = 2, etc.).
     game_ply: u16,
     /// The player active to play next.
-    side_to_move: Color,
+    side_to_move: Side,
 
     /// Current transposition hash of the board position.
     zobrist_hash: u64,
     /// Palace coordinates of both players' Generals (Kings) for faster check
     /// detection.
-    king_squares: [Square; Color::COUNT],
+    king_squares: [Square; Side::COUNT],
 }
 
 #[derive(Error, Debug)]
@@ -87,11 +87,11 @@ impl Position {
         let mut pos = Self {
             board: [None; Square::COUNT],
             bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
-            bitboard_by_color: [Bitboard::new(); Color::COUNT],
+            bitboard_by_color: [Bitboard::new(); Side::COUNT],
             piece_count: [0; Piece::COUNT],
             history: Vec::new(),
             game_ply: 0,
-            side_to_move: Color::White,
+            side_to_move: Side::Red,
             zobrist_hash: 0,
             king_squares: [Square::E0, Square::E9],
         };
@@ -112,7 +112,7 @@ impl Position {
 
     /// Get the current side to make a move
     #[inline]
-    pub fn side_to_move(&self) -> Color {
+    pub fn side_to_move(&self) -> Side {
         self.side_to_move
     }
 
@@ -138,7 +138,7 @@ impl Position {
     /// Get the bitboard of the side [`color`], which represents the pieces
     /// owned by [`color`] currently on the board
     #[inline]
-    pub fn bitboard_by_color(&self, color: Color) -> Bitboard {
+    pub fn bitboard_by_color(&self, color: Side) -> Bitboard {
         self.bitboard_by_color[color as usize]
     }
 
@@ -150,13 +150,13 @@ impl Position {
 
     /// Get the square where the king of side [`color`] is currently at
     #[inline]
-    pub fn king_square(&self, color: Color) -> Square {
+    pub fn king_square(&self, color: Side) -> Square {
         self.king_squares[color as usize]
     }
 
     /// Checks if the given player's King is currently in check.
     #[inline]
-    pub fn is_in_check(&self, color: Color) -> bool {
+    pub fn is_in_check(&self, color: Side) -> bool {
         self.is_square_attacked(self.king_square(color), color.opposite())
     }
 
@@ -174,7 +174,7 @@ impl Position {
     pub fn set(&mut self, fen: &str) -> Result<(), PositionSetError> {
         self.board = [None; Square::COUNT];
         self.bitboard_by_type = [Bitboard::new(); PieceType::COUNT];
-        self.bitboard_by_color = [Bitboard::new(); Color::COUNT];
+        self.bitboard_by_color = [Bitboard::new(); Side::COUNT];
         self.piece_count = [0; Piece::COUNT];
         self.king_squares = [Square::E0, Square::E9];
         self.history.clear();
@@ -233,19 +233,19 @@ impl Position {
         // 2. Parse side to move ('w' or 'b')
         if tokens.len() > 1 {
             self.side_to_move = match tokens[1] {
-                "w" => Color::White,
-                "b" => Color::Black,
+                "w" => Side::Red,
+                "b" => Side::Black,
                 _ => {
                     return Err(PositionSetError {
                         msg: format!("Invalid side to move: {}", tokens[1]),
                     });
                 }
             };
-            if self.side_to_move == Color::Black {
+            if self.side_to_move == Side::Black {
                 self.zobrist_hash ^= ZOBRIST.side;
             }
         } else {
-            self.side_to_move = Color::White;
+            self.side_to_move = Side::Red;
         }
 
         let mut rule60 = 0;
@@ -263,10 +263,7 @@ impl Position {
         }
         self.game_ply = (fullmove.saturating_sub(1) * 2) + (self.side_to_move as u16);
 
-        let in_check = [
-            self.is_in_check(Color::White),
-            self.is_in_check(Color::Black),
-        ];
+        let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
         let (material_score, piece_square_table_score) = self.compute_evaluation_scores();
         self.history.push(StateInfo {
             last_move: Move::NULL,

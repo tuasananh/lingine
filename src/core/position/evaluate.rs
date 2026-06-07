@@ -1,7 +1,7 @@
 use strum::EnumCount;
 
 use crate::{
-    core::{Color, Position, Score, Square, score},
+    core::{Position, Score, Side, Square, score},
     eval::{piece_material_value, piece_square_table_value},
 };
 
@@ -44,7 +44,7 @@ impl Position {
                 let color = piece.color();
                 let val = piece_material_value(piece, sq);
                 let pst = piece_square_table_value(piece.piece_type(), color, sq);
-                if color == Color::White {
+                if color == Side::Red {
                     material_score += val;
                     piece_square_table_score += pst;
                 } else {

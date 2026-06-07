@@ -4,9 +4,9 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 
 use crate::core::{
-    Color, File, MAX_DEPTH, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
+    File, Move, MoveGenType, MoveList, Position, Rank, Side, Square, generate_moves,
 };
-use crate::search::{HistoryMoves, Searcher, SearcherParameters, TranspositionTable};
+use crate::search::{HistoryMoves, MAX_DEPTH, Searcher, SearcherParameters, TranspositionTable};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, RunningStatus,
     SetOptionParameters, UciId, UciOption,
@@ -47,14 +47,14 @@ impl Lingine {
     }
 
     /// Determines the time limit budget for a given search color/increments.
-    fn calculate_search_time(params: &GoParameters, side: Color) -> Option<Duration> {
+    fn calculate_search_time(params: &GoParameters, side: Side) -> Option<Duration> {
         if let Some(movetime) = params.movetime {
             return Some(movetime.saturating_sub(Duration::from_millis(10)));
         }
 
         let (time_left, inc) = match side {
-            Color::White => (params.wtime, params.winc),
-            Color::Black => (params.btime, params.binc),
+            Side::Red => (params.wtime, params.winc),
+            Side::Black => (params.btime, params.binc),
         };
 
         if let Some(time) = time_left {

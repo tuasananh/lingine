@@ -20,6 +20,7 @@
 mod attacks;
 mod tables;
 
+use arrayvec::ArrayVec;
 // Re-export public API so external callers (position.rs, etc.) keep their
 // existing `use crate::movegen::*` paths.
 pub use attacks::{cannon_attacks, gather_file_bits, rook_attacks};
@@ -29,11 +30,29 @@ pub use tables::{
     RankEntry,
 };
 
-use crate::core::{Color, Move, MoveGenType, MoveList, PieceType, Position, Square};
+use crate::core::{Move, PieceType, Position, Side, Square};
+
+/// The maximum number of pseudo-legal moves in any given Xiangqi position
+/// (typically <= 120).
+pub const MAX_MOVES: usize = 128;
+
+/// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
+/// allocation.
+pub type MoveList = ArrayVec<Move, MAX_MOVES>;
+
+/// Types of moves that can be requested during move generation.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MoveGenType {
+    Captures,
+    Quiets,
+    Evasions,
+    PseudoLegal,
+    Legal,
+}
 
 /// Generates valid orthogonal moves for the General (King) inside the Palace.
 fn generate_king_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let from_sq = pos.king_square(us);
     let us_pieces = pos.bitboard_by_color(us);
     let mut target_bb = KING_ATTACKS[from_sq as usize] & !us_pieces;
@@ -44,7 +63,7 @@ fn generate_king_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveLis
 
 /// Generates diagonal moves for Advisors inside the Palace.
 fn generate_advisor_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let mut advisors = pos.bitboard_by_type(PieceType::Advisor) & us_pieces;
     while let Some(from_sq) = advisors.pop_lsb() {
@@ -58,9 +77,9 @@ fn generate_advisor_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut Move
 /// Generates diagonal moves for Elephants (Bishops), checking diagonal blocker
 /// intermediate eyes.
 fn generate_bishop_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let us_pieces = pos.bitboard_by_color(us);
-    let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
+    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
     let mut bishops = pos.bitboard_by_type(PieceType::Bishop) & us_pieces;
 
     while let Some(from_sq) = bishops.pop_lsb() {
@@ -87,9 +106,9 @@ fn generate_bishop_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
 /// Generates L-shaped moves for Horses (Knights), checking intermediate
 /// orthogonal blocker leg squares.
 fn generate_knight_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let us_pieces = pos.bitboard_by_color(us);
-    let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
+    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
     let mut knights = pos.bitboard_by_type(PieceType::Knight) & us_pieces;
 
     while let Some(from_sq) = knights.pop_lsb() {
@@ -116,7 +135,7 @@ fn generate_knight_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
 /// Generates moves for Soldiers (Pawns) based on whether they have crossed the
 /// river or not.
 fn generate_pawn_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let us_pieces = pos.bitboard_by_color(us);
     let mut pawns = pos.bitboard_by_type(PieceType::Pawn) & us_pieces;
     let color_idx = if IS_WHITE { 0 } else { 1 };
@@ -132,9 +151,9 @@ fn generate_pawn_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveLis
 /// Generates horizontal and vertical sliding moves for Chariots (Rooks) in O(1)
 /// lookups.
 fn generate_rook_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let us_pieces = pos.bitboard_by_color(us);
-    let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
+    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
     let mut rooks = pos.bitboard_by_type(PieceType::Rook) & us_pieces;
 
     while let Some(from_sq) = rooks.pop_lsb() {
@@ -171,11 +190,11 @@ fn generate_rook_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveLis
 /// Generates horizontal and vertical moves/leap captures for Cannons in O(1)
 /// lookups.
 fn generate_cannon_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Color::White } else { Color::Black };
+    let us = if IS_WHITE { Side::Red } else { Side::Black };
     let them = us.opposite();
     let us_pieces = pos.bitboard_by_color(us);
     let them_pieces = pos.bitboard_by_color(them);
-    let occupied = pos.bitboard_by_color(Color::White) | pos.bitboard_by_color(Color::Black);
+    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
     let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
 
     while let Some(from_sq) = cannons.pop_lsb() {
@@ -236,8 +255,8 @@ fn generate_pseudo_legal<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveL
 pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveList) {
     let color = pos.side_to_move();
     match color {
-        Color::White => generate_pseudo_legal::<true>(pos, moves),
-        Color::Black => generate_pseudo_legal::<false>(pos, moves),
+        Side::Red => generate_pseudo_legal::<true>(pos, moves),
+        Side::Black => generate_pseudo_legal::<false>(pos, moves),
     };
 
     if gen_type == MoveGenType::PseudoLegal {
@@ -273,7 +292,7 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
 mod tests {
     use super::*;
     use crate::core::position::Position;
-    use crate::core::types::{Move, MoveGenType, Square};
+    use crate::core::types::{Move, Square};
 
     fn count_moves(pos: &Position, gen_type: MoveGenType) -> usize {
         let mut moves = MoveList::new();
@@ -543,7 +562,7 @@ mod tests {
     }
 
     fn assert_positions_equal(a: &Position, b: &Position) {
-        use crate::core::types::{Color, Piece, PieceType};
+        use crate::core::types::{Piece, PieceType, Side};
         use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
         assert_eq!(a.zobrist_hash(), b.zobrist_hash());
@@ -552,7 +571,7 @@ mod tests {
             assert_eq!(a.piece_at(sq), b.piece_at(sq));
             assert_eq!(a.is_empty(sq), b.is_empty(sq));
         }
-        for color in [Color::White, Color::Black] {
+        for color in [Side::Red, Side::Black] {
             assert_eq!(a.king_square(color), b.king_square(color));
             assert_eq!(a.is_in_check(color), b.is_in_check(color));
             assert_eq!(a.bitboard_by_color(color), b.bitboard_by_color(color));
@@ -568,8 +587,6 @@ mod tests {
 
     #[test]
     fn test_position_restored_after_move_generation() {
-        use crate::core::types::MoveGenType;
-
         // Test with a few different FEN configurations:
         let fens = [
             // 1. Initial starting position

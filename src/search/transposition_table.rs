@@ -1,6 +1,6 @@
 use strum::FromRepr;
 
-use crate::core::{Move, Score, TranspositionTableKey, score};
+use crate::core::{Move, Score, score};
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr, Default)]
@@ -15,6 +15,9 @@ pub enum TranspositionTableFlag {
     /// Score represents a lower bound (score >= beta).
     Beta,
 }
+
+/// Represents the hash key for Zobrist position hashing.
+pub type TranspositionTableKey = u64;
 
 #[derive(Default, Debug, Clone)]
 /// Represents an entry inside the Transposition Table.
