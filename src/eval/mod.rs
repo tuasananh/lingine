@@ -74,21 +74,21 @@ mod tests {
 
     #[test]
     fn test_incremental_evaluation_consistency() {
-        let positions = vec![
+        let positions = [
             "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w - - 0 1".to_string(),
             "4k4/9/9/4P4/4p4/9/9/9/9/4K4 w - - 0 1".to_string(),
             "r1bakab1r/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w - - 0 1".to_string(),
         ];
 
-        for fen in positions {
+        for (idx, fen) in positions.iter().enumerate() {
             let mut pos = Position::new();
-            pos.set(&fen).unwrap();
+            pos.set(fen).unwrap();
 
             // Generate all pseudo-legal moves
             let mut moves = MoveList::new();
             generate_moves(&pos, MoveGenType::PseudoLegal, &mut moves);
 
-            for m in moves {
+            for (m_idx, m) in moves.iter().copied().enumerate() {
                 if pos.legal(m) {
                     let pre_material = pos.material_score();
                     let pre_pst = pos.piece_square_table_score();
@@ -103,30 +103,38 @@ mod tests {
                     assert_eq!(
                         pos.material_score(),
                         expected_material,
-                        "Material mismatch for move {}",
+                        "Material mismatch for FEN {} move {}: {}",
+                        idx,
+                        m_idx,
                         m
                     );
                     assert_eq!(
                         pos.piece_square_table_score(),
                         expected_pst,
-                        "PST mismatch for move {}",
+                        "PST mismatch for FEN {} move {}: {}",
+                        idx,
+                        m_idx,
                         m
                     );
 
                     // Undo the move
-                    pos.undo_move(m);
+                    pos.undo_move();
 
                     // Assert scores rolled back perfectly
                     assert_eq!(
                         pos.material_score(),
                         pre_material,
-                        "Material rollback mismatch for move {}",
+                        "Material rollback mismatch for FEN {} move {}: {}",
+                        idx,
+                        m_idx,
                         m
                     );
                     assert_eq!(
                         pos.piece_square_table_score(),
                         pre_pst,
-                        "PST rollback mismatch for move {}",
+                        "PST rollback mismatch for FEN {} move {}: {}",
+                        idx,
+                        m_idx,
                         m
                     );
                 }

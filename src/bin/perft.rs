@@ -293,7 +293,7 @@ impl Perft {
                     sub_nodes += cnt;
                 }
 
-                pos.undo_move(m);
+                pos.undo_move();
             }
 
             if ROOT {

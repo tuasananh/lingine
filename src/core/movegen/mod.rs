@@ -331,7 +331,7 @@ mod tests {
     fn test_advisor_moves() {
         let mut pos = Position::new();
         // Setup Advisor at center of Palace (E1)
-        pos.set("9/9/9/9/9/9/9/9/4A4/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
@@ -347,7 +347,7 @@ mod tests {
         assert!(adv_moves.contains(&Move::new(Square::E1, Square::F2)));
 
         // Corner Advisor (D0)
-        pos.set("9/9/9/9/9/9/9/9/9/3A5 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/9/9/9/3AK4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
@@ -364,7 +364,7 @@ mod tests {
     fn test_bishop_moves() {
         let mut pos = Position::new();
         // Bishop (Elephant) at C0
-        pos.set("9/9/9/9/9/9/9/9/9/2B6 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/9/9/9/2B1K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
@@ -378,7 +378,7 @@ mod tests {
         assert!(bish_moves.contains(&Move::new(Square::C0, Square::E2)));
 
         // Block with a piece on the Elephant eye (D1)
-        pos.set("9/9/9/9/9/9/9/9/3p5/2B6 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/9/9/3p5/2B1K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
@@ -395,7 +395,7 @@ mod tests {
     fn test_knight_moves() {
         let mut pos = Position::new();
         // Knight at E2
-        pos.set("9/9/9/9/9/9/9/4H4/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/9/4H4/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
@@ -407,7 +407,7 @@ mod tests {
         assert_eq!(kn_moves.len(), 8);
 
         // Block with a piece on the Horse Leg (E3)
-        pos.set("9/9/9/9/9/9/4p4/4H4/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/4p4/4H4/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
@@ -425,7 +425,7 @@ mod tests {
     fn test_pawn_moves() {
         let mut pos = Position::new();
         // Unpromoted Pawn (C3)
-        pos.set("9/9/9/9/9/9/2P6/9/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/9/9/2P6/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
@@ -438,7 +438,7 @@ mod tests {
         assert!(pawn_moves.contains(&Move::new(Square::C3, Square::C4)));
 
         // Promoted Pawn (C6 - crossed river)
-        pos.set("9/9/9/2P6/9/9/9/9/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/2P6/9/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
@@ -457,7 +457,7 @@ mod tests {
     fn test_rook_moves() {
         let mut pos = Position::new();
         // Rook at E5
-        pos.set("9/9/9/9/4R4/9/9/9/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/4R4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -465,11 +465,11 @@ mod tests {
             .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
-        // Rank 5 has 8 other squares, File E has 9 other squares. Total 17 moves.
-        assert_eq!(r_moves.len(), 17);
+        // Rank 5 has 8 other squares, File E has 9 other squares. Minus King. Total 16 moves.
+        assert_eq!(r_moves.len(), 16);
 
         // Friendly blocker at E6, opponent at E3
-        pos.set("9/9/9/4A4/4R4/9/4p4/9/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/4A4/4R4/9/4p4/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -492,7 +492,7 @@ mod tests {
     fn test_cannon_moves() {
         let mut pos = Position::new();
         // Cannon at E5, empty board.
-        pos.set("9/9/9/9/4C4/9/9/9/9/9 w - - 0 1").unwrap();
+        pos.set("9/9/9/9/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
@@ -500,11 +500,12 @@ mod tests {
             .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
-        // Quiet moves only (behaves like Rook) = 17 moves.
-        assert_eq!(c_moves.len(), 17);
+        // Quiet moves only (behaves like Rook) = 17 - 1 (King) = 16 moves.
+        assert_eq!(c_moves.len(), 16);
 
         // Friendly screen at E6, opponent behind at E8
-        pos.set("9/4r4/9/4A4/4C4/9/9/9/9/9 w - - 0 1").unwrap();
+        pos.set("9/4r4/9/4A4/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        pos.print_board();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
@@ -516,8 +517,8 @@ mod tests {
         // Leap capture: E8 (opponent) using E6 (friendly) as hurdle!
         // Downwards: E4, E3, E2, E1, E0. (5 moves)
         // Rank: 8 moves.
-        // Total: 5 (file quiet) + 1 (file capture) + 8 (rank quiet) = 14 moves.
-        assert_eq!(c_moves.len(), 14);
+        // Total: 5 - 1 (King) (file quiet) + 1 (file capture) + 8 (rank quiet) = 14 moves.
+        assert_eq!(c_moves.len(), 13);
         assert!(c_moves.contains(&Move::new(Square::E5, Square::E8))); // leap capture
     }
 

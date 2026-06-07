@@ -192,7 +192,7 @@ impl<'a> Searcher<'a> {
                         -curr_alpha,
                         SearchContext::default(),
                     );
-                    self.pos.undo_move(m);
+                    self.pos.undo_move();
 
                     if score > best_score {
                         best_score = score;
@@ -461,7 +461,7 @@ impl<'a> Searcher<'a> {
                     ..Default::default()
                 },
             );
-            self.pos.undo_move(m);
+            self.pos.undo_move();
 
             if !self.keep_running.get() {
                 return Value::ZERO;
@@ -476,7 +476,7 @@ impl<'a> Searcher<'a> {
             }
             if alpha >= beta {
                 // Update killers and history for quiet moves
-                if self.pos.piece_at(m.to()) == Piece::None {
+                if self.pos.is_empty(m.to()) {
                     self.killer_moves.update(m, ply);
                     self.history_moves
                         .increase(self.pos.side_to_move(), m, depth);
@@ -609,7 +609,7 @@ impl<'a> Searcher<'a> {
         for m in moves {
             self.pos.do_move(m);
             let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
-            self.pos.undo_move(m);
+            self.pos.undo_move();
             if !self.keep_running.get() {
                 return Value::ZERO;
             }
@@ -655,11 +655,14 @@ impl<'a> Searcher<'a> {
             let move_score = if m == tt_move {
                 2_000_000_000 // Prioritize TT best move above all else
             } else {
-                let to_piece = self.pos.piece_at(m.to());
-                if to_piece != Piece::None {
+                if let Some(to_piece) = self.pos.piece_at(m.to()) {
                     // Capture: 10000 + victim_rank * 100 - attacker_rank
                     let victim = get_piece_value_rank(to_piece);
-                    let attacker = get_piece_value_rank(self.pos.piece_at(m.from()));
+                    let attacker = get_piece_value_rank(
+                        self.pos
+                            .piece_at(m.from())
+                            .expect("Move from square should always have a piece"),
+                    );
                     1_000_000_000 + victim * 10_000_000 - attacker * 100_000
                 } else {
                     if self.killer_moves.contains(m, ply) {
@@ -740,7 +743,6 @@ const fn get_piece_value_rank(p: Piece) -> i32 {
         PieceType::Advisor => 4,
         PieceType::Bishop => 3,
         PieceType::Pawn => 2,
-        _ => 0,
     }
 }
 

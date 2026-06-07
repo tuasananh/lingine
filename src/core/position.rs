@@ -95,8 +95,8 @@ impl ZobristTable {
 pub struct StateInfo {
     /// The exact move executed to reach this state.
     pub last_move: Move,
-    /// The piece captured during this move, or `Piece::None` if it was quiet.
-    pub captured_piece: Piece,
+    /// The piece captured during this move, or `None` if it was quiet.
+    pub captured_piece: Option<Piece>,
     /// The prior Zobrist position hash value before the move occurred.
     pub old_zobrist: u64,
     /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
@@ -117,7 +117,7 @@ pub struct StateInfo {
 pub struct Position {
     /// Flat 90-square array mapping square index (0 to 89) to the Piece
     /// occupying it.
-    board: [Piece; Square::COUNT],
+    board: [Option<Piece>; Square::COUNT],
     /// Precomputed bitboards showing piece placements grouped by `PieceType`.
     bitboard_by_type: [Bitboard; PieceType::COUNT],
     /// Precomputed bitboards showing piece placements grouped by `Color`.
@@ -159,7 +159,7 @@ impl Position {
     /// Initializes the position to the standard starting position by default.
     pub fn new() -> Self {
         let mut pos = Self {
-            board: [Piece::None; Square::COUNT],
+            board: [None; Square::COUNT],
             bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
             bitboard_by_color: [Bitboard::new(); Color::COUNT],
             piece_count: [0; Piece::COUNT],
@@ -218,9 +218,8 @@ impl Position {
         let mut piece_square_table_score = Value::ZERO;
         for sq_idx in 0..Square::COUNT {
             let sq = Square::from_repr(sq_idx as u8).unwrap();
-            let piece = self.board[sq_idx];
-            if piece != Piece::None {
-                let color = piece.color().unwrap();
+            if let Some(piece) = self.board[sq_idx] {
+                let color = piece.color();
                 let val = piece_material_value(piece, sq);
                 let pst = piece_square_table_value(piece.piece_type(), color, sq);
                 if color == Color::White {
@@ -243,7 +242,7 @@ impl Position {
 
     /// Get the piece currently at [`square`]
     #[inline]
-    pub fn piece_at(&self, square: Square) -> Piece {
+    pub fn piece_at(&self, square: Square) -> Option<Piece> {
         self.board[square as usize]
     }
 
@@ -271,38 +270,31 @@ impl Position {
     /// bitboards, King Palace trackers, and XORing its random signature
     /// into the Zobrist hash.
     #[inline]
-    pub fn put_piece(&mut self, piece: Piece, square: Square) {
-        self.board[square as usize] = piece;
-        if piece != Piece::None {
+    pub fn put_piece(&mut self, square: Square, piece: Option<Piece>) {
+        let square_idx = square as usize;
+        // Clear the old piece
+        if let Some(piece) = self.board[square_idx] {
             let pt = piece.piece_type();
-            let c = piece.color().unwrap();
+            let color_idx = piece.color() as usize;
+            self.bitboard_by_type[pt as usize].clear_bit(square);
+            self.bitboard_by_color[color_idx].clear_bit(square);
+            self.piece_count[piece as usize] -= 1;
+            self.zobrist_hash ^= ZOBRIST.pieces[piece as usize][square as usize];
+        }
+        self.board[square as usize] = piece;
+        if let Some(piece) = piece {
+            let pt = piece.piece_type();
+            let color_idx = piece.color() as usize;
             self.bitboard_by_type[pt as usize].set_bit(square);
-            self.bitboard_by_color[c as usize].set_bit(square);
+            self.bitboard_by_color[color_idx].set_bit(square);
             self.piece_count[piece as usize] += 1;
 
             if pt == PieceType::King {
-                self.king_squares[c as usize] = square;
+                self.king_squares[color_idx] = square;
             }
 
             self.zobrist_hash ^= ZOBRIST.pieces[piece as usize][square as usize];
         }
-    }
-
-    /// Removes a piece from a board square, cleaning up placement bitboards,
-    /// Zobrist position signatures, and returning the removed piece.
-    #[inline]
-    pub fn remove_piece(&mut self, square: Square) -> Piece {
-        let piece = self.board[square as usize];
-        if piece != Piece::None {
-            let pt = piece.piece_type();
-            let c = piece.color().unwrap();
-            self.bitboard_by_type[pt as usize].clear_bit(square);
-            self.bitboard_by_color[c as usize].clear_bit(square);
-            self.piece_count[piece as usize] -= 1;
-            self.zobrist_hash ^= ZOBRIST.pieces[piece as usize][square as usize];
-            self.board[square as usize] = Piece::None;
-        }
-        piece
     }
 
     /// Maps standard algebraic piece FEN notation characters to their Piece
@@ -330,7 +322,7 @@ impl Position {
 
     /// Parses and initializes the position state from a standard FEN string.
     pub fn set(&mut self, fen: &str) -> Result<(), PositionSetError> {
-        self.board = [Piece::None; Square::COUNT];
+        self.board = [None; Square::COUNT];
         self.bitboard_by_type = [Bitboard::new(); PieceType::COUNT];
         self.bitboard_by_color = [Bitboard::new(); Color::COUNT];
         self.piece_count = [0; Piece::COUNT];
@@ -372,7 +364,7 @@ impl Position {
                     let file = File::from_repr(file_idx).unwrap();
                     let square = Square::from_file_rank(file, rank);
                     if let Some(piece) = Self::piece_from_char(c) {
-                        self.put_piece(piece, square);
+                        self.put_piece(square, Some(piece));
                     } else {
                         return Err(PositionSetError {
                             msg: format!("Unknown piece character: {}", c),
@@ -428,7 +420,7 @@ impl Position {
         let (material_score, piece_square_table_score) = self.compute_evaluation_scores();
         self.history.push(StateInfo {
             last_move: Move::NULL,
-            captured_piece: Piece::None,
+            captured_piece: None,
             old_zobrist: self.zobrist_hash,
             rule60,
             in_check,
@@ -454,60 +446,49 @@ impl Position {
         let mut material_score = last_state.material_score;
         let mut piece_square_table_score = last_state.piece_square_table_score;
 
-        // 1. Remove piece from from
-        if piece.color() == Some(Color::White) {
-            material_score -= piece_material_value(piece, from);
-            piece_square_table_score -=
-                piece_square_table_value(piece.piece_type(), Color::White, from);
-        } else if piece.color() == Some(Color::Black) {
-            material_score += piece_material_value(piece, from);
-            piece_square_table_score +=
-                piece_square_table_value(piece.piece_type(), Color::Black, from);
-        }
+        let piece = piece.expect("Cannot do_move with no piece at the source square");
 
-        // 2. Remove captured piece from to (if any)
-        if captured != Piece::None {
-            if captured.color() == Some(Color::White) {
-                material_score -= piece_material_value(captured, to);
+        match piece.color() {
+            Color::White => {
+                material_score -= piece_material_value(piece, from);
                 piece_square_table_score -=
-                    piece_square_table_value(captured.piece_type(), Color::White, to);
-            } else if captured.color() == Some(Color::Black) {
-                material_score += piece_material_value(captured, to);
+                    piece_square_table_value(piece.piece_type(), Color::White, from);
+                material_score += piece_material_value(piece, to);
                 piece_square_table_score +=
-                    piece_square_table_value(captured.piece_type(), Color::Black, to);
+                    piece_square_table_value(piece.piece_type(), Color::White, to);
+            }
+            Color::Black => {
+                material_score += piece_material_value(piece, from);
+                piece_square_table_score +=
+                    piece_square_table_value(piece.piece_type(), Color::Black, from);
+
+                material_score -= piece_material_value(piece, to);
+                piece_square_table_score -=
+                    piece_square_table_value(piece.piece_type(), Color::Black, to);
             }
         }
 
-        // 3. Put piece at to
-        if piece.color() == Some(Color::White) {
-            material_score += piece_material_value(piece, to);
-            piece_square_table_score +=
-                piece_square_table_value(piece.piece_type(), Color::White, to);
-        } else if piece.color() == Some(Color::Black) {
-            material_score -= piece_material_value(piece, to);
-            piece_square_table_score -=
-                piece_square_table_value(piece.piece_type(), Color::Black, to);
+        // 2. Remove captured piece from to (if any)
+        if let Some(piece) = captured {
+            match piece.color() {
+                Color::White => {
+                    material_score -= piece_material_value(piece, to);
+                    piece_square_table_score -=
+                        piece_square_table_value(piece.piece_type(), Color::White, to);
+                }
+                Color::Black => {
+                    material_score += piece_material_value(piece, to);
+                    piece_square_table_score +=
+                        piece_square_table_value(piece.piece_type(), Color::Black, to);
+                }
+            }
         }
 
-        // Push current state onto history stack
-        self.history.push(StateInfo {
-            last_move: m,
-            captured_piece: captured,
-            old_zobrist,
-            rule60,
-            in_check: [false, false],
-            material_score,
-            piece_square_table_score,
-        });
-
-        self.remove_piece(from);
-        if captured != Piece::None {
-            self.remove_piece(to);
-        }
-        self.put_piece(piece, to);
+        self.put_piece(from, None);
+        self.put_piece(to, Some(piece));
 
         // Update rule60 halfmove clock
-        let new_rule60 = if piece.piece_type() == PieceType::Pawn || captured != Piece::None {
+        let new_rule60 = if piece.piece_type() == PieceType::Pawn || captured.is_some() {
             0
         } else {
             rule60 + 1
@@ -516,10 +497,17 @@ impl Position {
             self.is_in_check(Color::White),
             self.is_in_check(Color::Black),
         ];
-        if let Some(last) = self.history.last_mut() {
-            last.rule60 = new_rule60;
-            last.in_check = in_check;
-        }
+
+        // Push current state onto history stack
+        self.history.push(StateInfo {
+            last_move: m,
+            captured_piece: captured,
+            old_zobrist,
+            rule60: new_rule60,
+            in_check,
+            material_score,
+            piece_square_table_score,
+        });
 
         // Toggle side to move
         self.zobrist_hash ^= ZOBRIST.side;
@@ -530,18 +518,15 @@ impl Position {
     /// Restores the position to the exact state before the last move was
     /// played, popping details off the stack and re-toggling side to move.
     #[inline]
-    pub fn undo_move(&mut self, m: Move) {
+    pub fn undo_move(&mut self) {
+        let state = self.history.pop().expect("No state in history to undo");
+        let m = state.last_move;
         let from = m.from();
         let to = m.to();
         let piece = self.board[to as usize];
 
-        let state = self.history.pop().expect("No state in history to undo");
-
-        self.remove_piece(to);
-        self.put_piece(piece, from);
-        if state.captured_piece != Piece::None {
-            self.put_piece(state.captured_piece, to);
-        }
+        self.put_piece(to, state.captured_piece);
+        self.put_piece(from, piece);
 
         self.zobrist_hash = state.old_zobrist;
         self.side_to_move = self.side_to_move.opposite();
@@ -551,7 +536,7 @@ impl Position {
     /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
-        self.board[square as usize] == Piece::None
+        self.board[square as usize].is_none()
     }
 
     /// Get the square where the king of side [`color`] is currently at
@@ -669,8 +654,6 @@ impl Position {
         moved_piece: Piece,
     ) -> Bitboard {
         let captured = self.board[to as usize];
-        let was_captured = captured != Piece::None && captured.color() == Some(attacker);
-
         let mut opponent_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
             & self.bitboard_by_color[attacker as usize];
         let mut opponent_knights = self.bitboard_by_type[PieceType::Knight as usize]
@@ -682,7 +665,9 @@ impl Position {
         let mut opponent_king = self.bitboard_by_type[PieceType::King as usize]
             & self.bitboard_by_color[attacker as usize];
 
-        if was_captured {
+        if let Some(captured) = captured
+            && captured.color() == attacker
+        {
             let captured_pt = captured.piece_type();
             match captured_pt {
                 PieceType::Pawn => opponent_pawns.clear_bit(to),
@@ -694,7 +679,7 @@ impl Position {
             }
         }
 
-        let moved_by_attacker = moved_piece.color() == Some(attacker);
+        let moved_by_attacker = moved_piece.color() == attacker;
         if moved_by_attacker {
             let pt = moved_piece.piece_type();
             match pt {
@@ -756,7 +741,8 @@ impl Position {
         let them = us.opposite();
         let from = m.from();
         let to = m.to();
-        let moved_piece = self.board[from as usize];
+        let moved_piece =
+            self.board[from as usize].expect("No piece at the source square for gives_check");
         let them_king_sq = self.king_square(them);
 
         let mut occupied = self.bitboard_by_color[Color::White as usize]
@@ -778,11 +764,11 @@ impl Position {
     /// Finds the last piece that was captured, or None if last move is not a
     /// capture move
     #[inline]
-    pub fn last_captured_piece(&self) -> Piece {
+    pub fn last_captured_piece(&self) -> Option<Piece> {
         self.history
             .last()
             .map(|s| s.captured_piece)
-            .unwrap_or(Piece::None)
+            .unwrap_or(None)
     }
 
     /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is
@@ -792,7 +778,8 @@ impl Position {
         let us = self.side_to_move;
         let from = m.from();
         let to = m.to();
-        let moved_piece = self.board[from as usize];
+        let moved_piece =
+            self.board[from as usize].expect("No piece at the source square for legality check");
 
         let king_sq = if moved_piece.piece_type() == PieceType::King {
             to
@@ -882,7 +869,8 @@ impl Position {
 
         // 3. Scan all attackers to see if they attack any target
         while let Some(from) = attackers.pop_lsb() {
-            let piece = self.board[from as usize];
+            let piece = self.board[from as usize]
+                .expect("Attacker bitboard has no piece at the given square");
             let ptype = piece.piece_type();
 
             // Generate attacks from `from`
@@ -912,20 +900,20 @@ impl Position {
             attacks &= targets;
 
             while let Some(to) = attacks.pop_lsb() {
-                let m = Move::new(from, to);
-
                 // Verify if the move is legal (meaning the king of mover is not in check after
                 // the move)
-                if self.legal(m) {
-                    let target_piece = self.board[to as usize];
+                if self.legal(Move::new(from, to)) {
+                    let target_piece = self.board[to as usize]
+                        .expect("Attack square must have a piece since it's in targets_mask");
                     let target_ptype = target_piece.piece_type();
 
                     // Relative value rules:
 
                     // Rule A: Attacks against stronger pieces
                     // Knight or Cannon attacking Rook -> chase
-                    if (ptype == PieceType::Knight || ptype == PieceType::Cannon)
-                        && target_ptype == PieceType::Rook
+
+                    if target_ptype == PieceType::Rook
+                        && (ptype == PieceType::Knight || ptype == PieceType::Cannon)
                     {
                         chase |= 1 << id_board[to as usize];
                         continue;
@@ -935,12 +923,9 @@ impl Position {
                     let mut true_chase = true;
                     let saved_side = self.side_to_move;
 
-                    let old_type_from = self.board[from as usize];
-                    let old_type_to = self.board[to as usize];
-
                     // Play move:
-                    self.board[from as usize] = Piece::None;
-                    self.board[to as usize] = old_type_from;
+                    self.board[from as usize] = None;
+                    self.board[to as usize] = Some(piece);
 
                     // Update bitboards
                     self.bitboard_by_color[mover as usize].clear_bit(from);
@@ -967,20 +952,16 @@ impl Position {
                     }
 
                     // Restore board and bitboards:
-                    self.board[from as usize] = old_type_from;
-                    self.board[to as usize] = old_type_to;
+                    self.board[from as usize] = Some(piece);
+                    self.board[to as usize] = Some(target_piece);
 
                     self.bitboard_by_color[mover as usize].set_bit(from);
                     self.bitboard_by_color[mover as usize].clear_bit(to);
-                    if old_type_to != Piece::None {
-                        self.bitboard_by_color[opponent as usize].set_bit(to);
-                    }
+                    self.bitboard_by_color[opponent as usize].set_bit(to);
 
                     self.bitboard_by_type[ptype as usize].set_bit(from);
                     self.bitboard_by_type[ptype as usize].clear_bit(to);
-                    if old_type_to != Piece::None {
-                        self.bitboard_by_type[target_ptype as usize].set_bit(to);
-                    }
+                    self.bitboard_by_type[target_ptype as usize].set_bit(to);
 
                     self.side_to_move = saved_side;
 
@@ -1021,9 +1002,8 @@ impl Position {
         let mut id_board = [0u8; Square::COUNT];
         for sq_idx in 0..Square::COUNT {
             let sq = Square::from_repr(sq_idx as u8).unwrap();
-            let piece = self.board[sq as usize];
-            if piece != Piece::None {
-                if piece.color() == Some(Color::White) {
+            if let Some(piece) = self.board[sq as usize] {
+                if piece.color() == Color::White {
                     id_board[sq as usize] = white_id;
                     white_id += 1;
                 } else {
@@ -1039,13 +1019,13 @@ impl Position {
         // Rollback until we reached st - d
         let mut chase = [0xFFFFu16, 0xFFFFu16];
 
-        // Save the moves in the loop so we can undo them one by one
-        let mut moves_in_loop = Vec::with_capacity(d);
-        for i in 0..d {
-            moves_in_loop.push(self.history[n - 1 - i].last_move);
-        }
+        // // Save the moves in the loop so we can undo them one by one
+        // let mut moves_in_loop = Vec::with_capacity(d);
+        // for i in 0..d {
+        //     moves_in_loop.push(self.history[n - 1 - i].last_move);
+        // }
 
-        for m in moves_in_loop {
+        for _ in 0..d {
             let state = self.history.last().unwrap();
 
             // Under Xiangqi rules, if the current side to move is in check, it overrides
@@ -1063,10 +1043,10 @@ impl Position {
                 }
 
                 // Just undo move without computing chase diff
-                self.undo_move(m);
+                self.undo_move();
             } else {
                 let after = self.chased(self.side_to_move.opposite(), &id_board);
-                self.undo_move(m);
+                self.undo_move();
                 let before = self.chased(self.side_to_move, &id_board);
 
                 chase[self.side_to_move as usize] &= after & !before;
@@ -1192,6 +1172,41 @@ impl Position {
 
         None
     }
+
+    /// Prints a human-readable ASCII representation of the board state.
+    pub fn print_board(&self) {
+        println!("  +---------------------------+");
+        for rank_idx in (0..10).rev() {
+            print!("{} |", rank_idx);
+            for file_idx in 0..9 {
+                let file = File::from_repr(file_idx).unwrap();
+                let rank = Rank::from_repr(rank_idx).unwrap();
+                let square = Square::from_file_rank(file, rank);
+                let piece_char = match self.board[square as usize] {
+                    Some(Piece::WhiteRook) => 'R',
+                    Some(Piece::WhiteKnight) => 'H',
+                    Some(Piece::WhiteBishop) => 'E',
+                    Some(Piece::WhiteAdvisor) => 'A',
+                    Some(Piece::WhiteKing) => 'K',
+                    Some(Piece::WhiteCannon) => 'C',
+                    Some(Piece::WhitePawn) => 'P',
+                    Some(Piece::BlackRook) => 'r',
+                    Some(Piece::BlackKnight) => 'h',
+                    Some(Piece::BlackBishop) => 'e',
+                    Some(Piece::BlackAdvisor) => 'a',
+                    Some(Piece::BlackKing) => 'k',
+                    Some(Piece::BlackCannon) => 'c',
+                    Some(Piece::BlackPawn) => 'p',
+                    None => '.',
+                };
+                print!(" {} ", piece_char);
+            }
+            println!("|");
+        }
+        println!("  +---------------------------+");
+        println!("    a  b  c  d  e  f  g  h  i");
+        println!("Side to move: {:?}", self.side_to_move);
+    }
 }
 
 #[cfg(test)]
@@ -1251,5 +1266,11 @@ mod tests {
         // rule60 counter should be exactly 120
         assert_eq!(pos.history.last().unwrap().rule60, 120);
         assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
+    }
+
+    #[test]
+    fn test_print_board() {
+        let pos = Position::new();
+        pos.print_board();
     }
 }

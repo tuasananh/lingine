@@ -204,7 +204,6 @@ pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square)
         PieceType::Rook => PIECE_SQUARE_TABLE_ROOK[index],
         PieceType::Cannon => PIECE_SQUARE_TABLE_CANNON[index],
         PieceType::Pawn => PIECE_SQUARE_TABLE_PAWN[index],
-        _ => panic!("Invalid piece type for PST evaluation"),
     }
 }
 
@@ -213,7 +212,6 @@ pub fn piece_square_table_value(piece_type: PieceType, color: Color, sq: Square)
 #[inline]
 pub fn piece_material_value(piece: Piece, sq: Square) -> Value {
     let val = match piece {
-        Piece::None => 0,
         Piece::WhiteRook | Piece::BlackRook => 600,
         Piece::WhiteCannon | Piece::BlackCannon => 285,
         Piece::WhiteKnight | Piece::BlackKnight => 270,

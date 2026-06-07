@@ -231,7 +231,7 @@ impl Square {
 #[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum PieceType {
-    None, Rook, Advisor, Cannon, Pawn, Knight, Bishop, King
+    Rook, Advisor, Cannon, Pawn, Knight, Bishop, King
 }
 
 /// Represents standard Xiangqi pieces, categorized by color and piece type.
@@ -240,25 +240,23 @@ pub enum PieceType {
 #[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Piece {
-    None,
-    WhiteRook,     WhiteAdvisor, WhiteCannon, WhitePawn, WhiteKnight, WhiteBishop, WhiteKing, 
-    BlackRook, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing, 
+    WhiteRook, WhiteAdvisor, WhiteCannon, WhitePawn, WhiteKnight, WhiteBishop, WhiteKing,
+    BlackRook, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing,
 }
 
 impl Piece {
     /// Extracts the `Color` of the piece, or returns `None` if it is `None`.
     #[inline]
-    pub const fn color(&self) -> Option<Color> {
+    pub const fn color(&self) -> Color {
         match *self {
-            Piece::None => None,
             Piece::WhiteRook
             | Piece::WhiteAdvisor
             | Piece::WhiteCannon
             | Piece::WhitePawn
             | Piece::WhiteKnight
             | Piece::WhiteBishop
-            | Piece::WhiteKing => Some(Color::White),
-            _ => Some(Color::Black),
+            | Piece::WhiteKing => Color::White,
+            _ => Color::Black,
         }
     }
 
@@ -266,7 +264,6 @@ impl Piece {
     #[inline]
     pub const fn piece_type(&self) -> PieceType {
         match *self {
-            Piece::None => PieceType::None,
             Piece::WhiteRook | Piece::BlackRook => PieceType::Rook,
             Piece::WhiteAdvisor | Piece::BlackAdvisor => PieceType::Advisor,
             Piece::WhiteCannon | Piece::BlackCannon => PieceType::Cannon,
@@ -421,28 +418,25 @@ mod tests {
 
     #[test]
     fn test_piece_properties() {
-        assert_eq!(Piece::None.color(), None);
-        assert_eq!(Piece::None.piece_type(), PieceType::None);
-
-        assert_eq!(Piece::WhiteRook.color(), Some(Color::White));
+        assert_eq!(Piece::WhiteRook.color(), (Color::White));
         assert_eq!(Piece::WhiteRook.piece_type(), PieceType::Rook);
 
-        assert_eq!(Piece::BlackKing.color(), Some(Color::Black));
+        assert_eq!(Piece::BlackKing.color(), (Color::Black));
         assert_eq!(Piece::BlackKing.piece_type(), PieceType::King);
 
-        assert_eq!(Piece::WhiteAdvisor.color(), Some(Color::White));
+        assert_eq!(Piece::WhiteAdvisor.color(), (Color::White));
         assert_eq!(Piece::WhiteAdvisor.piece_type(), PieceType::Advisor);
 
-        assert_eq!(Piece::BlackCannon.color(), Some(Color::Black));
+        assert_eq!(Piece::BlackCannon.color(), (Color::Black));
         assert_eq!(Piece::BlackCannon.piece_type(), PieceType::Cannon);
 
-        assert_eq!(Piece::WhitePawn.color(), Some(Color::White));
+        assert_eq!(Piece::WhitePawn.color(), (Color::White));
         assert_eq!(Piece::WhitePawn.piece_type(), PieceType::Pawn);
 
-        assert_eq!(Piece::BlackKnight.color(), Some(Color::Black));
+        assert_eq!(Piece::BlackKnight.color(), (Color::Black));
         assert_eq!(Piece::BlackKnight.piece_type(), PieceType::Knight);
 
-        assert_eq!(Piece::WhiteBishop.color(), Some(Color::White));
+        assert_eq!(Piece::WhiteBishop.color(), (Color::White));
         assert_eq!(Piece::WhiteBishop.piece_type(), PieceType::Bishop);
     }
 
