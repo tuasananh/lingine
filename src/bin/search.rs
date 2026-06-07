@@ -1,6 +1,6 @@
 use clap::Parser;
 use lingine::core::Position;
-use lingine::search::{Searcher, SearcherParameters, TranspositionTable};
+use lingine::search::{HistoryMoves, Searcher, SearcherParameters, TranspositionTable};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     println!("Searching...\n");
 
     let (tx, _rx) = std::sync::mpsc::channel();
-    let mut history_table = [[[0i32; 90]; 90]; 2];
+    let mut history_moves = HistoryMoves::default();
 
     let start = Instant::now();
     let (score, best_move, nodes) = Searcher::start_search(SearcherParameters {
@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
         max_depth: args.depth as i8,
         allocated_time: None,
         transposition_table: &mut transposition_table,
-        history_table: &mut history_table,
+        history_moves: &mut history_moves,
         tx,
         age: 0,
     });

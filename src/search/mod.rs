@@ -12,7 +12,12 @@ use crate::core::{
 use crate::uci::{UciInfo, UciScore, UciScoreBound};
 use crate::{tt_value, value};
 
+mod history_moves;
+mod killer_moves;
 mod transposition_table;
+
+pub use history_moves::*;
+pub use killer_moves::*;
 pub use transposition_table::*;
 
 /// Tracks search extension and move exclusion parameters for the current
@@ -58,9 +63,9 @@ pub struct Searcher<'a> {
     /// Current search sequence age.
     age: u8,
     /// Killer moves tracked per ply to sort high-quality quiet moves.
-    killers: [[Move; 2]; MAX_PLY],
+    killer_moves: KillerMoves,
     /// History heuristic table to prioritize frequently successful quiet moves.
-    history_table: &'a mut [[[MoveScore; Square::COUNT]; Square::COUNT]; Color::COUNT],
+    history_moves: &'a mut HistoryMoves,
     /// Tracks the maximum search depth reached, including quiescence.
     max_ply: u8,
     /// Channel sender to send UCI info updates back to the main thread.
@@ -83,7 +88,7 @@ pub struct SearcherParameters<'a> {
     // The history table for quiet moves
     //
     // See: https://www.chessprogramming.org/History_Heuristic
-    pub history_table: &'a mut [[[MoveScore; Square::COUNT]; Square::COUNT]; Color::COUNT],
+    pub history_moves: &'a mut HistoryMoves,
     // The channel sender to send UCI info updates back to the main thread
     pub tx: Sender<UciInfo>,
     // The current search sequence age for TT entry management
@@ -110,13 +115,8 @@ impl<'a> Searcher<'a> {
 
         // Decay history table to make sure old moves do not accumulate indefinitely and
         // overshadow newer moves.
-        for side in history_table.iter_mut() {
-            for from in side.iter_mut() {
-                for to in from.iter_mut() {
-                    *to >>= 3;
-                }
-            }
-        }
+
+        history_moves.decay();
 
         let search = Searcher {
             pos,
@@ -126,8 +126,8 @@ impl<'a> Searcher<'a> {
             allocated_time,
             transposition_table,
             age,
-            killers: [[Move::NULL; 2]; MAX_PLY],
-            history_table,
+            killer_moves: KillerMoves::default(),
+            history_moves,
             max_ply: 0,
             tx,
         };
@@ -494,19 +494,10 @@ impl<'a> Searcher<'a> {
             }
             if alpha >= beta {
                 // Update killers and history for quiet moves
-                if self.pos.piece_at(m.square_to()) == Piece::None {
-                    let ply_idx = ply as usize;
-                    // We do not check for ply_idx out of bounds since
-                    // ply should not exceed MAX_PLY in normal circumstances
-                    if self.killers[ply_idx][0] != m {
-                        self.killers[ply_idx][1] = self.killers[ply_idx][0];
-                        self.killers[ply_idx][0] = m;
-                    }
-                    let side_idx = self.pos.side_to_move() as usize;
-                    let from_idx = m.square_from() as usize;
-                    let to_idx = m.square_to() as usize;
-                    self.history_table[side_idx][from_idx][to_idx] +=
-                        (depth as i32) * (depth as i32);
+                if self.pos.piece_at(m.to()) == Piece::None {
+                    self.killer_moves.update(m, ply);
+                    self.history_moves
+                        .increase(self.pos.side_to_move(), m, depth);
                 }
                 break; // Beta cutoff
             }
@@ -689,20 +680,10 @@ impl<'a> Searcher<'a> {
                     let attacker = get_piece_value_rank(self.pos.piece_at(m.square_from()));
                     1_000_000_000 + victim * 10_000_000 - attacker * 100_000
                 } else {
-                    // Quiet move
-                    let ply_idx = ply as usize;
-                    // We might not need to check for ply_idx out of bounds since ply should not
-                    // exceed MAX_PLY in normal circumstances
-                    if m == self.killers[ply_idx][0] {
+                    if self.killer_moves.contains(m, ply) {
                         900_000_000
-                    } else if m == self.killers[ply_idx][1] {
-                        800_000_000
                     } else {
-                        let side_idx = self.pos.side_to_move() as usize;
-                        let from_idx = m.square_from() as usize;
-                        let to_idx = m.square_to() as usize;
-                        // History score should not be more than 800_000_000
-                        self.history_table[side_idx][from_idx][to_idx]
+                        self.history_moves.get(self.pos.side_to_move(), m)
                     }
                 }
             };
@@ -828,8 +809,8 @@ mod tests {
         // Call negamax with depth=1, we should get 0 (draw)
         let stop = Arc::new(AtomicBool::new(false));
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = [[Move::NULL; 2]; MAX_PLY];
-        let mut history_table = [[[0; 90]; 90]; 2];
+        let killers = KillerMoves::default();
+        let mut history_moves = HistoryMoves::default();
         let mut ctx = Searcher {
             pos: pos.clone(),
             stop,
@@ -838,8 +819,8 @@ mod tests {
             allocated_time: None,
             transposition_table: &mut transposition_table,
             age: 1,
-            killers,
-            history_table: &mut history_table,
+            killer_moves: killers,
+            history_moves: &mut history_moves,
             max_ply: 0,
             tx: std::sync::mpsc::channel().0, /* dummy sender since we won't be sending UCI info
                                                * in this test */
@@ -897,8 +878,8 @@ mod tests {
         // negamax should return a win score (MATE_VALUE - ply)
         let stop = Arc::new(AtomicBool::new(false));
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = [[Move::NULL; 2]; MAX_PLY];
-        let mut history_table = [[[0; 90]; 90]; 2];
+        let killers = KillerMoves::default();
+        let mut history_moves = HistoryMoves::default();
         let mut ctx = Searcher {
             pos,
             stop,
@@ -907,8 +888,8 @@ mod tests {
             allocated_time: None,
             transposition_table: &mut transposition_table,
             age: 1,
-            killers,
-            history_table: &mut history_table,
+            killer_moves: killers,
+            history_moves: &mut history_moves,
             max_ply: 0,
             tx: std::sync::mpsc::channel().0, /* dummy sender since we won't be sending UCI info
                                                * in this test */
@@ -932,14 +913,14 @@ mod tests {
         let mut tt = TranspositionTable::new(1);
         let stop = Arc::new(AtomicBool::new(false));
 
-        let mut history_table = [[[0; 90]; 90]; 2];
+        let mut history_moves = HistoryMoves::default();
         let (_score, best_move, _nodes) = Searcher::start_search(SearcherParameters {
             pos,
             allocated_time: None,
             stop,
             max_depth: 2,
             transposition_table: &mut tt,
-            history_table: &mut history_table,
+            history_moves: &mut history_moves,
             tx,
             age: 0,
         });
