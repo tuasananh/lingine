@@ -2,6 +2,8 @@ use anyhow::{Error, Result, anyhow, ensure};
 
 use std::{num::NonZeroU32, time::Duration};
 
+use crate::core::Position;
+
 /// A parsed UCI command received from the GUI on stdin.
 ///
 /// [`EngineCommand::parse`] converts a raw input line into a typed command.
@@ -475,9 +477,6 @@ impl TryFrom<&[&str]> for RegisterParameters {
 // PositionParameters
 // ===========================================================================
 
-/// The starting FEN for a standard Xiangqi game.
-pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
-
 /// The board position sent by the GUI via the `position` command.
 #[derive(Clone, Debug)]
 pub struct PositionParameters {
@@ -490,7 +489,7 @@ pub struct PositionParameters {
 impl Default for PositionParameters {
     fn default() -> Self {
         Self {
-            fen: START_FEN.to_string(),
+            fen: Position::START_FEN.to_string(),
             moves: Vec::new(),
         }
     }
@@ -537,7 +536,7 @@ impl TryFrom<&[&str]> for PositionParameters {
                 }
                 i += 1;
             }
-            fen = START_FEN.to_string();
+            fen = Position::START_FEN.to_string();
         }
 
         while i < tokens.len() {
@@ -555,6 +554,8 @@ impl TryFrom<&[&str]> for PositionParameters {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::Position;
+
     use super::*;
 
     #[test]
@@ -630,7 +631,7 @@ mod tests {
     fn test_parse_position() {
         let cmd = EngineCommand::parse("position startpos").unwrap();
         if let EngineCommand::Position(pos) = cmd {
-            assert_eq!(pos.fen, crate::core::START_FEN);
+            assert_eq!(pos.fen, Position::START_FEN);
             assert!(pos.moves.is_empty());
         } else {
             panic!("Expected Position");
@@ -948,7 +949,7 @@ mod tests {
 
         let parsed = PositionParameters::try_from(tokens.as_slice()).unwrap();
 
-        assert_eq!(parsed.fen, START_FEN);
+        assert_eq!(parsed.fen, Position::START_FEN);
         assert!(parsed.moves.is_empty());
     }
 
@@ -960,7 +961,7 @@ mod tests {
 
         let parsed = PositionParameters::try_from(tokens.as_slice()).unwrap();
 
-        assert_eq!(parsed.fen, START_FEN);
+        assert_eq!(parsed.fen, Position::START_FEN);
         assert_eq!(parsed.moves.len(), 2);
     }
 

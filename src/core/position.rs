@@ -153,7 +153,10 @@ impl Default for Position {
 }
 
 impl Position {
-    /// Constructs a clean, completely empty board position state.
+    /// Standard Xiangqi starting position in FEN notation.
+    pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
+
+    /// Initializes the position to the standard starting position by default.
     pub fn new() -> Self {
         let mut pos = Self {
             board: [Piece::None; Square::COUNT],
@@ -166,17 +169,13 @@ impl Position {
             zobrist_hash: 0,
             king_squares: [Square::E0, Square::E9],
         };
-        // Setup initial empty history state
-        pos.history.push(StateInfo {
-            last_move: Move::NULL,
-            captured_piece: Piece::None,
-            old_zobrist: 0,
-            rule60: 0,
-            in_check: [false, false],
-            material_score: Value::ZERO,
-            piece_square_table_score: Value::ZERO,
-        });
+        pos.set(Self::START_FEN).unwrap();
         pos
+    }
+
+    /// Get a position that is the start position
+    pub fn startpos() -> Self {
+        Self::new()
     }
 
     /// Get the Zobrish Hash of the current position
