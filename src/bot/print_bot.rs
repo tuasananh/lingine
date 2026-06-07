@@ -41,7 +41,7 @@ impl Engine for PrintBot {
 
     /// Logs the debug mode change. No behaviour changes in the stub.
     fn debug(&self, is_on: bool) {
-        log::debug!("debug mode: {is_on}");
+        eprintln!("debug: debug mode: {is_on}");
     }
 
     /// No initialisation needed for the stub; always ready immediately.
@@ -52,21 +52,21 @@ impl Engine for PrintBot {
     /// Logs the option change. Always succeeds (`Ok(())`); a real engine
     /// would parse `params.name`/`params.value` and update its configuration.
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
-        log::debug!("setoption: name={:?} value={:?}", params.name, params.value);
+        eprintln!("debug: setoption: name={:?} value={:?}", params.name, params.value);
         Ok(())
     }
 
     /// Logs; a real engine should clear its hash table and reset search state.
     fn ucinewgame(&mut self) {
-        log::debug!("ucinewgame");
+        eprintln!("debug: ucinewgame");
     }
 
     /// Logs the registration details. No copy-protection in Lingine.
     fn register(&self, params: RegisterParameters) {
         match params {
-            RegisterParameters::Later => log::debug!("register later"),
+            RegisterParameters::Later => eprintln!("debug: register later"),
             RegisterParameters::Identity { name, code } => {
-                log::debug!("register name={name:?} code={code:?}");
+                eprintln!("debug: register name={name:?} code={code:?}");
             }
         }
     }
@@ -74,7 +74,7 @@ impl Engine for PrintBot {
     /// Logs the FEN and move list. Always succeeds; a real engine would apply
     /// the moves to its internal board representation.
     fn position(&mut self, position: PositionParameters) -> Result<()> {
-        log::debug!("position fen={:?} moves={:?}", position.fen, position.moves);
+        eprintln!("debug: position fen={:?} moves={:?}", position.fen, position.moves);
         Ok(())
     }
 
@@ -104,18 +104,18 @@ impl Engine for PrintBot {
     fn stop(&mut self) {
         // The stop flag in GoParameters is already set by the handler before
         // this method is called. Nothing extra to do for a synchronous stub.
-        log::debug!("stop");
+        eprintln!("debug: stop");
     }
 
     /// Logs. No pondering implemented yet; see [`EngineCommand::PonderHit`]
     /// for the current limitation.
     fn ponderhit(&mut self) {
-        log::debug!("ponderhit");
+        eprintln!("debug: ponderhit");
     }
 
     /// Logs. A real engine should flush any buffers and free resources.
     fn quit(&self) {
-        log::debug!("quit");
+        eprintln!("debug: quit");
     }
 }
 

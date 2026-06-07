@@ -102,7 +102,7 @@ fn run_reader<R: BufRead>(
         let line = match line {
             Ok(l) => l,
             Err(e) => {
-                log::error!("stdin read error: {e}");
+                eprintln!("error: stdin read error: {e}");
                 break;
             }
         };
@@ -124,7 +124,7 @@ fn run_reader<R: BufRead>(
                 }
             }
             Ok(None) => {} // blank line or unknown command — ignore per spec
-            Err(e) => log::error!("UCI parse error: {e:?}"),
+            Err(e) => eprintln!("error: UCI parse error: {e:?}"),
         }
     }
     // The loop exited: either via `quit`, EOF, or an I/O error.
@@ -171,14 +171,14 @@ fn run_actor<T: Engine>(
             }
             EngineCommand::SetOption(p) => {
                 if let Err(e) = engine.setoption(p) {
-                    log::error!("setoption failed: {e:?}");
+                    eprintln!("error: setoption failed: {e:?}");
                 }
             }
             EngineCommand::Register(p) => engine.register(p),
             EngineCommand::NewGame => engine.ucinewgame(),
             EngineCommand::Position(p) => {
                 if let Err(e) = engine.position(p) {
-                    log::error!("position failed: {e:?}");
+                    eprintln!("error: position failed: {e:?}");
                 }
             }
             EngineCommand::Go(mut params) => {
@@ -200,13 +200,13 @@ fn run_actor<T: Engine>(
                     }
                 });
 
-                // Blocks Thread B for the duration of the search.
+                 // Blocks Thread B for the duration of the search.
                 // Thread A continues reading stdin and can set stop_flag at any time.
                 let best = match engine.go(params, info_tx) {
                     Ok(b) => b,
                     Err(e) => {
-                        log::error!("go failed: {e:?}");
-                        BestMove::NULL
+                        eprintln!("error: go failed: {e:?}");
+                        BestMove::null()
                     }
                 };
 

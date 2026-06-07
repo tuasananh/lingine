@@ -721,8 +721,8 @@ impl<'a> Searcher<'a> {
                 generate_moves(&current_pos, MoveGenType::Legal, &mut moves);
                 // The TT move might be illegal
                 if !moves.contains(&m) {
-                    log::debug!(
-                        "PV extraction: TT move {} at ply {} is not legal in the current position, stopping PV extraction",
+                    eprintln!(
+                        "debug: PV extraction: TT move {} at ply {} is not legal in the current position, stopping PV extraction",
                         m.to_uci_string(),
                         ply
                     );

@@ -2,7 +2,6 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
-use strum::EnumCount;
 
 use crate::core::{
     Color, File, MAX_DEPTH, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves,
@@ -100,7 +99,7 @@ impl Engine for Lingine {
     }
 
     fn debug(&self, is_on: bool) {
-        log::debug!("debug mode: {is_on}");
+        eprintln!("debug: debug mode: {is_on}");
     }
 
     fn isready(&self) {
@@ -110,19 +109,19 @@ impl Engine for Lingine {
     }
 
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
-        log::debug!("setoption: name={:?} value={:?}", params.name, params.value);
+        eprintln!("debug: setoption: name={:?} value={:?}", params.name, params.value);
         if params.name.to_lowercase() == "hash"
             && let Some(val) = params.value
             && let Ok(mb_size) = val.parse::<usize>()
         {
             self.transposition_table.resize(mb_size);
-            log::info!("Resized transposition table to {} MB", mb_size);
+            eprintln!("info: Resized transposition table to {} MB", mb_size);
         }
         Ok(())
     }
 
     fn ucinewgame(&mut self) {
-        log::debug!("ucinewgame");
+        eprintln!("debug: ucinewgame");
         self.position = Position::new();
         self.transposition_table.clear();
         self.age = 0;
@@ -130,15 +129,15 @@ impl Engine for Lingine {
 
     fn register(&self, params: RegisterParameters) {
         match params {
-            RegisterParameters::Later => log::debug!("register later"),
+            RegisterParameters::Later => eprintln!("debug: register later"),
             RegisterParameters::Identity { name, code } => {
-                log::debug!("register name={name:?} code={code:?}");
+                eprintln!("debug: register name={name:?} code={code:?}");
             }
         }
     }
 
     fn position(&mut self, position: PositionParameters) -> Result<()> {
-        log::debug!("position fen={:?} moves={:?}", position.fen, position.moves);
+        eprintln!("debug: position fen={:?} moves={:?}", position.fen, position.moves);
 
         // Parse starting FEN
         self.position.set(&position.fen)?;
@@ -219,14 +218,14 @@ impl Engine for Lingine {
     }
 
     fn stop(&mut self) {
-        log::debug!("stop");
+        eprintln!("debug: stop");
     }
 
     fn ponderhit(&mut self) {
-        log::debug!("ponderhit");
+        eprintln!("debug: ponderhit");
     }
 
     fn quit(&self) {
-        log::debug!("quit");
+        eprintln!("debug: quit");
     }
 }
