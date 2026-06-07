@@ -155,8 +155,8 @@ impl Engine for Lingine {
             generate_moves(&self.position, MoveGenType::Legal, &mut moves);
 
             let matched = moves.iter().find(|m| {
-                let from = m.square_from();
-                let to = m.square_to();
+                let from = m.from();
+                let to = m.to();
                 from.file() as u8 == uci_mv.src_file()
                     && from.rank() as u8 == uci_mv.src_rank()
                     && to.file() as u8 == uci_mv.dst_file()

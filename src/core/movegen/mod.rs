@@ -252,8 +252,8 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
         let keep = if is_legal {
             match gen_type {
                 MoveGenType::Legal | MoveGenType::Evasions => true,
-                MoveGenType::Captures => !pos.is_empty(m.square_to()),
-                MoveGenType::Quiets => pos.is_empty(m.square_to()),
+                MoveGenType::Captures => !pos.is_empty(m.to()),
+                MoveGenType::Quiets => pos.is_empty(m.to()),
                 _ => false,
             }
         } else {
@@ -319,7 +319,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let king_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E0)
+            .filter(|m| m.from() == Square::E0)
             .copied()
             .collect();
         assert_eq!(king_moves.len(), 2);
@@ -336,7 +336,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E1)
+            .filter(|m| m.from() == Square::E1)
             .copied()
             .collect();
         // E1 has 4 corners: D0, F0, D2, F2
@@ -352,7 +352,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::D0)
+            .filter(|m| m.from() == Square::D0)
             .copied()
             .collect();
         // D0 only has 1 diagonal square: E1
@@ -369,7 +369,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::C0)
+            .filter(|m| m.from() == Square::C0)
             .copied()
             .collect();
         // C0 can go to A2, E2. (Can't cross river or go off board)
@@ -383,7 +383,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::C0)
+            .filter(|m| m.from() == Square::C0)
             .copied()
             .collect();
         // D1 eye blocked, can only go to A2
@@ -400,7 +400,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E2)
+            .filter(|m| m.from() == Square::E2)
             .copied()
             .collect();
         // Knight at E2 should have 8 moves on empty board
@@ -412,7 +412,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E2)
+            .filter(|m| m.from() == Square::E2)
             .copied()
             .collect();
         // E3 leg blocked, so moves to D4 and F4 are blocked. 8 - 2 = 6 moves left.
@@ -430,7 +430,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::C3)
+            .filter(|m| m.from() == Square::C3)
             .copied()
             .collect();
         // Only 1 step forward (C4)
@@ -443,7 +443,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::C6)
+            .filter(|m| m.from() == Square::C6)
             .copied()
             .collect();
         // Forward (C7), Left (B6), Right (D6)
@@ -462,7 +462,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E5)
+            .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
         // Rank 5 has 8 other squares, File E has 9 other squares. Total 17 moves.
@@ -474,7 +474,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E5)
+            .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
         // Upwards blocked at E6 (so no E6, E7, E8, E9).
@@ -497,7 +497,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E5)
+            .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
         // Quiet moves only (behaves like Rook) = 17 moves.
@@ -509,7 +509,7 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E5)
+            .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
         // Upwards quiet moves: none (E6 blocked).
@@ -530,14 +530,14 @@ mod tests {
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
             .iter()
-            .filter(|m| m.square_from() == Square::E3)
+            .filter(|m| m.from() == Square::E3)
             .copied()
             .collect();
         // Moving the Rook horizontally (off file E) is illegal because it exposes the
         // Kings to face each other! So the Rook can only move vertically along
         // file E (D3, F3, etc. are illegal).
         for m in r_moves {
-            assert_eq!(m.square_to() as u8 % 9, 4); // must stay on file E (index 4)
+            assert_eq!(m.to() as u8 % 9, 4); // must stay on file E (index 4)
         }
     }
 

@@ -444,8 +444,8 @@ impl Position {
     /// stack to support fast undo restores, and toggles active side.
     #[inline]
     pub fn do_move(&mut self, m: Move) {
-        let from = m.square_from();
-        let to = m.square_to();
+        let from = m.from();
+        let to = m.to();
         let piece = self.board[from as usize];
         let captured = self.board[to as usize];
 
@@ -532,8 +532,8 @@ impl Position {
     /// played, popping details off the stack and re-toggling side to move.
     #[inline]
     pub fn undo_move(&mut self, m: Move) {
-        let from = m.square_from();
-        let to = m.square_to();
+        let from = m.from();
+        let to = m.to();
         let piece = self.board[to as usize];
 
         let state = self.history.pop().expect("No state in history to undo");
@@ -755,8 +755,8 @@ impl Position {
     pub fn gives_check(&self, m: Move) -> bool {
         let us = self.side_to_move;
         let them = us.opposite();
-        let from = m.square_from();
-        let to = m.square_to();
+        let from = m.from();
+        let to = m.to();
         let moved_piece = self.board[from as usize];
         let them_king_sq = self.king_square(them);
 
@@ -791,8 +791,8 @@ impl Position {
     #[inline]
     pub fn legal(&self, m: Move) -> bool {
         let us = self.side_to_move;
-        let from = m.square_from();
-        let to = m.square_to();
+        let from = m.from();
+        let to = m.to();
         let moved_piece = self.board[from as usize];
 
         let king_sq = if moved_piece.piece_type() == PieceType::King {

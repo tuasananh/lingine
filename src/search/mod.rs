@@ -3,11 +3,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
-use strum::EnumCount;
 
 use crate::core::{
-    Color, MAX_PLY, Move, MoveGenType, MoveList, MoveScore, Piece, PieceType, Position, Square,
-    Value, generate_moves,
+    Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, Value, generate_moves,
 };
 use crate::uci::{UciInfo, UciScore, UciScoreBound};
 use crate::{tt_value, value};
@@ -108,7 +106,7 @@ impl<'a> Searcher<'a> {
             stop,
             max_depth,
             transposition_table,
-            history_table,
+            history_moves,
             tx,
             age,
         } = params;
@@ -673,11 +671,11 @@ impl<'a> Searcher<'a> {
             let move_score = if m == tt_move {
                 2_000_000_000 // Prioritize TT best move above all else
             } else {
-                let to_piece = self.pos.piece_at(m.square_to());
+                let to_piece = self.pos.piece_at(m.to());
                 if to_piece != Piece::None {
                     // Capture: 10000 + victim_rank * 100 - attacker_rank
                     let victim = get_piece_value_rank(to_piece);
-                    let attacker = get_piece_value_rank(self.pos.piece_at(m.square_from()));
+                    let attacker = get_piece_value_rank(self.pos.piece_at(m.from()));
                     1_000_000_000 + victim * 10_000_000 - attacker * 100_000
                 } else {
                     if self.killer_moves.contains(m, ply) {

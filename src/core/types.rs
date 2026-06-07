@@ -296,7 +296,7 @@ pub struct Move(u16);
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} to {:?}", self.square_from(), self.square_to())
+        write!(f, "{:?} to {:?}", self.from(), self.to())
     }
 }
 
@@ -320,13 +320,13 @@ impl Move {
     /// Extracts the starting square index by shifting past the destination
     /// bits.
     #[inline]
-    pub fn square_from(&self) -> Square {
+    pub fn from(&self) -> Square {
         Square::from_repr(((self.0 >> 7) & 0x7F) as u8).unwrap()
     }
 
     /// Extracts the target square index by masking the lower 7 bits.
     #[inline]
-    pub fn square_to(&self) -> Square {
+    pub fn to(&self) -> Square {
         Square::from_repr((self.0 & 0x7F) as u8).unwrap()
     }
 
@@ -363,8 +363,8 @@ impl Move {
         if self.is_null() {
             return "null".to_string();
         }
-        let from = self.square_from();
-        let to = self.square_to();
+        let from = self.from();
+        let to = self.to();
         let from_file = (b'a' + from.file() as u8) as char;
         let from_rank = (b'0' + from.rank() as u8) as char;
         let to_file = (b'a' + to.file() as u8) as char;
@@ -442,14 +442,14 @@ mod tests {
     #[test]
     fn test_move_encoding() {
         let m_quiet = Move::new(Square::A0, Square::I9);
-        assert_eq!(m_quiet.square_from(), Square::A0);
-        assert_eq!(m_quiet.square_to(), Square::I9);
+        assert_eq!(m_quiet.from(), Square::A0);
+        assert_eq!(m_quiet.to(), Square::I9);
         assert_eq!(m_quiet.flag(), TranspositionTableFlag::Empty);
         assert!(!m_quiet.is_null());
 
         let m_flags = Move::new_with_flag(Square::E4, Square::E5, TranspositionTableFlag::Beta);
-        assert_eq!(m_flags.square_from(), Square::E4);
-        assert_eq!(m_flags.square_to(), Square::E5);
+        assert_eq!(m_flags.from(), Square::E4);
+        assert_eq!(m_flags.to(), Square::E5);
         assert_eq!(m_flags.flag(), TranspositionTableFlag::Beta);
         assert!(!m_flags.is_null());
 
