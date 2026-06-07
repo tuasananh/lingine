@@ -81,6 +81,6 @@ mod tests {
         let m_none = Move::NULL;
         assert!(m_none.is_null());
 
-        assert_eq!(format!("{}", m_quiet), "A0 to I9");
+        assert_eq!(format!("{}", m_quiet), "a0i9");
     }
 }
