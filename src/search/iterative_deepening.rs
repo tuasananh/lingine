@@ -7,7 +7,6 @@ impl super::Searcher<'_> {
     /// Starts an iterative deepening search up to the specified maximum depth,
     /// with aspiration windows and UCI info updates.
     pub(super) fn iterative_deepening(mut self, max_depth: i8) -> (Score, Move, u64) {
-        self.keep_running.set(true);
         // Fetch the best move from the transposition table to use as the initial guess
         // for best move, Since we might have seen this position before in
         // earlier searches.
@@ -15,6 +14,7 @@ impl super::Searcher<'_> {
             .transposition_table
             .probe(self.pos.zobrist_hash(), 0)
             .map_or(Move::NULL, |entry| entry.best_move);
+
         let mut last_depth_score = -score::INFINITY;
 
         let mut moves = MoveList::new();

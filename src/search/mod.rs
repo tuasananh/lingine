@@ -83,7 +83,7 @@ impl<'a> Searcher<'a> {
         let SearcherParameters {
             pos,
             allocated_time,
-            keep_running: is_running,
+            keep_running,
             max_depth,
             transposition_table,
             history_moves,
@@ -95,9 +95,11 @@ impl<'a> Searcher<'a> {
 
         history_moves.decay();
 
+        let is_running = keep_running.clone();
+
         let search = Searcher {
             pos,
-            keep_running: is_running,
+            keep_running,
             nodes: 0,
             start_time: Instant::now(),
             allocated_time,
@@ -108,7 +110,10 @@ impl<'a> Searcher<'a> {
             max_ply: 0,
         };
 
-        search.iterative_deepening(max_depth)
+        is_running.set(true);
+        let answer = search.iterative_deepening(max_depth);
+        is_running.set(false);
+        answer
     }
 
     #[inline]

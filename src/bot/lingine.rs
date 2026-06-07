@@ -197,7 +197,6 @@ impl Engine for Lingine {
         // side to move. This will help us determine how long to search before returning
         // a best move.
         let time_limit = Self::calculate_search_time(&params, self.position.side_to_move());
-        eprintln!("info: Calculated search time limit: {:?}", time_limit);
 
         let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
 

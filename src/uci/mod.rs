@@ -16,9 +16,16 @@ fn spawn_listener(is_running: Arc<RunningStatus>) -> Receiver<EngineCommand> {
     std::thread::spawn(move || {
         loop {
             command_str.clear();
-            std::io::stdin()
+            if std::io::stdin()
                 .read_line(&mut command_str)
-                .expect("Failed to read line from stdin");
+                .expect("Failed to read line from stdin")
+                == 0
+            {
+                // EOF on stdin
+                is_running.set(RunningStatus::STOPPED);
+                tx.send(EngineCommand::Quit).ok();
+                break;
+            }
 
             let Some(command) = EngineCommand::parse(&command_str) else {
                 continue;
