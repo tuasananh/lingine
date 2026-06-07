@@ -31,30 +31,6 @@ use crate::{
     eval::{piece_material_value, piece_square_table_value},
 };
 
-/// A fast Linear Congruential Generator (LCG) used to generate pseudo-random
-/// numbers for Zobrist position hashing.
-/// Uses standard Knuth MMIX LCG values:
-/// * **Multiplier**: `6364136223846793005`
-/// * **Increment**: `1442695040888963407`
-struct Lcg {
-    state: u64,
-}
-
-impl Lcg {
-    /// Creates a new LCG starting from a given seed.
-    const fn new(seed: u64) -> Self {
-        Self { state: seed }
-    }
-    /// Returns the next 64-bit pseudo-random number in the sequence.
-    const fn next(&mut self) -> u64 {
-        self.state = self
-            .state
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        self.state
-    }
-}
-
 /// Holds Zobrist random numbers used for fast, incremental position hashing.
 /// Positional hashes are updated via XOR operations during do_move/undo_move,
 /// entirely avoiding full-board hash recalculations.
@@ -66,28 +42,31 @@ struct ZobristTable {
     side: u64,
 }
 
-static ZOBRIST: ZobristTable = ZobristTable::init();
-
-impl ZobristTable {
+static ZOBRIST: ZobristTable = {
     const SEED: u64 = 202416124 ^ 202400076 ^ 2416167;
+    let mut pieces = [[0u64; Square::COUNT]; Piece::COUNT];
+    let mut piece_idx = 0;
 
-    /// Initializes the Zobrist key matrix using LCG
-    const fn init() -> Self {
-        let mut prng = Lcg::new(Self::SEED);
-        let mut pieces = [[0u64; Square::COUNT]; Piece::COUNT];
-        let mut piece_idx = 0;
-        while piece_idx < Piece::COUNT {
-            let mut square_idx = 0;
-            while square_idx < Square::COUNT {
-                pieces[piece_idx][square_idx] = prng.next();
-                square_idx += 1;
-            }
-            piece_idx += 1;
-        }
-        let side = prng.next();
-        Self { pieces, side }
+    const fn gen_next(mut value: u64) -> u64 {
+        value = value
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        value
     }
-}
+
+    let mut value = SEED;
+    while piece_idx < Piece::COUNT {
+        let mut square_idx = 0;
+        while square_idx < Square::COUNT {
+            value = gen_next(value);
+            pieces[piece_idx][square_idx] = value;
+            square_idx += 1;
+        }
+        piece_idx += 1;
+    }
+    let side = gen_next(value);
+    ZobristTable { pieces, side }
+};
 
 /// Represents search state parameters that must be saved on a stack,
 /// allowing incremental undo_move restorations.
