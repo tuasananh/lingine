@@ -1,11 +1,39 @@
-use std::sync::mpsc::Sender;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::Result;
 
 use crate::uci::{
     BestMove, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters, UciId,
-    UciInfo, UciOption,
+    UciOption,
 };
+
+pub struct RunningStatus {
+    inner: AtomicBool,
+}
+
+impl Default for RunningStatus {
+    fn default() -> Self {
+        Self {
+            inner: AtomicBool::new(Self::STOPPED),
+        }
+    }
+}
+
+impl RunningStatus {
+    pub const STOPPED: bool = false;
+    pub const RUNNING: bool = true;
+
+    pub fn get(&self) -> bool {
+        self.inner.load(Ordering::Acquire)
+    }
+
+    pub fn set(&self, value: bool) {
+        self.inner.store(value, Ordering::Release)
+    }
+}
 
 /// The interface every engine implementation must satisfy.
 ///
@@ -71,18 +99,7 @@ pub trait Engine: Send {
     /// ## Threading
     /// The flag is `Arc<AtomicBool>` so `go` can safely be moved to a
     /// background thread in Phase 4 without changing this trait signature.
-    fn go(&mut self, params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove>;
-
-    /// Called when the GUI sends a `stop` command.
-    ///
-    /// By the time this method is called, the shared `stop_flag` inside
-    /// [`GoParameters::stop`] has **already been set to `true`** by Thread A
-    /// (the stdin reader). The engine's search loop should have observed the
-    /// flag and returned a `BestMove` before this is called.
-    ///
-    /// Use this method for any engine-side cleanup after a search is
-    /// interrupted — e.g. clearing search state, joining internal threads.
-    fn stop(&mut self);
+    fn go(&mut self, params: GoParameters) -> Result<BestMove>;
 
     /// Called when the GUI sends `ponderhit` — the opponent played the move the
     /// engine was pondering on; switch from ponder mode to normal search.
@@ -97,4 +114,9 @@ pub trait Engine: Send {
 
     /// Quit the engine as soon as possible.
     fn quit(&self);
+
+    /// Return the running status of the engine.
+    ///
+    /// Useful for when we need to stop or check if the engine is running.
+    fn get_running_status(&self) -> Arc<RunningStatus>;
 }

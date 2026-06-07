@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
@@ -8,8 +8,8 @@ use crate::core::{
 };
 use crate::search::{HistoryMoves, Searcher, SearcherParameters, TranspositionTable};
 use crate::uci::{
-    BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
-    UciId, UciInfo, UciOption,
+    BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, RunningStatus,
+    SetOptionParameters, UciId, UciOption,
 };
 
 /// A real, functional [`Engine`] implementation mapping to our search and
@@ -25,6 +25,8 @@ pub struct Lingine {
     /// used in [`crate::search::TranspositionTable::store`] to determine
     /// whether to replace an existing entry.
     age: u8,
+    /// Shared flag to indicate whether the engine should keep searching
+    keep_running: Arc<RunningStatus>,
 }
 
 impl Default for Lingine {
@@ -33,6 +35,7 @@ impl Default for Lingine {
             position: Position::default(),
             transposition_table: TranspositionTable::new(16), // Default to 16 MB
             age: 0,
+            keep_running: Arc::new(RunningStatus::default()),
         }
     }
 }
@@ -109,7 +112,10 @@ impl Engine for Lingine {
     }
 
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
-        eprintln!("debug: setoption: name={:?} value={:?}", params.name, params.value);
+        eprintln!(
+            "debug: setoption: name={:?} value={:?}",
+            params.name, params.value
+        );
         if params.name.to_lowercase() == "hash"
             && let Some(val) = params.value
             && let Ok(mb_size) = val.parse::<usize>()
@@ -137,8 +143,6 @@ impl Engine for Lingine {
     }
 
     fn position(&mut self, position: PositionParameters) -> Result<()> {
-        eprintln!("debug: position fen={:?} moves={:?}", position.fen, position.moves);
-
         // Parse starting FEN
         self.position.set(&position.fen)?;
 
@@ -185,7 +189,7 @@ impl Engine for Lingine {
         Ok(())
     }
 
-    fn go(&mut self, params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove> {
+    fn go(&mut self, params: GoParameters) -> Result<BestMove> {
         // Increment the age generation at the start of a search session
         self.age = self.age.wrapping_add(1);
 
@@ -193,6 +197,7 @@ impl Engine for Lingine {
         // side to move. This will help us determine how long to search before returning
         // a best move.
         let time_limit = Self::calculate_search_time(&params, self.position.side_to_move());
+        eprintln!("info: Calculated search time limit: {:?}", time_limit);
 
         let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
 
@@ -201,11 +206,10 @@ impl Engine for Lingine {
         let (_score, best_move, _nodes) = Searcher::start_search(SearcherParameters {
             pos: self.position.clone(),
             allocated_time: time_limit,
-            stop: params.stop.clone(),
+            keep_running: self.keep_running.clone(),
             max_depth,
             transposition_table: &mut self.transposition_table,
             history_moves: &mut history_table,
-            tx,
             age: self.age,
         });
 
@@ -217,15 +221,15 @@ impl Engine for Lingine {
         })
     }
 
-    fn stop(&mut self) {
-        eprintln!("debug: stop");
-    }
-
     fn ponderhit(&mut self) {
         eprintln!("debug: ponderhit");
     }
 
     fn quit(&self) {
         eprintln!("debug: quit");
+    }
+
+    fn get_running_status(&self) -> Arc<RunningStatus> {
+        self.keep_running.clone()
     }
 }

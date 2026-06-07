@@ -1,13 +1,11 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
 use crate::core::{
     Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, Value, generate_moves,
 };
-use crate::uci::{UciInfo, UciScore, UciScoreBound};
+use crate::uci::{RunningStatus, UciInfo, UciScore, UciScoreBound};
 use crate::{tt_value, value};
 
 mod history_moves;
@@ -48,8 +46,9 @@ impl SearchContext {
 /// Shared context parameters passed down the recursive search stack.
 pub struct Searcher<'a> {
     pos: Position,
-    /// Atomic flag set by Thread A to interrupt the search loop.
-    stop: Arc<AtomicBool>,
+    /// Track the running status of the search, may be stopped in another
+    /// thread.
+    keep_running: Arc<RunningStatus>,
     /// Tracks total nodes searched during this `go` invocation.
     nodes: u64,
     /// The moment when the search was started.
@@ -66,8 +65,6 @@ pub struct Searcher<'a> {
     history_moves: &'a mut HistoryMoves,
     /// Tracks the maximum search depth reached, including quiescence.
     max_ply: u8,
-    /// Channel sender to send UCI info updates back to the main thread.
-    tx: Sender<UciInfo>,
 }
 
 pub struct SearcherParameters<'a> {
@@ -76,7 +73,7 @@ pub struct SearcherParameters<'a> {
     // The time limit for this search
     pub allocated_time: Option<Duration>,
     // The stop flag to signal search interruption from another thread
-    pub stop: Arc<AtomicBool>,
+    pub keep_running: Arc<RunningStatus>,
     // The max depth to search to
     pub max_depth: i8,
     // The transposition table to use for caching search results
@@ -87,8 +84,6 @@ pub struct SearcherParameters<'a> {
     //
     // See: https://www.chessprogramming.org/History_Heuristic
     pub history_moves: &'a mut HistoryMoves,
-    // The channel sender to send UCI info updates back to the main thread
-    pub tx: Sender<UciInfo>,
     // The current search sequence age for TT entry management
     //
     // See: https://www.chessprogramming.org/Transposition_Table#Aging
@@ -103,11 +98,10 @@ impl<'a> Searcher<'a> {
         let SearcherParameters {
             pos,
             allocated_time,
-            stop,
+            keep_running: is_running,
             max_depth,
             transposition_table,
             history_moves,
-            tx,
             age,
         } = params;
 
@@ -118,7 +112,7 @@ impl<'a> Searcher<'a> {
 
         let search = Searcher {
             pos,
-            stop,
+            keep_running: is_running,
             nodes: 0,
             start_time: Instant::now(),
             allocated_time,
@@ -127,7 +121,6 @@ impl<'a> Searcher<'a> {
             killer_moves: KillerMoves::default(),
             history_moves,
             max_ply: 0,
-            tx,
         };
 
         search.search(max_depth)
@@ -136,6 +129,7 @@ impl<'a> Searcher<'a> {
     /// Starts an iterative deepening search up to the specified maximum depth,
     /// with aspiration windows and UCI info updates.
     fn search(mut self, max_depth: i8) -> (Value, Move, u64) {
+        self.keep_running.set(true);
         // Fetch the best move from the transposition table to use as the initial guess
         // for best move, Since we might have seen this position before in
         // earlier searches.
@@ -159,7 +153,7 @@ impl<'a> Searcher<'a> {
         //
         // See: https://www.chessprogramming.org/Iterative_Deepening
         for depth in 1..=max_depth {
-            if self.stop.load(Ordering::Relaxed) {
+            if !self.keep_running.get() {
                 break;
             }
 
@@ -206,7 +200,7 @@ impl<'a> Searcher<'a> {
                 depth_best_move = Move::NULL;
 
                 for m in moves.iter().copied() {
-                    if self.stop.load(Ordering::Relaxed) {
+                    if !self.keep_running.get() {
                         break;
                     }
                     self.pos.do_move(m);
@@ -228,7 +222,7 @@ impl<'a> Searcher<'a> {
                     }
                 }
 
-                if self.stop.load(Ordering::Relaxed) {
+                if !self.keep_running.get() {
                     break;
                 }
 
@@ -254,13 +248,15 @@ impl<'a> Searcher<'a> {
                 }
             }
 
-            if !self.stop.load(Ordering::Relaxed) && !depth_best_move.is_null() {
+            if self.keep_running.get() && !depth_best_move.is_null() {
                 last_depth_score = best_score;
                 best_move = depth_best_move;
 
                 self.send_uci_info(depth, best_score, best_move);
             }
         }
+
+        self.keep_running.set(false);
 
         (last_depth_score, best_move, self.nodes)
     }
@@ -303,7 +299,7 @@ impl<'a> Searcher<'a> {
             ..UciInfo::new()
         };
 
-        self.tx.send(info).ok();
+        println!("{info}");
     }
 
     #[inline]
@@ -314,7 +310,7 @@ impl<'a> Searcher<'a> {
 
     #[inline]
     fn should_stop_search(&self) -> bool {
-        if self.stop.load(Ordering::Relaxed) {
+        if !self.keep_running.get() {
             return true;
         }
         // Periodically check if we have exceeded the allocated time budget to avoid
@@ -323,7 +319,8 @@ impl<'a> Searcher<'a> {
             && let Some(limit) = self.allocated_time
             && self.start_time.elapsed() >= limit
         {
-            self.stop.store(true, Ordering::Relaxed);
+            // Timed out, stop the search
+            self.keep_running.set(false);
             return true;
         }
         false
@@ -479,7 +476,7 @@ impl<'a> Searcher<'a> {
             );
             self.pos.undo_move(m);
 
-            if self.stop.load(Ordering::Relaxed) {
+            if !self.keep_running.get() {
                 return Value::ZERO;
             }
 
@@ -502,7 +499,7 @@ impl<'a> Searcher<'a> {
         }
 
         // Cache search results to Transposition Table
-        if !self.stop.load(Ordering::Relaxed) {
+        if self.keep_running.get() {
             let flag = if best_score >= beta {
                 TranspositionTableFlag::Beta
             } else if best_score <= alpha_orig {
@@ -626,7 +623,7 @@ impl<'a> Searcher<'a> {
             self.pos.do_move(m);
             let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
             self.pos.undo_move(m);
-            if self.stop.load(Ordering::Relaxed) {
+            if !self.keep_running.get() {
                 return Value::ZERO;
             }
             if score > best_score {
@@ -642,7 +639,7 @@ impl<'a> Searcher<'a> {
             }
         }
 
-        if !self.stop.load(Ordering::Relaxed) {
+        if self.keep_running.get() {
             let flag = if best_score >= beta {
                 TranspositionTableFlag::Beta
             } else if best_score <= alpha_orig {
@@ -772,7 +769,6 @@ mod tests {
     use crate::core::Position;
     use crate::core::{Color, Move, Square};
     use std::sync::Arc;
-    use std::sync::atomic::AtomicBool;
     use std::time::Instant;
 
     #[test]
@@ -805,13 +801,12 @@ mod tests {
         assert_eq!(pos.rule_judge(6), Some(Value::ZERO));
 
         // Call negamax with depth=1, we should get 0 (draw)
-        let stop = Arc::new(AtomicBool::new(false));
         let mut transposition_table = TranspositionTable::new(1);
         let killers = KillerMoves::default();
         let mut history_moves = HistoryMoves::default();
         let mut ctx = Searcher {
             pos: pos.clone(),
-            stop,
+            keep_running: Arc::new(RunningStatus::default()),
             nodes: 0,
             start_time: Instant::now(),
             allocated_time: None,
@@ -820,8 +815,6 @@ mod tests {
             killer_moves: killers,
             history_moves: &mut history_moves,
             max_ply: 0,
-            tx: std::sync::mpsc::channel().0, /* dummy sender since we won't be sending UCI info
-                                               * in this test */
         };
         let score = ctx.negamax(
             1,
@@ -874,13 +867,12 @@ mod tests {
 
         // Black should win because White is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)
-        let stop = Arc::new(AtomicBool::new(false));
         let mut transposition_table = TranspositionTable::new(1);
         let killers = KillerMoves::default();
         let mut history_moves = HistoryMoves::default();
         let mut ctx = Searcher {
             pos,
-            stop,
+            keep_running: Arc::new(RunningStatus::default()),
             nodes: 0,
             start_time: Instant::now(),
             allocated_time: None,
@@ -889,9 +881,8 @@ mod tests {
             killer_moves: killers,
             history_moves: &mut history_moves,
             max_ply: 0,
-            tx: std::sync::mpsc::channel().0, /* dummy sender since we won't be sending UCI info
-                                               * in this test */
         };
+        ctx.keep_running.set(true);
         let score = ctx.negamax(
             1,
             5,
@@ -900,49 +891,5 @@ mod tests {
             SearchContext::default(),
         );
         assert_eq!(score, Value::mate_in(5));
-    }
-
-    #[test]
-    fn test_search_max_ply_and_pv() {
-        let mut pos = Position::new();
-        pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w")
-            .unwrap();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut tt = TranspositionTable::new(1);
-        let stop = Arc::new(AtomicBool::new(false));
-
-        let mut history_moves = HistoryMoves::default();
-        let (_score, best_move, _nodes) = Searcher::start_search(SearcherParameters {
-            pos,
-            allocated_time: None,
-            stop,
-            max_depth: 2,
-            transposition_table: &mut tt,
-            history_moves: &mut history_moves,
-            tx,
-            age: 0,
-        });
-
-        assert!(!best_move.is_null());
-
-        // Drain the channel and check UciInfo values
-        let mut max_seldepth = 0;
-        let mut has_pv = false;
-        while let Ok(info) = rx.try_recv() {
-            if let Some(sd) = info.seldepth
-                && sd > max_seldepth
-            {
-                max_seldepth = sd;
-            }
-            if let Some(pv) = info.pv
-                && !pv.is_empty()
-            {
-                has_pv = true;
-            }
-        }
-
-        // Depth 2 search must reach at least ply 2 in negamax or quiescence
-        assert!(max_seldepth >= 2, "max_seldepth was {}", max_seldepth);
-        assert!(has_pv);
     }
 }

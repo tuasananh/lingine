@@ -1,8 +1,8 @@
 use clap::Parser;
 use lingine::core::Position;
 use lingine::search::{HistoryMoves, Searcher, SearcherParameters, TranspositionTable};
+use lingine::uci::RunningStatus;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -32,25 +32,23 @@ fn main() -> anyhow::Result<()> {
     pos.set(&args.fen)?;
 
     let mut transposition_table = TranspositionTable::new(args.hash);
-    let stop = Arc::new(AtomicBool::new(false));
+    let stop = Arc::new(RunningStatus::default());
 
     println!("Board FEN:    {}", args.fen);
     println!("Search Depth: {}", args.depth);
     println!("Table Size:   {} MB", args.hash);
     println!("Searching...\n");
 
-    let (tx, _rx) = std::sync::mpsc::channel();
     let mut history_moves = HistoryMoves::default();
 
     let start = Instant::now();
     let (score, best_move, nodes) = Searcher::start_search(SearcherParameters {
         pos,
-        stop: stop.clone(),
+        keep_running: stop.clone(),
         max_depth: args.depth as i8,
         allocated_time: None,
         transposition_table: &mut transposition_table,
         history_moves: &mut history_moves,
-        tx,
         age: 0,
     });
     let duration = start.elapsed();

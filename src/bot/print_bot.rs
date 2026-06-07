@@ -1,10 +1,13 @@
-use std::sync::mpsc::Sender;
+use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::uci::{
-    BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, SetOptionParameters,
-    UciId, UciInfo, UciOption,
+use crate::{
+    core::Move,
+    uci::{
+        BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, RunningStatus,
+        SetOptionParameters, UciId, UciOption,
+    },
 };
 
 /// A stub [`Engine`] implementation used to verify the UCI protocol layer
@@ -52,7 +55,10 @@ impl Engine for PrintBot {
     /// Logs the option change. Always succeeds (`Ok(())`); a real engine
     /// would parse `params.name`/`params.value` and update its configuration.
     fn setoption(&mut self, params: SetOptionParameters) -> Result<()> {
-        eprintln!("debug: setoption: name={:?} value={:?}", params.name, params.value);
+        eprintln!(
+            "debug: setoption: name={:?} value={:?}",
+            params.name, params.value
+        );
         Ok(())
     }
 
@@ -74,7 +80,10 @@ impl Engine for PrintBot {
     /// Logs the FEN and move list. Always succeeds; a real engine would apply
     /// the moves to its internal board representation.
     fn position(&mut self, position: PositionParameters) -> Result<()> {
-        eprintln!("debug: position fen={:?} moves={:?}", position.fen, position.moves);
+        eprintln!(
+            "debug: position fen={:?} moves={:?}",
+            position.fen, position.moves
+        );
         Ok(())
     }
 
@@ -82,29 +91,17 @@ impl Engine for PrintBot {
     ///
     /// A real implementation would run a search loop here, checking the stop
     /// flag periodically
-    fn go(&mut self, _params: GoParameters, tx: Sender<UciInfo>) -> Result<BestMove> {
+    fn go(&mut self, _params: GoParameters) -> Result<BestMove> {
         // No real search — send a single info string so the protocol layer
         // has something to print, then return a null move.
         //
         // When real search is added, check `_params.stop.load(Ordering::Relaxed)`
         // periodically in the search loop to respect the stop command.
-        let _ = tx.send(UciInfo {
-            string: Some("PrintBot has no search implemented".into()),
-            ..UciInfo::new()
-        });
+        eprintln!("debug: go: params={:?}", _params);
         Ok(BestMove {
-            mv: "0000".into(),
+            mv: Move::NULL.to_uci_string(),
             ponder: None,
         })
-    }
-
-    /// Logs the stop signal. The shared `stop_flag` was already set by
-    /// Thread A before this method is called; no extra action is needed in
-    /// the stub.
-    fn stop(&mut self) {
-        // The stop flag in GoParameters is already set by the handler before
-        // this method is called. Nothing extra to do for a synchronous stub.
-        eprintln!("debug: stop");
     }
 
     /// Logs. No pondering implemented yet; see [`EngineCommand::PonderHit`]
@@ -117,13 +114,16 @@ impl Engine for PrintBot {
     fn quit(&self) {
         eprintln!("debug: quit");
     }
+
+    fn get_running_status(&self) -> Arc<RunningStatus> {
+        Arc::new(RunningStatus::default())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::uci::GoParameters;
-    use std::sync::mpsc;
 
     #[test]
     fn test_print_bot_interface() {
@@ -152,21 +152,12 @@ mod tests {
         };
         assert!(bot.position(pos).is_ok());
 
-        let (tx, rx) = mpsc::channel();
-        let best_move = bot.go(GoParameters::default(), tx).unwrap();
+        let best_move = bot.go(GoParameters::default()).unwrap();
 
-        bot.stop();
         bot.ponderhit();
         bot.quit();
 
-        assert_eq!(best_move.mv, "0000");
+        assert_eq!(best_move.mv, "null");
         assert_eq!(best_move.ponder, None);
-
-        // Verify the stream received the expected info message
-        let info = rx.recv().unwrap();
-        assert_eq!(
-            info.string,
-            Some("PrintBot has no search implemented".into())
-        );
     }
 }
