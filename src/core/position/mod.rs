@@ -2,7 +2,7 @@ use strum::EnumCount;
 use thiserror::Error;
 
 use crate::core::{
-    Value,
+    Score,
     bitboard::Bitboard,
     types::{Color, File, Move, Piece, PieceType, Rank, Square},
 };
@@ -31,10 +31,10 @@ pub struct StateInfo {
     /// Whether each color [White, Black] was in check in this position state.
     pub in_check: [bool; Color::COUNT],
     /// Precalculated incremental material score (from White's perspective)
-    pub material_score: Value,
+    pub material_score: Score,
     /// Precalculated incremental piece-square table positional score (from
     /// White's perspective)
-    pub piece_square_table_score: Value,
+    pub piece_square_table_score: Score,
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn
@@ -341,16 +341,16 @@ mod tests {
         let mut pos = Position::new();
         // 1. Bare Kings
         pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
 
         // 2. Kings + Bishops & Advisors (no attacking pieces)
         pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1")
             .unwrap();
-        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
 
         // 3. Kings + 1 Cannon, no Advisors/Bishops
         pos.set("4k4/9/9/9/9/9/9/9/3C5/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
     }
 
     #[test]
@@ -373,7 +373,7 @@ mod tests {
 
         // rule60 counter should be exactly 120
         assert_eq!(pos.history.last().unwrap().rule60, 120);
-        assert_eq!(pos.rule_judge(0), Some(Value::DRAW));
+        assert_eq!(pos.rule_judge(0), Some(Score::DRAW));
     }
 
     #[test]

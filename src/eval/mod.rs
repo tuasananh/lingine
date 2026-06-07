@@ -19,12 +19,12 @@
 mod piece_square_table;
 pub use piece_square_table::*;
 
-use crate::core::{Piece, Square, Value};
+use crate::core::{Piece, Score, Square};
 
 /// Returns a piece's base material value, dynamically adjusting Pawn values
 /// based on whether they have crossed the river.
 #[inline]
-pub fn piece_material_value(piece: Piece, sq: Square) -> Value {
+pub fn piece_material_value(piece: Piece, sq: Square) -> Score {
     let val = match piece {
         Piece::WhiteRook | Piece::BlackRook => 600,
         Piece::WhiteCannon | Piece::BlackCannon => 285,
@@ -49,13 +49,13 @@ pub fn piece_material_value(piece: Piece, sq: Square) -> Value {
                                                    * never captured) */
     };
 
-    Value::from_raw(val)
+    Score::from_raw(val)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::core::{MoveGenType, MoveList, Piece, Position, Value, generate_moves};
-    use crate::value;
+    use crate::core::{MoveGenType, MoveList, Piece, Position, Score, generate_moves};
+    use crate::score;
 
     #[test]
     fn test_initial_material_evaluation() {
@@ -64,7 +64,7 @@ mod tests {
         pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w - - 0 1")
             .unwrap();
         // Since board is symmetric, evaluation must be exactly 0
-        assert_eq!(pos.evaluate(), Value::DRAW);
+        assert_eq!(pos.evaluate(), Score::DRAW);
     }
 
     #[test]
@@ -76,7 +76,7 @@ mod tests {
         // White is down a Rook (-600). The Rook at A0 has a PST value of -5.
         // Therefore, without this Rook, White loses both -600 material and -5
         // positional value, resulting in net: -600 - (-5) = -595.
-        assert_eq!(pos.evaluate(), value!(-595));
+        assert_eq!(pos.evaluate(), score!(-595));
     }
 
     #[test]
@@ -96,13 +96,13 @@ mod tests {
         pos2.set("4k4/9/9/9/4p4/4P4/9/9/9/4K4 w - - 0 1").unwrap();
         // Both are uncrossed: White Pawn rank 4 < 5 (+30). Black Pawn rank 5 > 4 (-30).
         // Balance = 0. Let's verify that symmetric position still yields 0
-        assert_eq!(pos2.evaluate(), Value::DRAW);
+        assert_eq!(pos2.evaluate(), Score::DRAW);
 
         // Move White Pawn to E6 (crossed: material 70, PST: 25) and keep Black Pawn at
         // E5 (uncrossed: material -30, PST: -8). Net = 70 - 30 + 25 - 8 = 57.
         let mut pos3 = Position::new();
         pos3.set("4k4/9/9/4P4/4p4/9/9/9/9/4K4 w - - 0 1").unwrap();
-        assert_eq!(pos3.evaluate(), value!(57));
+        assert_eq!(pos3.evaluate(), score!(57));
     }
 
     #[test]

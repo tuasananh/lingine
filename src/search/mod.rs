@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::core::{
-    Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, Value, generate_moves,
+    Color, Move, MoveGenType, MoveList, Piece, PieceType, Position, Score, generate_moves,
 };
 use crate::uci::{RunningStatus, UciInfo, UciScore, UciScoreBound};
-use crate::{tt_value, value};
+use crate::{score, tt_value};
 
 mod history_moves;
 mod killer_moves;
@@ -75,7 +75,7 @@ impl<'a> Searcher<'a> {
     /// Starts the iterative deepening search loop
     ///
     /// Returns the best move found, its score, and the total nodes searched.
-    pub fn start_search(params: SearcherParameters) -> (Value, Move, u64) {
+    pub fn start_search(params: SearcherParameters) -> (Score, Move, u64) {
         let SearcherParameters {
             pos,
             allocated_time,
@@ -109,7 +109,7 @@ impl<'a> Searcher<'a> {
 
     /// Starts an iterative deepening search up to the specified maximum depth,
     /// with aspiration windows and UCI info updates.
-    fn search(mut self, max_depth: i8) -> (Value, Move, u64) {
+    fn search(mut self, max_depth: i8) -> (Score, Move, u64) {
         self.keep_running.set(true);
         // Fetch the best move from the transposition table to use as the initial guess
         // for best move, Since we might have seen this position before in
@@ -118,7 +118,7 @@ impl<'a> Searcher<'a> {
             .transposition_table
             .probe(self.pos.zobrist_hash(), 0)
             .map_or(Move::NULL, |entry| entry.best_move);
-        let mut last_depth_score = -Value::INFINITY;
+        let mut last_depth_score = -Score::INFINITY;
 
         let mut moves = MoveList::new();
         generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
@@ -163,9 +163,9 @@ impl<'a> Searcher<'a> {
             // score within the window.
             //
             // See: https://www.chessprogramming.org/Aspiration_Windows
-            let mut alpha = -Value::INFINITY;
-            let mut beta = Value::INFINITY;
-            let mut delta: Value = value!(25); // aspiration window size in centipawns
+            let mut alpha = -Score::INFINITY;
+            let mut beta = Score::INFINITY;
+            let mut delta: Score = score!(25); // aspiration window size in centipawns
 
             if depth >= 5 && !last_depth_score.abs().is_winning() {
                 alpha = last_depth_score - delta;
@@ -173,11 +173,11 @@ impl<'a> Searcher<'a> {
             }
 
             loop {
-                let search_alpha = alpha.max(-Value::INFINITY);
-                let search_beta = beta.min(Value::INFINITY);
+                let search_alpha = alpha.max(-Score::INFINITY);
+                let search_beta = beta.min(Score::INFINITY);
 
                 let mut curr_alpha = search_alpha;
-                best_score = -Value::INFINITY;
+                best_score = -Score::INFINITY;
                 depth_best_move = Move::NULL;
 
                 for m in moves.iter().copied() {
@@ -208,7 +208,7 @@ impl<'a> Searcher<'a> {
                 }
 
                 // If window was already full (-INFINITY, INFINITY), we stop, no re-search.
-                if search_alpha == -Value::INFINITY && search_beta == Value::INFINITY {
+                if search_alpha == -Score::INFINITY && search_beta == Score::INFINITY {
                     break;
                 }
 
@@ -245,7 +245,7 @@ impl<'a> Searcher<'a> {
     /// Sends UCI info updates back to the main thread after each completed
     /// depth iteration, including the best move, score, principal
     /// variation, nodes searched, time taken, and NPS.
-    fn send_uci_info(&self, depth: i8, best_score: Value, best_move: Move) {
+    fn send_uci_info(&self, depth: i8, best_score: Score, best_move: Move) {
         let pv_vec = self.extract_pv(depth, best_move);
         let time_elapsed = self.start_time.elapsed();
         let nps = if time_elapsed.as_secs_f64() > 0.001 {
@@ -312,14 +312,14 @@ impl<'a> Searcher<'a> {
         &mut self,
         depth: i8,
         ply: u8,
-        mut alpha: Value,
-        beta: Value,
+        mut alpha: Score,
+        beta: Score,
         mut ctx: SearchContext,
-    ) -> Value {
+    ) -> Score {
         self.update_analytics(ply);
 
         if self.should_stop_search() {
-            return Value::ZERO;
+            return Score::ZERO;
         }
 
         // Game over / rule evaluations (60-move rule, insufficient material,
@@ -330,7 +330,7 @@ impl<'a> Searcher<'a> {
 
         let alpha_orig = alpha;
 
-        let mut best_score = -Value::INFINITY;
+        let mut best_score = -Score::INFINITY;
         let mut best_move = Move::NULL;
 
         let mut depth = depth;
@@ -393,7 +393,7 @@ impl<'a> Searcher<'a> {
                 let score = self.negamax(
                     rdepth,
                     ply,
-                    rbeta - value!(1),
+                    rbeta - score!(1),
                     rbeta,
                     SearchContext {
                         extensions: ctx.extensions,
@@ -420,7 +420,7 @@ impl<'a> Searcher<'a> {
 
         // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
         if moves.is_empty() {
-            return Value::mated_in(ply);
+            return Score::mated_in(ply);
         }
 
         // One Reply Extensions: If there is only one legal move available,
@@ -464,7 +464,7 @@ impl<'a> Searcher<'a> {
             self.pos.undo_move();
 
             if !self.keep_running.get() {
-                return Value::ZERO;
+                return Score::ZERO;
             }
 
             if score > best_score {
@@ -508,11 +508,11 @@ impl<'a> Searcher<'a> {
     ///
     /// Prevents the horizon effect by searching captures only until a quiet
     /// position is reached.
-    fn quiescence_search(&mut self, depth: i8, ply: u8, mut alpha: Value, beta: Value) -> Value {
+    fn quiescence_search(&mut self, depth: i8, ply: u8, mut alpha: Score, beta: Score) -> Score {
         self.update_analytics(ply);
 
         if self.should_stop_search() {
-            return Value::ZERO;
+            return Score::ZERO;
         }
 
         // Base case: to avoid infinite recursion and stack overflow from perpetual
@@ -533,7 +533,7 @@ impl<'a> Searcher<'a> {
         let in_check = self.pos.is_in_check(self.pos.side_to_move());
 
         let alpha_orig = alpha;
-        let mut best_score = -Value::INFINITY;
+        let mut best_score = -Score::INFINITY;
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
@@ -600,7 +600,7 @@ impl<'a> Searcher<'a> {
 
         // Checkmate detection: in check with no legal evasions = checkmate
         if in_check && moves.is_empty() {
-            return Value::mated_in(ply);
+            return Score::mated_in(ply);
         }
 
         // Sort captures using MVV-LVA
@@ -611,7 +611,7 @@ impl<'a> Searcher<'a> {
             let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
             self.pos.undo_move();
             if !self.keep_running.get() {
-                return Value::ZERO;
+                return Score::ZERO;
             }
             if score > best_score {
                 best_score = score;
@@ -748,8 +748,8 @@ const fn get_piece_value_rank(p: Piece) -> i32 {
 
 /// Calculates the margin threshold required for singular extensions.
 #[inline]
-fn singular_margin(depth: i8) -> Value {
-    value!(2 * depth as i16)
+fn singular_margin(depth: i8) -> Score {
+    score!(2 * depth as i16)
 }
 
 #[cfg(test)]
@@ -787,7 +787,7 @@ mod tests {
         // Black moves to D9 again (repeating the state at ply 1)
         pos.do_move(b_move1);
         // This completed a repetition, neither side is in check.
-        assert_eq!(pos.rule_judge(6), Some(Value::ZERO));
+        assert_eq!(pos.rule_judge(6), Some(Score::ZERO));
 
         // Call negamax with depth=1, we should get 0 (draw)
         let mut transposition_table = TranspositionTable::new(1);
@@ -808,8 +808,8 @@ mod tests {
         let score = ctx.negamax(
             1,
             6,
-            -Value::INFINITY,
-            Value::INFINITY,
+            -Score::INFINITY,
+            Score::INFINITY,
             SearchContext::default(),
         );
         assert_eq!(score.raw(), 0);
@@ -851,7 +851,7 @@ mod tests {
 
         // Now Black turn to move. White just gave the repeating check on all turns in
         // the loop.
-        assert_eq!(pos.rule_judge(5), Some(Value::mate_in(5)));
+        assert_eq!(pos.rule_judge(5), Some(Score::mate_in(5)));
         assert!(pos.is_in_check(Color::Black));
 
         // Black should win because White is perpetually checking!
@@ -875,10 +875,10 @@ mod tests {
         let score = ctx.negamax(
             1,
             5,
-            -Value::INFINITY,
-            Value::INFINITY,
+            -Score::INFINITY,
+            Score::INFINITY,
             SearchContext::default(),
         );
-        assert_eq!(score, Value::mate_in(5));
+        assert_eq!(score, Score::mate_in(5));
     }
 }

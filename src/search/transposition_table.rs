@@ -20,7 +20,7 @@
 
 use strum::FromRepr;
 
-use crate::core::{Move, TranspositionTableKey, Value};
+use crate::core::{Move, Score, TranspositionTableKey};
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr, Default)]
@@ -40,7 +40,7 @@ pub enum TranspositionTableFlag {
 /// Represents an entry inside the Transposition Table.
 pub struct TranspositionTableValue {
     /// The evaluation score (may be relative to mate).
-    pub score: Value,
+    pub score: Score,
     /// The best move found at this position. The upper bits of this Move encode
     /// the TranspositionTableFlag, which denotes the entry's bound type (and
     /// validity; a flag of Empty indicates an invalid/empty entry).
@@ -201,7 +201,7 @@ impl TranspositionTable {
 
 #[cfg(test)]
 mod tests {
-    use crate::value;
+    use crate::score;
 
     use super::*;
 
@@ -213,11 +213,11 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_value!(value!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
+            tt_value!(score!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
         );
         let result = tt.probe(42, 0).unwrap();
         assert_eq!(result.depth, 5);
-        assert_eq!(result.score, value!(100));
+        assert_eq!(result.score, score!(100));
         assert_eq!(result.flag, TranspositionTableFlag::Exact);
 
         tt.clear();
@@ -232,7 +232,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(value!(80), TranspositionTableFlag::Exact, Move::NULL, 4, 1),
+            tt_value!(score!(80), TranspositionTableFlag::Exact, Move::NULL, 4, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 80);
 
@@ -240,7 +240,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(value!(90), TranspositionTableFlag::Exact, Move::NULL, 2, 1),
+            tt_value!(score!(90), TranspositionTableFlag::Exact, Move::NULL, 2, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().depth, 4); // Kept depth 4
         assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 80);
@@ -249,7 +249,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(value!(120), TranspositionTableFlag::Exact, Move::NULL, 6, 1),
+            tt_value!(score!(120), TranspositionTableFlag::Exact, Move::NULL, 6, 1),
         );
         assert_eq!(tt.probe(100, 0).unwrap().depth, 6);
         assert_eq!(tt.probe(100, 0).unwrap().score.raw(), 120);
@@ -258,7 +258,7 @@ mod tests {
         tt.store(
             100,
             0,
-            tt_value!(value!(200), TranspositionTableFlag::Alpha, Move::NULL, 6, 2),
+            tt_value!(score!(200), TranspositionTableFlag::Alpha, Move::NULL, 6, 2),
         );
         let entry = tt.probe(100, 0).unwrap();
         assert_eq!(entry.score.raw(), 200);
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_transposition_table_mate_score_mapping() {
-        let mate_score = Value::mate_in(10); // Mate in 10 plies
+        let mate_score = Score::mate_in(10); // Mate in 10 plies
         let ply = 5;
 
         let mut tt = TranspositionTable::new(1);
@@ -291,7 +291,7 @@ mod tests {
         tt.store(
             42,
             0,
-            tt_value!(value!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
+            tt_value!(score!(100), TranspositionTableFlag::Exact, Move::NULL, 5, 1),
         );
 
         let h = tt.hashfull();

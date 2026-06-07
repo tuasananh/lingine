@@ -1,7 +1,7 @@
 use strum::EnumCount;
 
 use crate::core::{
-    Bitboard, Color, Move, Piece, PieceType, Square, Value, cannon_attacks, rook_attacks,
+    Bitboard, Color, Move, Piece, PieceType, Score, Square, cannon_attacks, rook_attacks,
 };
 
 impl super::Position {
@@ -170,10 +170,10 @@ impl super::Position {
 
     /// Detects chases from state st - d to state st on a rollback clone of
     /// self.
-    pub fn detect_chases(&mut self, d: usize, ply: u8) -> Value {
+    pub fn detect_chases(&mut self, d: usize, ply: u8) -> Score {
         let n = self.history.len();
         if n < d {
-            return Value::ZERO; // Draw
+            return Score::ZERO; // Draw
         }
 
         // Grant each piece on board a unique ID for each side
@@ -212,7 +212,7 @@ impl super::Position {
             // chase or is a draw.
             let side_to_move_idx = self.side_to_move as usize;
             if state.in_check[side_to_move_idx] {
-                return Value::DRAW; // Draw
+                return Score::DRAW; // Draw
             }
 
             let opposing_chase_mask = chase[self.side_to_move.opposite() as usize];
@@ -237,20 +237,20 @@ impl super::Position {
         let them_chasing = chase[opponent as usize] != 0;
 
         if us_chasing && them_chasing {
-            Value::DRAW // Mutual chase -> draw
+            Score::DRAW // Mutual chase -> draw
         } else if us_chasing {
-            Value::mated_in(ply) // We perpetually chase -> we lose
+            Score::mated_in(ply) // We perpetually chase -> we lose
         } else if them_chasing {
-            Value::mate_in(ply) // Opponent perpetually chases -> we win
+            Score::mate_in(ply) // Opponent perpetually chases -> we win
         } else {
-            Value::DRAW // Normal draw
+            Score::DRAW // Normal draw
         }
     }
 
     /// Evaluates if the game has ended due to 60-move rule, insufficient
     /// material, or loops (normal draws, perpetual checking, or perpetual
     /// chasing).
-    pub fn rule_judge(&self, ply: u8) -> Option<Value> {
+    pub fn rule_judge(&self, ply: u8) -> Option<Score> {
         let n = self.history.len();
         if n == 0 {
             return None;
@@ -260,7 +260,7 @@ impl super::Position {
         let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
         const RULE60_PLIES_THRESHOLD: u16 = 120;
         if rule60 >= RULE60_PLIES_THRESHOLD {
-            return Some(Value::DRAW);
+            return Some(Score::DRAW);
         }
 
         // 2. Insufficient Material Draw
@@ -276,7 +276,7 @@ impl super::Position {
 
             if white_majors == 0 && black_majors == 0 {
                 // No Rooks, Cannons, or Knights remain on either side -> direct draw
-                return Some(Value::DRAW);
+                return Some(Score::DRAW);
             }
 
             // Exactly one Cannon left on the entire board, and no Advisors left
@@ -288,7 +288,7 @@ impl super::Position {
                 && total_cannons == 1
                 && total_advisors == 0
             {
-                return Some(Value::DRAW);
+                return Some(Score::DRAW);
             }
         }
 
@@ -334,11 +334,11 @@ impl super::Position {
 
                 if us_perpetual_check || them_perpetual_check {
                     if us_perpetual_check && them_perpetual_check {
-                        return Some(Value::DRAW); // Both check perpetually -> draw
+                        return Some(Score::DRAW); // Both check perpetually -> draw
                     } else if us_perpetual_check {
-                        return Some(-Value::mate_in(ply)); // We check perpetually -> we lose
+                        return Some(-Score::mate_in(ply)); // We check perpetually -> we lose
                     } else {
-                        return Some(Value::mate_in(ply)); // Opponent checks perpetually -> they lose
+                        return Some(Score::mate_in(ply)); // Opponent checks perpetually -> they lose
                     }
                 } else {
                     // No perpetual check, check perpetual chase

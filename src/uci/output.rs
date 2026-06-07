@@ -1,6 +1,6 @@
 use std::{fmt, time::Duration};
 
-use crate::core::Value;
+use crate::core::Score;
 
 // ===========================================================================
 // Responses / Output Structs
@@ -97,7 +97,7 @@ pub enum Bound {
 /// The type of score the engine reports.
 pub enum UciScore {
     /// Score in centipawns from the engine's point of view.
-    Centipawns(Value),
+    Centipawns(Score),
     /// Forced mate: positive = engine mates in N moves, negative = engine gets
     /// mated in N.
     Mate(i32),
@@ -257,7 +257,7 @@ impl fmt::Display for BestMove {
 
 #[cfg(test)]
 mod tests {
-    use crate::value;
+    use crate::score;
 
     use super::*;
 
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn score_cp_format() {
         let s = UciScoreBound {
-            score: UciScore::Centipawns(value!(214)),
+            score: UciScore::Centipawns(score!(214)),
             bound: None,
         };
         assert_eq!(s.to_string(), "score cp 214");
@@ -377,7 +377,7 @@ mod tests {
             nodes: Some(123456),
             nps: Some(100000),
             score: Some(UciScoreBound {
-                score: UciScore::Centipawns(value!(214)),
+                score: UciScore::Centipawns(score!(214)),
                 bound: None,
             }),
             pv: Some(vec!["e2e4".into(), "e7e5".into(), "g1f3".into()]),
