@@ -19,6 +19,39 @@
 mod piece_square_table;
 pub use piece_square_table::*;
 
+use crate::core::{Piece, Square, Value};
+
+/// Returns a piece's base material value, dynamically adjusting Pawn values
+/// based on whether they have crossed the river.
+#[inline]
+pub fn piece_material_value(piece: Piece, sq: Square) -> Value {
+    let val = match piece {
+        Piece::WhiteRook | Piece::BlackRook => 600,
+        Piece::WhiteCannon | Piece::BlackCannon => 285,
+        Piece::WhiteKnight | Piece::BlackKnight => 270,
+        Piece::WhiteBishop | Piece::BlackBishop => 120, // Elephant
+        Piece::WhiteAdvisor | Piece::BlackAdvisor => 110,
+        Piece::WhitePawn => {
+            if sq.rank() as u8 >= 5 {
+                70
+            } else {
+                30
+            }
+        }
+        Piece::BlackPawn => {
+            if sq.rank() as u8 <= 4 {
+                70
+            } else {
+                30
+            }
+        }
+        Piece::WhiteKing | Piece::BlackKing => 0, /* Treated as 0 for incremental score (kings
+                                                   * never captured) */
+    };
+
+    Value::from_raw(val)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::core::{MoveGenType, MoveList, Piece, Position, Value, generate_moves};
