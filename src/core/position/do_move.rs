@@ -46,6 +46,7 @@ impl Position {
 
         let last_state = self.history.last().expect("History stack is empty");
         let rule60 = last_state.rule60;
+        let rule_repetition = last_state.rule_repetition;
         let old_zobrist = self.zobrist_hash;
         let mut material_score = last_state.material_score;
         let mut piece_square_table_score = last_state.piece_square_table_score;
@@ -97,6 +98,15 @@ impl Position {
         } else {
             rule60 + 1
         };
+        
+        let is_pawn_push = piece.piece_type() == PieceType::Pawn && to.rank() != from.rank();
+        let is_irreversible = is_pawn_push || captured.is_some();
+        let new_rule_repetition = if is_irreversible {
+            0
+        } else {
+            rule_repetition + 1
+        };
+        
         let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
 
         // Push current state onto history stack
@@ -105,6 +115,7 @@ impl Position {
             captured_piece: captured,
             old_zobrist,
             rule60: new_rule60,
+            rule_repetition: new_rule_repetition,
             in_check,
             material_score,
             piece_square_table_score,

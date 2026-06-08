@@ -294,8 +294,9 @@ impl super::Position {
 
         // 3. Repetition & Perpetual Check/Chase Loops
         let current_hash = self.zobrist_hash;
-        let rule60_val = rule60 as usize;
-        let max_back = rule60_val.min(n - 1);
+        let rule_repetition = self.history.last().map(|s| s.rule_repetition).unwrap_or(0);
+        let rule_repetition_val = rule_repetition as usize;
+        let max_back = rule_repetition_val.min(n - 1);
 
         // Repetitions must occur on the same side's turn, so we scan back in steps of 2
         // plies.
