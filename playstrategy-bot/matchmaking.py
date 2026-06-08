@@ -24,8 +24,11 @@ class Matchmaking:
             25  # The challenge expires 20 seconds after creating it.
         )
         self.challenge_id = None
+        self.rate_limit_backoff_until = 0
 
     def should_create_challenge(self):
+        if time.time() < self.rate_limit_backoff_until:
+            return False
         matchmaking_enabled = self.matchmaking_cfg.get("allow_matchmaking")
         time_has_passed = (
             self.last_game_ended
@@ -120,5 +123,18 @@ class Matchmaking:
             )
             logger.info(f"Challenge id is {challenge_id}.")
             self.challenge_id = challenge_id
+        except Exception as e:
+            from requests.exceptions import HTTPError
+            if isinstance(e, HTTPError) and e.response is not None and e.response.status_code == 429:
+                retry_after = e.response.headers.get("Retry-After")
+                try:
+                    seconds = int(retry_after) if retry_after else 60
+                except ValueError:
+                    seconds = 60
+                logger.warning(
+                    f"Rate limited (429) when challenging bot. Backing off matchmaking for {seconds} seconds."
+                )
+                self.rate_limit_backoff_until = time.time() + seconds
+            raise
         finally:
             self.last_challenge_created = time.time()
