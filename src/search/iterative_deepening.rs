@@ -17,7 +17,10 @@ impl super::Searcher<'_> {
         // score.
         //
         // See: https://www.chessprogramming.org/Iterative_Deepening
-        for depth in 1..=self.time_manager.max_depth() {
+        let max_depth = self.time_manager.max_depth();
+        while self.current_root_depth < max_depth {
+            self.current_root_depth += 1;
+            let depth = self.current_root_depth;
             let score = if depth >= ASPIRATION_WINDOW_THRESHOLD {
                 self.aspiration_search(last_best_score, depth)
             } else {

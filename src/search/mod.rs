@@ -55,6 +55,8 @@ pub struct Searcher<'a> {
     max_ply: u8,
     /// Shared context parameters passed down the recursive search stack
     shared: SharedContext<'a>,
+    /// The depth that the search finished at the moment.
+    current_root_depth: i8,
 }
 
 impl<'a> Searcher<'a> {
@@ -76,6 +78,7 @@ impl<'a> Searcher<'a> {
             killer_moves: KillerMoves::new(),
             max_ply: 0,
             shared,
+            current_root_depth: 0,
         };
 
         is_running.set(true);
@@ -95,6 +98,12 @@ impl<'a> Searcher<'a> {
         if !self.shared.keep_running.get() {
             return true;
         }
+
+        if self.current_root_depth <= 1 {
+            // We need to search at least 1 ply to have a valid move to play
+            return false;
+        }
+
         const POLL_INTERVAL: u64 = 4096;
         // Periodically check if we have exceeded the allocated time budget to avoid
         // timing out in the middle of a ply.
@@ -178,6 +187,7 @@ mod tests {
                 age: 1,
                 history_moves: &mut history_moves,
             },
+            current_root_depth: 0,
         };
         let score = ctx.negamax::<false>(
             1,
@@ -246,6 +256,7 @@ mod tests {
                 age: 1,
                 history_moves: &mut history_moves,
             },
+            current_root_depth: 0,
         };
         ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false>(
