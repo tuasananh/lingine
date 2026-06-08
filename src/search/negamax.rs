@@ -128,7 +128,11 @@ impl super::Searcher<'_> {
 
         // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
         if moves.is_empty() {
-            assert!(!ROOT, "Root node should never have no legal moves");
+            if ROOT {
+                eprintln!(
+                    "Warning: Root node has no legal moves, this should not happen in a normal game"
+                );
+            }
             return score::mated_in(ply);
         }
 
