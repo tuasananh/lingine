@@ -1,5 +1,6 @@
 import json
 import requests
+import time
 from urllib.parse import urljoin
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 from urllib3.exceptions import ProtocolError
@@ -52,7 +53,7 @@ class Lichess:
     @backoff.on_exception(
         backoff.constant,
         (RemoteDisconnected, ConnectionError, ProtocolError, HTTPError, ReadTimeout),
-        max_time=60,
+        max_time=300,
         interval=0.1,
         giveup=is_final,
         backoff_log_level=logging.DEBUG,
@@ -84,7 +85,7 @@ class Lichess:
     @backoff.on_exception(
         backoff.constant,
         (RemoteDisconnected, ConnectionError, ProtocolError, HTTPError, ReadTimeout),
-        max_time=60,
+        max_time=300,
         interval=0.1,
         giveup=is_final,
         backoff_log_level=logging.DEBUG,
