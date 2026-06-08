@@ -30,6 +30,10 @@ impl super::Searcher<'_> {
                 )
             };
 
+            if !self.shared.keep_running.get() {
+                break;
+            }
+
             last_best_score = score;
             last_best_move = self
                 .shared
@@ -39,10 +43,6 @@ impl super::Searcher<'_> {
                 .best_move;
 
             self.send_uci_info(depth, last_best_score, last_best_move);
-
-            if !self.shared.keep_running.get() {
-                break;
-            }
 
             // Check if we still have enough time for another iteration to avoid timing out
             // in the middle of a ply. Also known as a Soft-Bound Time Limit.
