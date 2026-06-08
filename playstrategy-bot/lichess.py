@@ -70,7 +70,13 @@ class Lichess:
             if raise_for_status:
                 response.raise_for_status()
             response.encoding = "utf-8"
-            return response.text if get_raw_text else response.json()
+            if get_raw_text:
+                return response.text
+            try:
+                return response.json()
+            except ValueError:
+                response.raise_for_status()
+                raise
         except Exception as e:
             logger.debug(f"API GET error {url}: {e}")
             raise
@@ -107,7 +113,11 @@ class Lichess:
             )
             if raise_for_status:
                 response.raise_for_status()
-            return response.json()
+            try:
+                return response.json()
+            except ValueError:
+                response.raise_for_status()
+                raise
         except Exception as e:
             logger.debug(f"API POST error {url}: {e}")
             raise

@@ -112,11 +112,13 @@ class Matchmaking:
     def challenge(self):
         bot_username, base_time, increment, days, variant = self.choose_opponent()
         logger.info(f"Will challenge {bot_username} for a {variant} game.")
-        challenge_id = (
-            self.create_challenge(bot_username, base_time, increment, days, variant)
-            if bot_username
-            else None
-        )
-        logger.info(f"Challenge id is {challenge_id}.")
-        self.last_challenge_created = time.time()
-        self.challenge_id = challenge_id
+        try:
+            challenge_id = (
+                self.create_challenge(bot_username, base_time, increment, days, variant)
+                if bot_username
+                else None
+            )
+            logger.info(f"Challenge id is {challenge_id}.")
+            self.challenge_id = challenge_id
+        finally:
+            self.last_challenge_created = time.time()
