@@ -1,18 +1,18 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
-    search::{SearchContext, TranspositionTableFlag, TranspositionTableValue},
+    search::{SearchContext, TranspositionTableFlag, TranspositionTableValue, get_flag},
     tt_value,
 };
 
 /// Calculates the margin threshold required for singular extensions.
 #[inline]
 fn singular_margin(depth: i8) -> Score {
-    2 * depth as i16
+    2 * depth as Score
 }
 
 impl super::Searcher<'_> {
     /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
-    pub(super) fn negamax(
+    pub(super) fn negamax<const ROOT: bool>(
         &mut self,
         depth: i8,
         ply: u8,
@@ -20,8 +20,6 @@ impl super::Searcher<'_> {
         beta: Score,
         mut ctx: SearchContext,
     ) -> Score {
-        self.update_analytics(ply);
-
         if self.should_stop_search() {
             return score::ZERO;
         }
@@ -52,6 +50,14 @@ impl super::Searcher<'_> {
             depth += 1;
             ctx.extensions += 1;
         }
+
+        // Base case: fall back to quiescence search
+        if depth == 0 {
+            return self.quiescence_search(0, ply, alpha, beta);
+        }
+
+        // Update analytics after quiescence to avoid counting same nodes twice
+        self.update_analytics(ply);
 
         let mut is_singular = false;
         let tt_value = self
@@ -97,7 +103,7 @@ impl super::Searcher<'_> {
             {
                 let rdepth = depth - 3;
                 let rbeta = value.score - singular_margin(depth);
-                let score = self.negamax(
+                let score = self.negamax::<false>(
                     rdepth,
                     ply,
                     rbeta - 1,
@@ -117,16 +123,12 @@ impl super::Searcher<'_> {
             }
         };
 
-        // Base case: fall back to quiescence search
-        if depth == 0 {
-            return self.quiescence_search(0, ply, alpha, beta);
-        }
-
         let mut moves = MoveList::new();
         generate_moves(&self.pos, MoveGenType::Legal, &mut moves);
 
         // Stalemate / Checkmate: In Xiangqi, a player with no legal moves loses.
         if moves.is_empty() {
+            assert!(!ROOT, "Root node should never have no legal moves");
             return score::mated_in(ply);
         }
 
@@ -158,7 +160,7 @@ impl super::Searcher<'_> {
             }
 
             self.pos.do_move(m);
-            let score = -self.negamax(
+            let score = -self.negamax::<false>(
                 depth - 1 + ext as i8,
                 ply + 1,
                 -beta,
@@ -193,21 +195,12 @@ impl super::Searcher<'_> {
             }
         }
 
-        // Cache search results to Transposition Table
-        if self.shared.keep_running.get() {
-            let flag = if best_score >= beta {
-                TranspositionTableFlag::Beta
-            } else if best_score <= alpha_orig {
-                TranspositionTableFlag::Alpha
-            } else {
-                TranspositionTableFlag::Exact
-            };
-            self.shared.transposition_table.store(
-                self.pos.zobrist_hash(),
-                ply,
-                tt_value!(best_score, flag, best_move, depth, self.shared.age),
-            );
-        }
+        let flag = get_flag(best_score, alpha_orig, beta);
+        self.shared.transposition_table.store(
+            self.pos.zobrist_hash(),
+            ply,
+            tt_value!(best_score, flag, best_move, depth, self.shared.age),
+        );
 
         best_score
     }

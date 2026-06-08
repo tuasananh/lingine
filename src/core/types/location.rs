@@ -39,7 +39,7 @@ impl Square {
     /// Maps using `rank_index * 9 + file_index` because each rank spans 9
     /// vertical files.
     #[inline]
-    pub fn from_file_rank(file: File, rank: Rank) -> Self {
+    pub const fn from_file_rank(file: File, rank: Rank) -> Self {
         let file_index = file as u8;
         let rank_index = rank as u8;
         let square_index = rank_index * 9 + file_index;
@@ -48,13 +48,13 @@ impl Square {
 
     /// Extracts the vertical column (`File`) of the square.
     #[inline]
-    pub fn file(&self) -> File {
+    pub const fn file(&self) -> File {
         File::from_repr((*self as u8) % 9).unwrap()
     }
 
     /// Extracts the horizontal row (`Rank`) of the square.
     #[inline]
-    pub fn rank(&self) -> Rank {
+    pub const fn rank(&self) -> Rank {
         Rank::from_repr((*self as u8) / 9).unwrap()
     }
 }

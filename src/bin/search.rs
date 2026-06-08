@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
         },
         pos.side_to_move(),
     );
-    let (score, best_move, nodes) = Searcher::start_search(
+    let best_move = Searcher::start_search(
         pos,
         time_manager,
         SharedContext {
@@ -61,20 +61,20 @@ fn main() -> anyhow::Result<()> {
     );
     let duration = start.elapsed();
 
-    let nps = if duration.as_secs_f64() > 0.0001 {
-        (nodes as f64 / duration.as_secs_f64()) as u64
-    } else {
-        0
-    };
+    // let nps = if duration.as_secs_f64() > 0.0001 {
+    //     (nodes as f64 / duration.as_secs_f64()) as u64
+    // } else {
+    //     0
+    // };
 
     println!("========================================");
     println!("   SEARCH RESULTS                       ");
     println!("========================================");
     println!("Best Move: {}", best_move.to_uci_string());
-    println!("Score:     {} cp", score);
-    println!("Nodes:     {}", nodes);
+    // println!("Score:     {} cp", score);
+    // println!("Nodes:     {}", nodes);
     println!("Time:      {:.3} s", duration.as_secs_f64());
-    println!("NPS:       {} nodes/sec", nps);
+    // println!("NPS:       {} nodes/sec", nps);
     println!("========================================");
 
     Ok(())

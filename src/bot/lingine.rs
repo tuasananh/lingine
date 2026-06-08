@@ -158,7 +158,7 @@ impl Engine for Lingine {
 
         let mut history_table = HistoryMoves::default();
 
-        let (_score, best_move, _nodes) = Searcher::start_search(
+        let best_move = Searcher::start_search(
             self.position.clone(),
             time_manager,
             SharedContext {

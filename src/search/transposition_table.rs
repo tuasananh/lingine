@@ -67,6 +67,16 @@ pub struct TranspositionTable {
     size_mask: usize,
 }
 
+pub fn get_flag(score: Score, alpha: Score, beta: Score) -> TranspositionTableFlag {
+    if score >= beta {
+        TranspositionTableFlag::Beta
+    } else if score <= alpha {
+        TranspositionTableFlag::Alpha
+    } else {
+        TranspositionTableFlag::Exact
+    }
+}
+
 impl Default for TranspositionTable {
     fn default() -> Self {
         Self::new(16) // Default to 16 MB

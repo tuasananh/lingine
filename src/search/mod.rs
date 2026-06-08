@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use crate::core::{Move, Piece, PieceType, Position, Score};
+use crate::core::{Move, Piece, PieceType, Position};
 use crate::uci::RunningStatus;
 
+mod aspiration_search;
 mod history_moves;
 mod iterative_deepening;
 mod killer_moves;
@@ -59,12 +60,8 @@ pub struct Searcher<'a> {
 impl<'a> Searcher<'a> {
     /// Starts the iterative deepening search loop
     ///
-    /// Returns the best move found, its score, and the total nodes searched.
-    pub fn start_search(
-        pos: Position,
-        time_manager: TimeManager,
-        shared: SharedContext,
-    ) -> (Score, Move, u64) {
+    /// Returns the best move found.
+    pub fn start_search(pos: Position, time_manager: TimeManager, shared: SharedContext) -> Move {
         // Decay history table to make sure old moves do not accumulate indefinitely and
         // overshadow newer moves.
         shared.history_moves.decay();
@@ -181,7 +178,7 @@ mod tests {
                 history_moves: &mut history_moves,
             },
         };
-        let score = ctx.negamax(
+        let score = ctx.negamax::<false>(
             1,
             6,
             -score::INFINITY,
@@ -250,7 +247,7 @@ mod tests {
             },
         };
         ctx.shared.keep_running.set(true);
-        let score = ctx.negamax(
+        let score = ctx.negamax::<false>(
             1,
             5,
             -score::INFINITY,
