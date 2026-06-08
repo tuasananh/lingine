@@ -39,8 +39,14 @@ impl super::Searcher<'_> {
                 .shared
                 .transposition_table
                 .probe(self.pos.zobrist_hash(), 0)
-                .unwrap()
-                .best_move;
+                .map(|entry| entry.best_move)
+                .unwrap_or_else(|| {
+                    eprintln!(
+                        "warn: No best move found in TT for depth {}, using NULL move",
+                        depth
+                    );
+                    Move::NULL
+                });
 
             self.send_uci_info(depth, last_best_score, last_best_move);
 
