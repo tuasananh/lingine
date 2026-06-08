@@ -22,6 +22,7 @@ impl super::Searcher<'_> {
 
         for ply in 1..depth as u8 {
             if let Some(entry) = self
+                .shared
                 .transposition_table
                 .probe(current_pos.zobrist_hash(), ply)
             {
@@ -63,7 +64,7 @@ impl super::Searcher<'_> {
     /// variation, nodes searched, time taken, and NPS.
     pub(super) fn send_uci_info(&self, depth: i8, best_score: Score, best_move: Move) {
         let pv_vec = self.extract_pv(depth, best_move);
-        let time_elapsed = self.start_time.elapsed();
+        let time_elapsed = self.time_manager.executed_time();
         let nps = if time_elapsed.as_secs_f64() > 0.001 {
             Some((self.nodes as f64 / time_elapsed.as_secs_f64()) as u64)
         } else {
@@ -90,7 +91,7 @@ impl super::Searcher<'_> {
             nodes: Some(self.nodes),
             time: Some(time_elapsed),
             nps,
-            hashfull: Some(self.transposition_table.hashfull()),
+            hashfull: Some(self.shared.transposition_table.hashfull()),
             score: Some(uci_score),
             pv: pv_vec.map(|pv| pv.into_iter().map(|m| m.to_uci_string()).collect()),
             ..UciInfo::new()

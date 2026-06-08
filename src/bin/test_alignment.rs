@@ -1,3 +1,5 @@
+use std::num::NonZero;
+
 fn main() {
     println!(
         "Sizeof Option<Square>: {}",
@@ -6,5 +8,17 @@ fn main() {
     println!(
         "Sizeof Position::board: {}",
         std::mem::size_of::<lingine::core::Position>()
+    );
+    println!(
+        "Sizeof Option<Duration>: {}",
+        std::mem::size_of::<Option<std::time::Duration>>()
+    );
+    println!(
+        "Sizeof Duration: {}",
+        std::mem::size_of::<std::time::Duration>()
+    );
+    println!(
+        "Sizeof Option<NonZero<u32>>: {}",
+        std::mem::size_of::<Option<NonZero<u32>>>()
     );
 }

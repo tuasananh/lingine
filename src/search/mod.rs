@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::core::{Move, Piece, PieceType, Position, Score};
 use crate::uci::RunningStatus;
@@ -10,11 +9,13 @@ mod killer_moves;
 mod move_ordering;
 mod negamax;
 mod quiescence_search;
+mod time_manager;
 mod transposition_table;
 mod uci_info;
 
 pub use history_moves::*;
 pub use killer_moves::*;
+pub use time_manager::*;
 pub use transposition_table::*;
 
 pub const MAX_PLY: usize = 128;
@@ -28,90 +29,59 @@ struct SearchContext {
     pub extensions: u8,
 }
 
+pub struct SharedContext<'a> {
+    /// Reference to the transposition table.
+    pub transposition_table: &'a mut TranspositionTable,
+    /// History heuristic table to prioritize frequently successful quiet moves.
+    pub history_moves: &'a mut HistoryMoves,
+    /// Current search sequence age.
+    pub age: u8,
+    /// Track the running status of the search, may be stopped in another
+    /// thread.
+    pub keep_running: Arc<RunningStatus>,
+}
+
 /// Shared context parameters passed down the recursive search stack.
 pub struct Searcher<'a> {
     pos: Position,
-    /// Track the running status of the search, may be stopped in another
-    /// thread.
-    keep_running: Arc<RunningStatus>,
     /// Tracks total nodes searched during this `go` invocation.
     nodes: u64,
-    /// The moment when the search was started.
-    start_time: Instant,
+    /// The time budget allocated for this search, if any.
+    time_manager: TimeManager,
     /// Absolute time budget allowed for this search ply.
-    allocated_time: Option<std::time::Duration>,
-    /// Reference to the transposition table.
-    transposition_table: &'a mut TranspositionTable,
-    /// Current search sequence age.
-    age: u8,
-    /// Killer moves tracked per ply to sort high-quality quiet moves.
     killer_moves: KillerMoves,
-    /// History heuristic table to prioritize frequently successful quiet moves.
-    history_moves: &'a mut HistoryMoves,
     /// Tracks the maximum search depth reached, including quiescence.
     max_ply: u8,
-}
-
-pub struct SearcherParameters<'a> {
-    // We take ownership of the position here since we will be modifying it during search.
-    pub pos: Position,
-    // The time limit for this search
-    pub allocated_time: Option<Duration>,
-    // The stop flag to signal search interruption from another thread
-    pub keep_running: Arc<RunningStatus>,
-    // The max depth to search to
-    pub max_depth: i8,
-    // The transposition table to use for caching search results
-    //
-    // See: https://www.chessprogramming.org/Transposition_Table
-    pub transposition_table: &'a mut TranspositionTable,
-    // The history table for quiet moves
-    //
-    // See: https://www.chessprogramming.org/History_Heuristic
-    pub history_moves: &'a mut HistoryMoves,
-    // The current search sequence age for TT entry management
-    //
-    // See: https://www.chessprogramming.org/Transposition_Table#Aging
-    pub age: u8,
+    /// Shared context parameters passed down the recursive search stack
+    shared: SharedContext<'a>,
 }
 
 impl<'a> Searcher<'a> {
     /// Starts the iterative deepening search loop
     ///
     /// Returns the best move found, its score, and the total nodes searched.
-    pub fn start_search(params: SearcherParameters) -> (Score, Move, u64) {
-        let SearcherParameters {
-            pos,
-            allocated_time,
-            keep_running,
-            max_depth,
-            transposition_table,
-            history_moves,
-            age,
-        } = params;
-
+    pub fn start_search(
+        pos: Position,
+        time_manager: TimeManager,
+        shared: SharedContext,
+    ) -> (Score, Move, u64) {
         // Decay history table to make sure old moves do not accumulate indefinitely and
         // overshadow newer moves.
+        shared.history_moves.decay();
 
-        history_moves.decay();
-
-        let is_running = keep_running.clone();
+        let is_running = shared.keep_running.clone();
 
         let search = Searcher {
             pos,
-            keep_running,
             nodes: 0,
-            start_time: Instant::now(),
-            allocated_time,
-            transposition_table,
-            age,
+            time_manager,
             killer_moves: KillerMoves::new(),
-            history_moves,
             max_ply: 0,
+            shared,
         };
 
         is_running.set(true);
-        let answer = search.iterative_deepening(max_depth);
+        let answer = search.iterative_deepening();
         is_running.set(false);
         answer
     }
@@ -124,17 +94,18 @@ impl<'a> Searcher<'a> {
 
     #[inline]
     fn should_stop_search(&self) -> bool {
-        if !self.keep_running.get() {
+        if !self.shared.keep_running.get() {
             return true;
         }
+        const POLL_INTERVAL: u64 = 4096;
         // Periodically check if we have exceeded the allocated time budget to avoid
         // timing out in the middle of a ply.
-        if self.nodes & 1023 == 0
-            && let Some(limit) = self.allocated_time
-            && self.start_time.elapsed() >= limit
+        if self.nodes >= self.time_manager.max_nodes()
+            || (self.nodes.is_multiple_of(POLL_INTERVAL)
+                && self.time_manager.is_hard_bound_reached())
         {
             // Timed out, stop the search
-            self.keep_running.set(false);
+            self.shared.keep_running.set(false);
             return true;
         }
         false
@@ -160,8 +131,8 @@ mod tests {
     use super::*;
     use crate::core::{Move, Side, Square};
     use crate::core::{Position, score};
+    use crate::uci::GoParameters;
     use std::sync::Arc;
-    use std::time::Instant;
 
     #[test]
     fn test_repetition_draw_repetition() {
@@ -196,17 +167,19 @@ mod tests {
         let mut transposition_table = TranspositionTable::new(1);
         let killers = KillerMoves::default();
         let mut history_moves = HistoryMoves::default();
+        let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
         let mut ctx = Searcher {
             pos: pos.clone(),
-            keep_running: Arc::new(RunningStatus::default()),
             nodes: 0,
-            start_time: Instant::now(),
-            allocated_time: None,
-            transposition_table: &mut transposition_table,
-            age: 1,
+            time_manager,
             killer_moves: killers,
-            history_moves: &mut history_moves,
             max_ply: 0,
+            shared: SharedContext {
+                keep_running: Arc::new(RunningStatus::default()),
+                transposition_table: &mut transposition_table,
+                age: 1,
+                history_moves: &mut history_moves,
+            },
         };
         let score = ctx.negamax(
             1,
@@ -262,19 +235,21 @@ mod tests {
         let mut transposition_table = TranspositionTable::new(1);
         let killers = KillerMoves::default();
         let mut history_moves = HistoryMoves::default();
+        let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
         let mut ctx = Searcher {
             pos,
-            keep_running: Arc::new(RunningStatus::default()),
             nodes: 0,
-            start_time: Instant::now(),
-            allocated_time: None,
-            transposition_table: &mut transposition_table,
-            age: 1,
+            time_manager,
             killer_moves: killers,
-            history_moves: &mut history_moves,
             max_ply: 0,
+            shared: SharedContext {
+                keep_running: Arc::new(RunningStatus::default()),
+                transposition_table: &mut transposition_table,
+                age: 1,
+                history_moves: &mut history_moves,
+            },
         };
-        ctx.keep_running.set(true);
+        ctx.shared.keep_running.set(true);
         let score = ctx.negamax(
             1,
             5,

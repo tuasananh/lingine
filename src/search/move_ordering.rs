@@ -30,7 +30,7 @@ impl super::Searcher<'_> {
                     if self.killer_moves.contains(m, ply) {
                         900_000_000
                     } else {
-                        self.history_moves.get(self.pos.side_to_move(), m)
+                        self.shared.history_moves.get(self.pos.side_to_move(), m)
                     }
                 }
             };

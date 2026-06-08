@@ -54,7 +54,10 @@ impl super::Searcher<'_> {
         }
 
         let mut is_singular = false;
-        let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
+        let tt_value = self
+            .shared
+            .transposition_table
+            .probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
             if value.depth >= depth {
                 match value.flag {
@@ -167,7 +170,7 @@ impl super::Searcher<'_> {
             );
             self.pos.undo_move();
 
-            if !self.keep_running.get() {
+            if !self.shared.keep_running.get() {
                 return score::ZERO;
             }
 
@@ -182,7 +185,8 @@ impl super::Searcher<'_> {
                 // Update killers and history for quiet moves
                 if self.pos.is_empty(m.to()) {
                     self.killer_moves.update(m, ply);
-                    self.history_moves
+                    self.shared
+                        .history_moves
                         .increase(self.pos.side_to_move(), m, depth);
                 }
                 break; // Beta cutoff
@@ -190,7 +194,7 @@ impl super::Searcher<'_> {
         }
 
         // Cache search results to Transposition Table
-        if self.keep_running.get() {
+        if self.shared.keep_running.get() {
             let flag = if best_score >= beta {
                 TranspositionTableFlag::Beta
             } else if best_score <= alpha_orig {
@@ -198,10 +202,10 @@ impl super::Searcher<'_> {
             } else {
                 TranspositionTableFlag::Exact
             };
-            self.transposition_table.store(
+            self.shared.transposition_table.store(
                 self.pos.zobrist_hash(),
                 ply,
-                tt_value!(best_score, flag, best_move, depth, self.age),
+                tt_value!(best_score, flag, best_move, depth, self.shared.age),
             );
         }
 

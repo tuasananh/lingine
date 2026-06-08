@@ -6,11 +6,12 @@ use crate::{
 impl super::Searcher<'_> {
     /// Starts an iterative deepening search up to the specified maximum depth,
     /// with aspiration windows and UCI info updates.
-    pub(super) fn iterative_deepening(mut self, max_depth: i8) -> (Score, Move, u64) {
+    pub(super) fn iterative_deepening(mut self) -> (Score, Move, u64) {
         // Fetch the best move from the transposition table to use as the initial guess
         // for best move, Since we might have seen this position before in
         // earlier searches.
         let mut best_move = self
+            .shared
             .transposition_table
             .probe(self.pos.zobrist_hash(), 0)
             .map_or(Move::NULL, |entry| entry.best_move);
@@ -30,8 +31,8 @@ impl super::Searcher<'_> {
         // score.
         //
         // See: https://www.chessprogramming.org/Iterative_Deepening
-        for depth in 1..=max_depth {
-            if !self.keep_running.get() {
+        for depth in 1..=self.time_manager.max_depth() {
+            if !self.shared.keep_running.get() {
                 break;
             }
 
@@ -39,9 +40,7 @@ impl super::Searcher<'_> {
             // in the middle of a ply. Also known as a Soft-Bound Time Limit.
             //
             // See: https://www.chessprogramming.org/Time_Management#Soft_Bound
-            if let Some(limit) = self.allocated_time
-                && self.start_time.elapsed() > limit / 2
-            {
+            if self.time_manager.is_soft_bound_reached() {
                 break;
             }
 
@@ -78,7 +77,7 @@ impl super::Searcher<'_> {
                 depth_best_move = Move::NULL;
 
                 for m in moves.iter().copied() {
-                    if !self.keep_running.get() {
+                    if !self.shared.keep_running.get() {
                         break;
                     }
                     self.pos.do_move(m);
@@ -100,7 +99,7 @@ impl super::Searcher<'_> {
                     }
                 }
 
-                if !self.keep_running.get() {
+                if !self.shared.keep_running.get() {
                     break;
                 }
 
@@ -126,7 +125,7 @@ impl super::Searcher<'_> {
                 }
             }
 
-            if self.keep_running.get() && !depth_best_move.is_null() {
+            if self.shared.keep_running.get() && !depth_best_move.is_null() {
                 last_depth_score = best_score;
                 best_move = depth_best_move;
 
@@ -134,7 +133,7 @@ impl super::Searcher<'_> {
             }
         }
 
-        self.keep_running.set(false);
+        self.shared.keep_running.set(false);
 
         (last_depth_score, best_move, self.nodes)
     }

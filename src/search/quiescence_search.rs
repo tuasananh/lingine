@@ -66,7 +66,10 @@ impl super::Searcher<'_> {
 
         let mut best_move = Move::NULL;
 
-        let tt_value = self.transposition_table.probe(self.pos.zobrist_hash(), ply);
+        let tt_value = self
+            .shared
+            .transposition_table
+            .probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
             if value.depth >= depth {
                 match value.flag {
@@ -117,7 +120,7 @@ impl super::Searcher<'_> {
             self.pos.do_move(m);
             let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
             self.pos.undo_move();
-            if !self.keep_running.get() {
+            if !self.shared.keep_running.get() {
                 return score::ZERO;
             }
             if score > best_score {
@@ -133,7 +136,7 @@ impl super::Searcher<'_> {
             }
         }
 
-        if self.keep_running.get() {
+        if self.shared.keep_running.get() {
             let flag = if best_score >= beta {
                 TranspositionTableFlag::Beta
             } else if best_score <= alpha_orig {
@@ -141,10 +144,10 @@ impl super::Searcher<'_> {
             } else {
                 TranspositionTableFlag::Exact
             };
-            self.transposition_table.store(
+            self.shared.transposition_table.store(
                 self.pos.zobrist_hash(),
                 ply,
-                tt_value!(best_score, flag, best_move, depth, self.age),
+                tt_value!(best_score, flag, best_move, depth, self.shared.age),
             );
         }
 

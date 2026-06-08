@@ -1,12 +1,9 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 
-use crate::core::{
-    File, Move, MoveGenType, MoveList, Position, Rank, Side, Square, generate_moves,
-};
-use crate::search::{HistoryMoves, MAX_DEPTH, Searcher, SearcherParameters, TranspositionTable};
+use crate::core::{File, Move, MoveGenType, MoveList, Position, Rank, Square, generate_moves};
+use crate::search::{HistoryMoves, Searcher, SharedContext, TimeManager, TranspositionTable};
 use crate::uci::{
     BestMove, Engine, GoParameters, PositionParameters, RegisterParameters, RunningStatus,
     SetOptionParameters, UciId, UciOption,
@@ -44,45 +41,6 @@ impl Lingine {
     /// Creates a new EngineBot instance.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Determines the time limit budget for a given search color/increments.
-    fn calculate_search_time(params: &GoParameters, side: Side) -> Option<Duration> {
-        if let Some(movetime) = params.movetime {
-            return Some(movetime.saturating_sub(Duration::from_millis(10)));
-        }
-
-        let (time_left, inc) = match side {
-            Side::Red => (params.wtime, params.winc),
-            Side::Black => (params.btime, params.binc),
-        };
-
-        if let Some(time) = time_left {
-            let inc_val = inc.unwrap_or(Duration::ZERO);
-
-            // Determine divisor based on movestogo, default to 20
-            let divisor = if let Some(movestogo) = params.movestogo {
-                movestogo.get() as u64
-            } else {
-                20
-            };
-
-            // Basic allocation: time_left / divisor + inc / 2
-            let allocated = time / divisor as u32 + inc_val / 2;
-
-            // Safety buffer: reserve at least 50ms or 10% of remaining time, whichever is
-            // smaller, to account for process/communication latency.
-            let buffer = Duration::from_millis(50).min(time / 10);
-            let limit = time.saturating_sub(buffer);
-
-            // Ensure we allocate at least 10ms (or the remaining limit if it's even
-            // smaller)
-            let min_time = Duration::from_millis(10).min(limit);
-
-            Some(allocated.min(limit).max(min_time))
-        } else {
-            None
-        }
     }
 }
 
@@ -196,21 +154,20 @@ impl Engine for Lingine {
         // Calculate time limit for this search based on the provided parameters and the
         // side to move. This will help us determine how long to search before returning
         // a best move.
-        let time_limit = Self::calculate_search_time(&params, self.position.side_to_move());
-
-        let max_depth = params.depth.unwrap_or(MAX_DEPTH as u32) as i8;
+        let time_manager = TimeManager::new(&params, self.position.side_to_move());
 
         let mut history_table = HistoryMoves::default();
 
-        let (_score, best_move, _nodes) = Searcher::start_search(SearcherParameters {
-            pos: self.position.clone(),
-            allocated_time: time_limit,
-            keep_running: self.keep_running.clone(),
-            max_depth,
-            transposition_table: &mut self.transposition_table,
-            history_moves: &mut history_table,
-            age: self.age,
-        });
+        let (_score, best_move, _nodes) = Searcher::start_search(
+            self.position.clone(),
+            time_manager,
+            SharedContext {
+                keep_running: self.keep_running.clone(),
+                transposition_table: &mut self.transposition_table,
+                history_moves: &mut history_table,
+                age: self.age,
+            },
+        );
 
         // Returns the best move found in UCI format. Pondering is not implemented in
         // this version, so we return `None` for the ponder move.
