@@ -158,16 +158,17 @@ const PIECE_SQUARE_TABLE_PAWN: [Score; 90] = [
 /// and color on a specific square. For Black pieces, the position is
 /// automatically mirrored vertically.
 #[inline]
-pub fn piece_square_table_value(piece_type: PieceType, color: Side, sq: Square) -> Score {
-    let index = if color == Side::Red {
-        sq as usize
-    } else {
-        // Mirror rank vertically: 9 - rank, and file horizontally: 8 - file
-        let file = sq.file() as usize;
-        let rank = sq.rank() as usize;
-        let mirrored_rank = 9 - rank;
-        let mirrored_file = 8 - file;
-        mirrored_rank * 9 + mirrored_file
+pub const fn piece_square_table_value(piece_type: PieceType, color: Side, sq: Square) -> Score {
+    let index = match color {
+        Side::Red => sq as usize,
+        Side::Black => {
+            // Mirror rank vertically: 9 - rank, and file horizontally: 8 - file
+            let file = sq.file() as usize;
+            let rank = sq.rank() as usize;
+            let mirrored_rank = 9 - rank;
+            let mirrored_file = 8 - file;
+            mirrored_rank * 9 + mirrored_file
+        }
     };
     match piece_type {
         PieceType::King => PIECE_SQUARE_TABLE_KING[index],

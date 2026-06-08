@@ -24,7 +24,7 @@ use crate::core::{Piece, Score, Square};
 /// Returns a piece's base material value, dynamically adjusting Pawn values
 /// based on whether they have crossed the river.
 #[inline]
-pub fn piece_material_value(piece: Piece, sq: Square) -> Score {
+pub const fn piece_material_value(piece: Piece, sq: Square) -> Score {
     match piece {
         Piece::WhiteRook | Piece::BlackRook => 600,
         Piece::WhiteCannon | Piece::BlackCannon => 285,
