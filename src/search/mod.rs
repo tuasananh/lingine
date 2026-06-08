@@ -67,6 +67,7 @@ impl<'a> Searcher<'a> {
         shared.history_moves.decay();
 
         let is_running = shared.keep_running.clone();
+        shared.transposition_table.incremente_age();
 
         let search = Searcher {
             pos,

@@ -1,6 +1,6 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
-    search::TranspositionTableFlag,
+    search::Bound,
     uci::{UciInfo, UciScore, UciScoreBound},
 };
 
@@ -26,7 +26,7 @@ impl super::Searcher<'_> {
                 .transposition_table
                 .probe(current_pos.zobrist_hash(), ply)
             {
-                if entry.flag == TranspositionTableFlag::Empty {
+                if entry.bound == Bound::Empty {
                     break;
                 }
                 let m = entry.best_move;

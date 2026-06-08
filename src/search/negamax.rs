@@ -1,6 +1,6 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
-    search::{SearchContext, TranspositionTableFlag, TranspositionTableValue, get_flag},
+    search::{Bound, Entry, SearchContext},
     tt_value,
 };
 
@@ -66,19 +66,19 @@ impl super::Searcher<'_> {
             .probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
             if value.depth >= depth {
-                match value.flag {
-                    TranspositionTableFlag::Exact => return value.score,
-                    TranspositionTableFlag::Alpha => {
+                match value.bound {
+                    Bound::Exact => return value.score,
+                    Bound::Alpha => {
                         if value.score <= alpha {
                             return value.score;
                         }
                     }
-                    TranspositionTableFlag::Beta => {
+                    Bound::Beta => {
                         if value.score >= beta {
                             return value.score;
                         }
                     }
-                    TranspositionTableFlag::Empty => {
+                    Bound::Empty => {
                         unreachable!("Empty flag should not be returned by probe")
                     }
                 }
@@ -98,7 +98,7 @@ impl super::Searcher<'_> {
                 && ctx.excluded_move.is_null()
                 && ctx.extensions < 6
                 && value.depth >= depth - 3
-                && value.flag != TranspositionTableFlag::Alpha
+                && value.bound != Bound::Alpha
                 && !score::is_winning(value.score.abs())
             {
                 let rdepth = depth - 3;
@@ -199,11 +199,11 @@ impl super::Searcher<'_> {
             }
         }
 
-        let flag = get_flag(best_score, alpha_orig, beta);
+        let bound = Bound::with_score(best_score, alpha_orig, beta);
         self.shared.transposition_table.store(
             self.pos.zobrist_hash(),
             ply,
-            tt_value!(best_score, flag, best_move, depth, self.shared.age),
+            tt_value!(best_score, best_move, bound, depth),
         );
 
         best_score
