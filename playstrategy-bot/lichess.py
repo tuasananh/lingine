@@ -1,6 +1,5 @@
 import json
 import requests
-import time
 from urllib.parse import urljoin
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 from urllib3.exceptions import ProtocolError
@@ -68,6 +67,8 @@ class Lichess:
             logger.debug(
                 f"API GET response {url} status={response.status_code} body={response.text[:200]}"
             )
+            if response.status_code == 429:
+                response.raise_for_status()
             if raise_for_status:
                 response.raise_for_status()
             response.encoding = "utf-8"
@@ -76,7 +77,8 @@ class Lichess:
             try:
                 return response.json()
             except ValueError:
-                response.raise_for_status()
+                if raise_for_status:
+                    response.raise_for_status()
                 raise
         except Exception as e:
             logger.debug(f"API GET error {url}: {e}")
@@ -112,12 +114,15 @@ class Lichess:
             logger.debug(
                 f"API POST response {url} status={response.status_code} body={response.text[:200]}"
             )
+            if response.status_code == 429:
+                response.raise_for_status()
             if raise_for_status:
                 response.raise_for_status()
             try:
                 return response.json()
             except ValueError:
-                response.raise_for_status()
+                if raise_for_status:
+                    response.raise_for_status()
                 raise
         except Exception as e:
             logger.debug(f"API POST error {url}: {e}")
@@ -199,6 +204,14 @@ class Lichess:
                     logger.warning(f"Failed to parse online bot line: {e}")
             return bots
         except Exception as e:
+            from requests.exceptions import HTTPError
+
+            if (
+                isinstance(e, HTTPError)
+                and e.response is not None
+                and e.response.status_code == 429
+            ):
+                raise
             logger.warning(f"Error fetching online bots: {e}")
             return []
 

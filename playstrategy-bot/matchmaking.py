@@ -128,13 +128,14 @@ class Matchmaking:
             if isinstance(e, HTTPError) and e.response is not None and e.response.status_code == 429:
                 retry_after = e.response.headers.get("Retry-After")
                 try:
-                    seconds = int(retry_after) if retry_after else 60
+                    seconds = int(retry_after) if retry_after else 3600
                 except ValueError:
-                    seconds = 60
+                    seconds = 3600
                 logger.warning(
                     f"Rate limited (429) when challenging bot. Backing off matchmaking for {seconds} seconds."
                 )
                 self.rate_limit_backoff_until = time.time() + seconds
-            raise
+            else:
+                raise
         finally:
             self.last_challenge_created = time.time()
