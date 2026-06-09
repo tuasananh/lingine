@@ -1,21 +1,3 @@
-//! Static position evaluation for Xiangqi.
-//!
-//! This module performs a static evaluation of a given board position, yielding
-//! a `Value` in centipawns. The evaluation is conducted from Red's
-//! perspective:
-//! - Positive values favor Red.
-//! - Negative values favor Black.
-//!
-//! The evaluation function is highly optimized and relies entirely on
-//! incrementally updated scores: `evaluate = material_score +
-//! piece_square_table_score`
-//!
-//! Details:
-//! 1. **Material Score**: Cumulative weight of remaining pieces.
-//! 2. **Piece-Square Table (PST) Score**: Positional values reflecting the
-//!    developmental guidance, tactical positioning, and river crossing dynamics
-//!    for each piece type.
-
 mod piece_square_table;
 pub use piece_square_table::*;
 
@@ -46,7 +28,7 @@ pub const fn piece_material_value(piece: Piece, sq: Square) -> Score {
             }
         }
         Piece::RedKing | Piece::BlackKing => 0, /* Treated as 0 for incremental score (kings
-                                                   * never captured) */
+                                                 * never captured) */
     }
 }
 

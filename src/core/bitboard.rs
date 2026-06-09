@@ -115,19 +115,6 @@ impl Bitboard {
         Self(self.0 & b.0)
     }
 
-    /// A compile-time precomputed mask representing both Palace zones (3x3
-    /// squares at the center-bottom and center-top). Used to validate
-    /// Advisor and King moves which are strictly restricted to the Palace.
-    ///
-    /// * **Red Palace**: Squares D0, E0, F0, D1, E1, F1, D2, E2, F2 (indexes
-    ///   3..5, 12..14, 21..23).
-    /// * **Black Palace**: Squares D7, E7, F7, D8, E8, F8, D9, E9, F9 (indexes
-    ///   66..68, 75..77, 84..86).
-    ///
-    /// Combined bitwise mask = `0x70381C0000000000E07038u128` (active bits
-    /// corresponding exactly to these indices).
-    pub const PALACE: Self = Self(0x70381C0000000000E07038u128);
-
     /// Constructs a bitboard with all bits active along the specified vertical
     /// column (`File`).
     pub const fn file(f: File) -> Self {
@@ -162,9 +149,6 @@ impl Bitboard {
 
     /// Returns a precomputed bitboard covering one half of the board (5 ranks)
     /// for a given player:
-    ///
-    /// * **Red Side**: Ranks R0 to R4 (indices 0 to 44).
-    /// * **Black Side**: Ranks R5 to R9 (indices 45 to 89).
     pub const fn side(color: Side) -> Self {
         match color {
             Side::Red => Self::rank(Rank::R0)
@@ -178,29 +162,6 @@ impl Bitboard {
                 .const_or(Self::rank(Rank::R8))
                 .const_or(Self::rank(Rank::R9)),
         }
-    }
-
-    /// A precomputed mask representing vertical pawn starting paths (Files FA,
-    /// FC, FE, FG, FI). In Xiangqi, Pawns can only cross the river and move
-    /// sideways on files A, C, E, G, I before promotion.
-    pub const PAWN_FILE: Self = Self::file(File::FA)
-        .const_or(Self::file(File::FC))
-        .const_or(Self::file(File::FE))
-        .const_or(Self::file(File::FG))
-        .const_or(Self::file(File::FI));
-
-    /// Computes the valid Pawn board zone for the given color.
-    /// Prior to crossing the river (opponent's side), Pawns can only move
-    /// straight forward. Once they cross, they can move forward or
-    /// horizontally sideways (left/right).
-    pub const fn pawn(color: Side) -> Self {
-        let other_side = Self::side(color.opposite());
-        let my_side = Self::PAWN_FILE.const_and(match color {
-            Side::Red => Self::rank(Rank::R3).const_or(Self::rank(Rank::R4)),
-            Side::Black => Self::rank(Rank::R5).const_or(Self::rank(Rank::R6)),
-        });
-
-        my_side.const_or(other_side)
     }
 }
 
@@ -262,11 +223,6 @@ mod tests {
     };
 
     #[test]
-    fn test_print_palace() {
-        println!("{}", Bitboard::PALACE);
-    }
-
-    #[test]
     fn test_print_rank_bitboard() {
         println!("{}", Bitboard::rank(Rank::R0));
         println!("{}", Bitboard::rank(Rank::R1));
@@ -281,11 +237,6 @@ mod tests {
     }
 
     #[test]
-    fn test_print_pawn_file_bitboard() {
-        println!("{}", Bitboard::PAWN_FILE);
-    }
-
-    #[test]
     fn test_print_red_side_bitboard() {
         println!("{}", Bitboard::side(Side::Red));
     }
@@ -293,11 +244,5 @@ mod tests {
     #[test]
     fn test_print_black_side_bitboard() {
         println!("{}", Bitboard::side(Side::Black));
-    }
-
-    #[test]
-    fn test_print_pawn_bitboard() {
-        println!("{}", Bitboard::pawn(Side::Red));
-        println!("{}", Bitboard::pawn(Side::Black));
     }
 }

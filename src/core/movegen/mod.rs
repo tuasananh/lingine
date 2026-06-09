@@ -123,7 +123,8 @@ fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveLis
     }
 }
 
-/// The main entry point for move generation.
+/// Generates moves of the specified type for the current position and appends
+/// them to the provided `moves` list.
 pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveList) {
     match pos.side_to_move() {
         Side::Red => generate_pseudo_legal::<true>(pos, moves),
@@ -134,7 +135,6 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
         return;
     }
 
-    // Leverage ArrayVec's native `retain` instead of a manual two-pointer loop
     moves.retain(|m| {
         if !pos.legal(*m) {
             return false;

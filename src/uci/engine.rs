@@ -36,11 +36,6 @@ impl RunningStatus {
 }
 
 /// The interface every engine implementation must satisfy.
-///
-/// The [`Handler`] calls these methods in response to GUI commands and is
-/// responsible for all output to stdout (printing `uciok`, `readyok`,
-/// `bestmove`, `info`, etc.). Engine implementations only produce typed values
-/// and must **never** write to stdout directly.
 pub trait Engine: Send {
     /// Return the engine's identity and its supported options.
     ///
@@ -84,32 +79,13 @@ pub trait Engine: Send {
 
     /// Start searching the current position.
     ///
-    /// The engine should stream [`UciInfo`] messages through `tx` while
-    /// searching, then return a [`BestMove`] when the search is complete.
+    /// The engine should return a [`BestMove`] when the search is complete.
     ///
-    /// The handler prints every received `info` line and the final `bestmove`
-    /// line. The engine must **not** print anything itself.
-    ///
-    /// ## Stop flag
-    /// [`GoParameters::stop`] is an `Arc<AtomicBool>` shared with the handler.
-    /// The handler sets it to `true` when it receives a `stop` command.
-    /// The engine's search loop **must** check this flag periodically and
-    /// return the best move found so far when it becomes `true`.
-    ///
-    /// ## Threading
-    /// The flag is `Arc<AtomicBool>` so `go` can safely be moved to a
-    /// background thread in Phase 4 without changing this trait signature.
+    /// Any additional info messages should be printed during the search.
     fn go(&mut self, params: GoParameters) -> Result<BestMove>;
 
     /// Called when the GUI sends `ponderhit` — the opponent played the move the
     /// engine was pondering on; switch from ponder mode to normal search.
-    ///
-    /// # Current limitation
-    /// Thread B (the engine actor) is blocked inside `engine.go()` while
-    /// searching, so a `ponderhit` command queues in the command channel but
-    /// is **not processed until the current search returns**. This means
-    /// pondering cannot be properly supported until `go` is made non-blocking
-    /// (e.g. by managing an internal search thread inside the engine).
     fn ponderhit(&mut self);
 
     /// Quit the engine as soon as possible.

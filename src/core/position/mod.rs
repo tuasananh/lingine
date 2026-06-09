@@ -51,7 +51,6 @@ pub struct Position {
     bitboard_by_type: [Bitboard; PieceType::COUNT],
     /// Precomputed bitboards showing piece placements grouped by `Color`.
     bitboard_by_color: [Bitboard; Side::COUNT],
-
     /// Active count of each piece category on the board.
     piece_count: [u8; Piece::COUNT],
     /// Stack tracking previous move parameter histories for undoing moves.
@@ -61,7 +60,6 @@ pub struct Position {
     game_ply: u16,
     /// The player active to play next.
     side_to_move: Side,
-
     /// Current transposition hash of the board position.
     zobrist_hash: u64,
     /// Palace coordinates of both players' Generals (Kings) for faster check

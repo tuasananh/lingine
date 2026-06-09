@@ -20,8 +20,7 @@ impl Position {
             self.king_square(us)
         };
 
-        let mut occupied = self.bitboard_by_color[Side::Red as usize]
-            | self.bitboard_by_color[Side::Black as usize];
+        let mut occupied = self.bitboard_occupied();
         occupied.clear_bit(from);
         occupied.set_bit(to);
 
@@ -104,11 +103,6 @@ impl Position {
         // (treated as a Rook attack).
         let rook_attackers = rook_attacks(square, occupied) & (opponent_rooks | opponent_king);
 
-        // --- Cannon scanner (platform-leap captures) ---
-        // Compute Cannon attack squares from `square`: Cannons capture by leaping over
-        // exactly one intervening piece (the "platform"). `cannon_attacks`
-        // returns squares that have exactly one piece between them and `square`
-        // along a rank or file.
         let cannon_attackers = cannon_captures(square, occupied) & opponent_cannons;
 
         pawn_attackers | knight_attackers | rook_attackers | cannon_attackers

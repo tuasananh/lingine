@@ -12,7 +12,8 @@ use crate::core::{Bitboard, File, Rank, Side, Square};
 pub struct RankEntry {
     /// Slides until hitting a blocker (inclusive).
     pub rook: [u16; 512],
-    /// Quiet moves skip to the first screen; captures land on the piece behind it.
+    /// Quiet moves skip to the first screen; captures land on the piece behind
+    /// it.
     pub cannon: [u16; 512],
 }
 
@@ -93,8 +94,8 @@ const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
 
 /// Builds the pawn attack mask for one square and one side.
 /// `forward_dr`: +1 for Red (moves up), -1 for Black (moves down).
-/// `river_start`: rank at which the pawn is considered promoted (5 for Red, ≤4 for Black).
-/// `promoted`: true when the pawn has crossed the river.
+/// `river_start`: rank at which the pawn is considered promoted (5 for Red, ≤4
+/// for Black). `promoted`: true when the pawn has crossed the river.
 #[inline(always)]
 const fn pawn_attacks_from(f: i8, r: i8, forward_dr: i8, promoted: bool) -> u128 {
     let mut mask = 0u128;
@@ -362,7 +363,8 @@ const fn bishop_attacks(sq: usize, occ: u128) -> u128 {
     attacks
 }
 
-/// Squares a knight could occupy to attack `sq` given `occ` (used in check detection).
+/// Squares a knight could occupy to attack `sq` given `occ` (used in check
+/// detection).
 const fn knight_to_attacks(sq: usize, occ: u128) -> u128 {
     let r = (sq / 9) as i32;
     let f = (sq % 9) as i32;
