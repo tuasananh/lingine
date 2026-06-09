@@ -55,7 +55,7 @@ fn spawn_listener(is_running: Arc<RunningStatus>) -> Receiver<EngineCommand> {
 }
 
 pub fn message_loop<E: Engine + 'static>(mut bot: E) {
-    let is_running = bot.get_running_status();
+    let is_running = bot.running_status();
     let rx = spawn_listener(is_running);
 
     for command in rx {

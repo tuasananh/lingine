@@ -115,7 +115,7 @@ impl Engine for PrintBot {
         eprintln!("debug: quit");
     }
 
-    fn get_running_status(&self) -> Arc<RunningStatus> {
+    fn running_status(&self) -> Arc<RunningStatus> {
         Arc::new(RunningStatus::default())
     }
 }

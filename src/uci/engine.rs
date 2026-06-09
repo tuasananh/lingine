@@ -118,5 +118,5 @@ pub trait Engine: Send {
     /// Return the running status of the engine.
     ///
     /// Useful for when we need to stop or check if the engine is running.
-    fn get_running_status(&self) -> Arc<RunningStatus>;
+    fn running_status(&self) -> Arc<RunningStatus>;
 }

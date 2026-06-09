@@ -159,7 +159,7 @@ impl Engine for Lingine {
         eprintln!("debug: quit");
     }
 
-    fn get_running_status(&self) -> Arc<RunningStatus> {
+    fn running_status(&self) -> Arc<RunningStatus> {
         self.keep_running.clone()
     }
 }
