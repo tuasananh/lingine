@@ -13,9 +13,15 @@
 //!    file tables to yield exact sliding paths and Cannon leap capture targets
 //!    instantly.
 
-use crate::core::{bitboard::Bitboard, types::Square};
-
-use super::tables::{FILE_ATTACKS_BY_MASK, FILE_TABLE, RANK_TABLE};
+use crate::core::{
+    Side,
+    bitboard::Bitboard,
+    movegen::tables::{
+        ADVISOR_ATTACKS, BISHOP_MAGICS, FILE_ATTACKS_BY_MASK, FILE_TABLE, KING_ATTACKS,
+        KNIGHT_MAGICS, KNIGHT_TO_TABLE, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
+    },
+    types::Square,
+};
 
 /// Collects (gathers) the vertical file occupancy states into a 10-bit integer.
 /// Every 9th bit in our `u128` bitboard represents the same file on successive
@@ -37,6 +43,65 @@ pub fn gather_file_bits(bits: u128, f: usize) -> usize {
     let key_high = (val_high.wrapping_mul(0x1010101010) >> 36) & 0x1F;
 
     (key_low | (key_high << 5)) as usize
+}
+
+#[inline]
+pub fn king_attacks(square: Square) -> Bitboard {
+    KING_ATTACKS[square as usize]
+}
+
+#[inline]
+pub fn advisor_attacks(square: Square) -> Bitboard {
+    ADVISOR_ATTACKS[square as usize]
+}
+
+#[inline]
+pub fn bishop_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+    let entry = &BISHOP_MAGICS[square as usize];
+    let hash_idx = (occupied.raw() & entry.mask).wrapping_mul(entry.magic) >> 124;
+    entry.attacks[hash_idx as usize]
+}
+
+#[inline]
+pub fn knight_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+    let entry = &KNIGHT_MAGICS[square as usize];
+    let occ_idx = (occupied.raw() & entry.mask).wrapping_mul(entry.magic) >> 124;
+    entry.attacks[occ_idx as usize]
+}
+
+#[inline]
+pub fn pawn_attacks(square: Square, side: Side) -> Bitboard {
+    PAWN_ATTACKS[side as usize][square as usize]
+}
+
+#[inline]
+pub fn pawn_attacks_to(square: Square, side: Side) -> Bitboard {
+    PAWN_ATTACKS_TO[side as usize][square as usize]
+}
+
+#[inline]
+pub fn knight_attacks_to(square: Square, occupied: Bitboard) -> Bitboard {
+    // --- Knight scanner (Horse-Leg / blocking-pin aware) ---
+    // Look up the precomputed entry for `square` in the reverse Knight attack
+    // table. Each entry stores up to 6 "eye" squares (the leg-blocking
+    // squares around `square`) and a 64-entry array of attack masks indexed
+    // by a 6-bit occupancy key.
+    let entry = &KNIGHT_TO_TABLE[square as usize];
+    let mut occ_idx = 0; // will become a 6-bit mask of which eye squares are occupied
+    let mut i = 0;
+    while i < 6 {
+        // For each potential eye square (the square a Knight must pass through on its
+        // L-move)...
+        if let Some(eye_sq) = entry.eyes[i] {
+            // ...set bit `i` in occ_idx if that eye square is currently occupied (leg is
+            // blocked).
+            if occupied.is_occupied(eye_sq) {
+                occ_idx |= 1 << i;
+            }
+        }
+        i += 1;
+    }
+    entry.attacks[occ_idx as usize]
 }
 
 /// Computes horizontal and vertical attack/move targets for a Rook (Chariot).
@@ -87,7 +152,6 @@ pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::movegen::tables::*;
 
     #[test]
     fn test_gather_file_bits() {
@@ -172,12 +236,7 @@ mod tests {
 
     #[test]
     fn test_bishop_blocking() {
-        // Bishop at C0 (Elephant eye at D1)
-        let bishop_c0 = BISHOP_TABLE[Square::C0 as usize];
-        assert_eq!(bishop_c0.eyes[0], Some(Square::D1));
-
-        // When unblocked (occ_idx = 0), can go to A2 and E2
-        let unblocked_attacks = bishop_c0.attacks[0];
+        let unblocked_attacks = bishop_attacks(Square::C0, Bitboard::new());
         let mut expected = 0u128;
         expected |= 1u128 << (2 * 9); // A2
         expected |= 1u128 << (2 * 9 + 4); // E2
@@ -186,7 +245,7 @@ mod tests {
         // When blocked at D1 (which is index 0 in eyes, so occ_idx = 1), moves to E2 is
         // blocked. C0 to A2 jumps over eye B1, which is index 2. So if only D1
         // is occupied (occ_idx = 1):
-        let blocked_attacks = bishop_c0.attacks[1];
+        let blocked_attacks = bishop_attacks(Square::C0, Square::D1.into());
         let mut expected_blocked = 0u128;
         expected_blocked |= 1u128 << (2 * 9); // A2 is still valid
         assert_eq!(blocked_attacks.raw(), expected_blocked);

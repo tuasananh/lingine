@@ -1,15 +1,14 @@
 use strum::EnumCount;
 
 use crate::core::{
-    Bitboard, Move, Piece, PieceType, Score, Side, Square, cannon_attacks, rook_attacks, score,
+    Bitboard, Move, Piece, PieceType, Score, Side, Square, cannon_attacks, knight_attacks,
+    pawn_attacks, rook_attacks, score,
 };
 
 impl super::Position {
     /// Calculates the chase information for a given color, returning a 16-bit
     /// mask of chased pieces.
     pub fn chased(&mut self, mover: Side, id_board: &[u8; Square::COUNT]) -> u16 {
-        use crate::core::movegen::{KNIGHT_TABLE, PAWN_ATTACKS};
-
         let mut chase = 0u16;
         let opponent = mover.opposite();
         let occupied = self.bitboard_by_color[Side::Red as usize]
@@ -57,22 +56,8 @@ impl super::Position {
             let mut attacks = match ptype {
                 PieceType::Rook => rook_attacks(from, occupied),
                 PieceType::Cannon => cannon_attacks(from, occupied),
-                PieceType::Knight => {
-                    let entry = &KNIGHT_TABLE[from as usize];
-                    let mut occ_idx = 0;
-                    for i in 0..4 {
-                        if let Some(eye_sq) = entry.eyes[i]
-                            && occupied.is_occupied(eye_sq)
-                        {
-                            occ_idx |= 1 << i;
-                        }
-                    }
-                    entry.attacks[occ_idx]
-                }
-                PieceType::Pawn => {
-                    let color_idx = if mover == Side::Red { 0 } else { 1 };
-                    PAWN_ATTACKS[color_idx][from as usize]
-                }
+                PieceType::Knight => knight_attacks(from, occupied),
+                PieceType::Pawn => pawn_attacks(from, mover),
                 _ => Bitboard::new(),
             };
 
