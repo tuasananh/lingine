@@ -1,6 +1,6 @@
 [package]
 name = "lingine"
-version = "1.6.4"
+version = "1.6.5"
 edition = "2024"
 
 [dependencies]
@@ -11,5 +11,6 @@ derive_more = { version = "2.1.1", features = ["full"] }
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.18"
 
-[profile.release]
+[profile.release-debug]
+inherits = "release"
 debug = true
