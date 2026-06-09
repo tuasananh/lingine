@@ -1,6 +1,6 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
-    search::{Bound, Entry, SearchContext},
+    search::{Bound, Entry, MAX_PLY, SearchContext},
     tt_value,
 };
 
@@ -18,10 +18,14 @@ impl super::Searcher<'_> {
         ply: u8,
         mut alpha: Score,
         beta: Score,
-        mut ctx: SearchContext,
+        ctx: SearchContext,
     ) -> Score {
         if self.should_stop_search() {
             return score::ZERO;
+        }
+
+        if ply >= MAX_PLY as u8 {
+            return self.pos.evaluate();
         }
 
         // Game over / rule evaluations (60-move rule, insufficient material,
@@ -46,9 +50,8 @@ impl super::Searcher<'_> {
         // save the King.
         //
         // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+        if self.pos.is_in_check(self.pos.side_to_move()) {
             depth += 1;
-            ctx.extensions += 1;
         }
 
         // Base case: fall back to quiescence search
@@ -96,7 +99,6 @@ impl super::Searcher<'_> {
             // See: https://www.chessprogramming.org/Singular_Extensions
             if depth >= 8
                 && ctx.excluded_move.is_null()
-                && ctx.extensions < 6
                 && value.depth >= depth - 3
                 && value.bound != Bound::Alpha
                 && !score::is_winning(value.score.abs())
@@ -109,7 +111,6 @@ impl super::Searcher<'_> {
                     rbeta - 1,
                     rbeta,
                     SearchContext {
-                        extensions: ctx.extensions,
                         excluded_move: value.best_move,
                     },
                 );
@@ -140,9 +141,8 @@ impl super::Searcher<'_> {
         // we extend the search, as it is likely a critical position.
         //
         // See: https://www.chessprogramming.org/One_Reply_Extensions
-        if moves.len() == 1 && ctx.excluded_move.is_null() && ctx.extensions < 6 {
+        if moves.len() == 1 && ctx.excluded_move.is_null() {
             depth += 1;
-            ctx.extensions += 1;
         }
 
         // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
@@ -169,10 +169,7 @@ impl super::Searcher<'_> {
                 ply + 1,
                 -beta,
                 -alpha,
-                SearchContext {
-                    extensions: (ctx.extensions + ext),
-                    ..Default::default()
-                },
+                SearchContext::default(),
             );
             self.pos.undo_move();
 

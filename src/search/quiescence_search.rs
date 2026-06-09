@@ -1,7 +1,6 @@
 use crate::{
-    core::{Move, MoveGenType, MoveList, Score, Side, generate_moves, score},
-    eval::evaluate,
-    search::{Bound, Entry},
+    core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
+    search::{Bound, Entry, MAX_PLY},
     tt_value,
 };
 
@@ -25,13 +24,8 @@ impl super::Searcher<'_> {
 
         // Base case: to avoid infinite recursion and stack overflow from perpetual
         // checks
-        if depth <= -12 {
-            let stand_pat = evaluate(&self.pos);
-            return if self.pos.side_to_move() == Side::Red {
-                stand_pat
-            } else {
-                -stand_pat
-            };
+        if depth <= -12 || ply >= MAX_PLY as u8 {
+            return self.pos.evaluate();
         }
 
         if let Some(rule_score) = self.pos.rule_judge(ply) {
@@ -45,12 +39,7 @@ impl super::Searcher<'_> {
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
-            let stand_pat = evaluate(&self.pos);
-            best_score = if self.pos.side_to_move() == Side::Red {
-                stand_pat
-            } else {
-                -stand_pat
-            };
+            best_score = self.pos.evaluate();
 
             // If the static evaluation is already good enough to cause a beta cutoff, we
             // can prune this node without searching captures. This is the

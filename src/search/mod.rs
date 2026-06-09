@@ -27,7 +27,6 @@ pub const MAX_DEPTH: usize = 64;
 #[derive(Copy, Clone, Debug, Default)]
 struct SearchContext {
     pub excluded_move: Move,
-    pub extensions: u8,
 }
 
 pub struct SharedContext<'a> {
