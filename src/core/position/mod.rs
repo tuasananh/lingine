@@ -28,7 +28,8 @@ pub struct StateInfo {
     /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
     /// on captures/pawn moves).
     pub rule60: u16,
-    /// Counter of plies since last irreversible move (capture or pawn push forward).
+    /// Counter of plies since last irreversible move (capture or pawn push
+    /// forward).
     pub rule_repetition: u16,
     /// Whether each color [White, Black] was in check in this position state.
     pub in_check: [bool; Side::COUNT],

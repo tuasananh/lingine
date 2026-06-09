@@ -79,7 +79,8 @@ struct Storage {
     /// the TranspositionTableFlag, which denotes the entry's bound type (and
     /// validity; a flag of Empty indicates an invalid/empty entry).
     pub best_move: Move, // 2 bytes
-    /// The type of bound and age this entry represents. The lower 2 bits encode the bound type.
+    /// The type of bound and age this entry represents. The lower 2 bits encode
+    /// the bound type.
     pub flags: Flags, // 1 byte
     /// The search depth this score was evaluated to.
     /// Negative depth is Quiescence search, non-negative is regular search

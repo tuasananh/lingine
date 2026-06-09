@@ -98,7 +98,7 @@ impl Position {
         } else {
             rule60 + 1
         };
-        
+
         let is_pawn_push = piece.piece_type() == PieceType::Pawn && to.rank() != from.rank();
         let is_irreversible = is_pawn_push || captured.is_some();
         let new_rule_repetition = if is_irreversible {
@@ -106,7 +106,7 @@ impl Position {
         } else {
             rule_repetition + 1
         };
-        
+
         let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
 
         // Push current state onto history stack

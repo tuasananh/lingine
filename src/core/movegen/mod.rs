@@ -484,7 +484,8 @@ mod tests {
             .filter(|m| m.from() == Square::E5)
             .copied()
             .collect();
-        // Rank 5 has 8 other squares, File E has 9 other squares. Minus King. Total 16 moves.
+        // Rank 5 has 8 other squares, File E has 9 other squares. Minus King. Total 16
+        // moves.
         assert_eq!(r_moves.len(), 16);
 
         // Friendly blocker at E6, opponent at E3
@@ -536,7 +537,8 @@ mod tests {
         // Leap capture: E8 (opponent) using E6 (friendly) as hurdle!
         // Downwards: E4, E3, E2, E1, E0. (5 moves)
         // Rank: 8 moves.
-        // Total: 5 - 1 (King) (file quiet) + 1 (file capture) + 8 (rank quiet) = 14 moves.
+        // Total: 5 - 1 (King) (file quiet) + 1 (file capture) + 8 (rank quiet) = 14
+        // moves.
         assert_eq!(c_moves.len(), 13);
         assert!(c_moves.contains(&Move::new(Square::E5, Square::E8))); // leap capture
     }

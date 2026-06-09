@@ -51,7 +51,8 @@ impl Bitboard {
     /// # Safety
     ///
     /// The caller must ensure that the provided `u128` value only has bits set
-    /// in the range 0..89, as bits 90 to 127 are unused and may lead to undefined behavior
+    /// in the range 0..89, as bits 90 to 127 are unused and may lead to
+    /// undefined behavior
     #[inline]
     pub const unsafe fn from_raw(bitboard: u128) -> Self {
         Self(bitboard)
