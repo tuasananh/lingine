@@ -74,9 +74,6 @@ impl super::Searcher<'_> {
                             return value.score;
                         }
                     }
-                    Bound::Empty => {
-                        unreachable!("Empty flag should not be returned by probe")
-                    }
                 }
             } else {
                 // Even though the TT entry is not deep enough to be directly used, we can still

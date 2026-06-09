@@ -1,6 +1,5 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
-    search::Bound,
     uci::{UciInfo, UciScore, UciScoreBound},
 };
 
@@ -26,9 +25,6 @@ impl super::Searcher<'_> {
                 .transposition_table
                 .probe(current_pos.zobrist_hash(), ply)
             {
-                if entry.bound == Bound::Empty {
-                    break;
-                }
                 let m = entry.best_move;
                 // Here we do not need to check for null move
                 // since we know that a non-empty TT entry must have a valid move.
