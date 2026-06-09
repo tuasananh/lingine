@@ -1,12 +1,3 @@
-//! Bitboard representation of the 9x10 Xiangqi board.
-//!
-//! The board has 90 squares, represented by the first 90 bits (0..89) of a
-//! `u128`. Bit indices are mapped in rank-major order using `rank_index * 9 +
-//! file_index`. Bits 90 to 127 are unused.
-//!
-//! High performance is achieved by utilizing bitwise operations for move
-//! generation, board occupancy tracking, and attack calculations.
-
 use std::fmt::Display;
 
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
@@ -14,9 +5,14 @@ use strum::EnumCount;
 
 use crate::core::types::{File, Rank, Side, Square};
 
-/// Represents the occupancy or attack targets on the 90-square Xiangqi board.
-/// Packaged inside a `u128` wrapper where bits 0 to 89 correspond to the
-/// squares A0 (0) to I9 (89). The upper bits (90 to 127) are unused.
+/// Bitboard representation of the 9x10 Xiangqi board.
+///
+/// The board has 90 squares, represented by the first 90 bits (0..89) of a
+/// `u128`. Bit indices are mapped in rank-major order using `rank_index * 9 +
+/// file_index`. Bits 90 to 127 are unused.
+///
+/// High performance is achieved by utilizing bitwise operations for move
+/// generation, board occupancy tracking, and attack calculations.
 #[derive(
     BitAnd,
     BitAndAssign,
@@ -30,14 +26,9 @@ use crate::core::types::{File, Rank, Side, Square};
     PartialEq,
     Eq,
     Debug,
+    Default,
 )]
 pub struct Bitboard(u128);
-
-impl Default for Bitboard {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl Bitboard {
     /// Creates a new, completely empty bitboard (all bits set to 0).
@@ -73,25 +64,25 @@ impl Bitboard {
 
     /// Verifies if a given square bit is active (set to 1) in the bitboard.
     #[inline]
-    pub fn is_occupied(&self, square: Square) -> bool {
+    pub const fn is_occupied(&self, square: Square) -> bool {
         (self.0 & (1u128 << (square as u8))) != 0
     }
 
     /// Activates (sets to 1) the bit corresponding to the given square.
     #[inline]
-    pub fn set_bit(&mut self, square: Square) {
+    pub const fn set_bit(&mut self, square: Square) {
         self.0 |= 1u128 << (square as u8);
     }
 
     /// Deactivates (clears to 0) the bit corresponding to the given square.
     #[inline]
-    pub fn clear_bit(&mut self, square: Square) {
+    pub const fn clear_bit(&mut self, square: Square) {
         self.0 &= !(1u128 << (square as u8));
     }
 
     /// Returns the number of active squares (bits set to 1) in the bitboard.
     #[inline]
-    pub fn count_ones(&self) -> u32 {
+    pub const fn count_ones(&self) -> u32 {
         self.0.count_ones()
     }
 
@@ -100,7 +91,7 @@ impl Bitboard {
     /// the bitboard is empty. Used for rapid, zero-overhead sequence
     /// generation and iterator-like popping of pieces.
     #[inline]
-    pub fn pop_lsb(&mut self) -> Option<Square> {
+    pub const fn pop_lsb(&mut self) -> Option<Square> {
         if self.0 == 0 {
             None
         } else {
