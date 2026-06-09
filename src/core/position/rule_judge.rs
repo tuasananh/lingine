@@ -251,10 +251,10 @@ impl super::Position {
         // 2. Insufficient Material Draw
         // If all Pawns are gone, check if remaining major pieces are capable of
         // checkmating
-        if self.piece_count(Piece::WhitePawn) == 0 && self.piece_count(Piece::BlackPawn) == 0 {
-            let white_majors = self.piece_count(Piece::WhiteRook) as u32
-                + self.piece_count(Piece::WhiteCannon) as u32
-                + self.piece_count(Piece::WhiteKnight) as u32;
+        if self.piece_count(Piece::RedPawn) == 0 && self.piece_count(Piece::BlackPawn) == 0 {
+            let white_majors = self.piece_count(Piece::RedRook) as u32
+                + self.piece_count(Piece::RedCannon) as u32
+                + self.piece_count(Piece::RedKnight) as u32;
             let black_majors = self.piece_count(Piece::BlackRook) as u32
                 + self.piece_count(Piece::BlackCannon) as u32
                 + self.piece_count(Piece::BlackKnight) as u32;
@@ -266,9 +266,9 @@ impl super::Position {
 
             // Exactly one Cannon left on the entire board, and no Advisors left
             let total_cannons =
-                self.piece_count(Piece::WhiteCannon) + self.piece_count(Piece::BlackCannon);
+                self.piece_count(Piece::RedCannon) + self.piece_count(Piece::BlackCannon);
             let total_advisors =
-                self.piece_count(Piece::WhiteAdvisor) + self.piece_count(Piece::BlackAdvisor);
+                self.piece_count(Piece::RedAdvisor) + self.piece_count(Piece::BlackAdvisor);
             if white_majors + black_majors == total_cannons as u32
                 && total_cannons == 1
                 && total_advisors == 0

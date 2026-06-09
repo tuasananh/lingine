@@ -1,6 +1,6 @@
 use crate::core::{PieceType, Score, Side, Square};
 
-// Positional piece-square tables from White's (Red's) perspective on the
+// Positional piece-square tables from Red's (Red's) perspective on the
 // 90-square board. Square indices are 0 to 89, rank-major order (rank * 9 +
 // file).
 

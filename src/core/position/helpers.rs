@@ -6,13 +6,13 @@ impl Position {
     #[inline]
     pub fn piece_from_char(c: char) -> Option<Piece> {
         match c {
-            'R' => Some(Piece::WhiteRook),
-            'H' | 'N' => Some(Piece::WhiteKnight),
-            'E' | 'B' => Some(Piece::WhiteBishop),
-            'A' => Some(Piece::WhiteAdvisor),
-            'K' => Some(Piece::WhiteKing),
-            'C' => Some(Piece::WhiteCannon),
-            'P' => Some(Piece::WhitePawn),
+            'R' => Some(Piece::RedRook),
+            'H' | 'N' => Some(Piece::RedKnight),
+            'E' | 'B' => Some(Piece::RedBishop),
+            'A' => Some(Piece::RedAdvisor),
+            'K' => Some(Piece::RedKing),
+            'C' => Some(Piece::RedCannon),
+            'P' => Some(Piece::RedPawn),
             'r' => Some(Piece::BlackRook),
             'h' | 'n' => Some(Piece::BlackKnight),
             'e' | 'b' => Some(Piece::BlackBishop),

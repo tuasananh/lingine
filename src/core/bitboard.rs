@@ -119,7 +119,7 @@ impl Bitboard {
     /// squares at the center-bottom and center-top). Used to validate
     /// Advisor and King moves which are strictly restricted to the Palace.
     ///
-    /// * **White Palace**: Squares D0, E0, F0, D1, E1, F1, D2, E2, F2 (indexes
+    /// * **Red Palace**: Squares D0, E0, F0, D1, E1, F1, D2, E2, F2 (indexes
     ///   3..5, 12..14, 21..23).
     /// * **Black Palace**: Squares D7, E7, F7, D8, E8, F8, D9, E9, F9 (indexes
     ///   66..68, 75..77, 84..86).
@@ -163,7 +163,7 @@ impl Bitboard {
     /// Returns a precomputed bitboard covering one half of the board (5 ranks)
     /// for a given player:
     ///
-    /// * **White Side**: Ranks R0 to R4 (indices 0 to 44).
+    /// * **Red Side**: Ranks R0 to R4 (indices 0 to 44).
     /// * **Black Side**: Ranks R5 to R9 (indices 45 to 89).
     pub const fn side(color: Side) -> Self {
         match color {
@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn test_print_white_side_bitboard() {
+    fn test_print_red_side_bitboard() {
         println!("{}", Bitboard::side(Side::Red));
     }
 

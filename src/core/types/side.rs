@@ -1,6 +1,6 @@
 use strum::{EnumCount, FromRepr};
 
-/// Represents the two players in a Xiangqi game: White (Red) or Black.
+/// Represents the two players in a Xiangqi game: Red (Red) or Black.
 #[derive(FromRepr, EnumCount, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Side {

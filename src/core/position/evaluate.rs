@@ -27,7 +27,7 @@ impl Position {
     }
 
     /// Get the complete evaluation score (material + piece-square table) of the
-    /// current position from White's perspective
+    /// current position from Red's perspective
     #[inline]
     pub fn evaluate(&self) -> Score {
         self.material_score() + self.piece_square_table_score()

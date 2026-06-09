@@ -196,11 +196,11 @@ pub struct GoParameters {
     pub searchmoves: Option<Vec<Move>>,
     /// If `true`, search in pondering mode (opponent's turn on the clock).
     pub ponder: bool,
-    /// Time remaining for White.
+    /// Time remaining for Red.
     pub wtime: Option<Duration>,
     /// Time remaining for Black.
     pub btime: Option<Duration>,
-    /// White's increment added after each move.
+    /// Red's increment added after each move.
     pub winc: Option<Duration>,
     /// Black's increment added after each move.
     pub binc: Option<Duration>,

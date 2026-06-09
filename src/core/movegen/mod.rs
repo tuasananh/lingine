@@ -28,8 +28,8 @@ pub enum MoveGenType {
 }
 
 /// Generates all pseudo-legal moves in a single pass.
-fn generate_pseudo_legal<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
+fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveList) {
+    let us = if IS_RED { Side::Red } else { Side::Black };
     let them = us.opposite();
     let us_pieces = pos.bitboard_by_color(us);
     let them_pieces = pos.bitboard_by_color(them);

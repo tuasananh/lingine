@@ -31,12 +31,12 @@ pub struct StateInfo {
     /// Counter of plies since last irreversible move (capture or pawn push
     /// forward).
     pub rule_repetition: u16,
-    /// Whether each color [White, Black] was in check in this position state.
+    /// Whether each color [Red, Black] was in check in this position state.
     pub in_check: [bool; Side::COUNT],
-    /// Precalculated incremental material score (from White's perspective)
+    /// Precalculated incremental material score (from Red's perspective)
     pub material_score: Score,
     /// Precalculated incremental piece-square table positional score (from
-    /// White's perspective)
+    /// Red's perspective)
     pub piece_square_table_score: Score,
 }
 
@@ -56,7 +56,7 @@ pub struct Position {
     piece_count: [u8; Piece::COUNT],
     /// Stack tracking previous move parameter histories for undoing moves.
     history: Vec<StateInfo>,
-    /// Total moves played in the game so far (White = 0, Black = 1, White's
+    /// Total moves played in the game so far (Red = 0, Black = 1, Red's
     /// next = 2, etc.).
     game_ply: u16,
     /// The player active to play next.
@@ -302,13 +302,13 @@ impl Position {
                 let rank = Rank::from_repr(rank_idx).unwrap();
                 let square = Square::from_file_rank(file, rank);
                 let piece_char = match self.board[square as usize] {
-                    Some(Piece::WhiteRook) => 'R',
-                    Some(Piece::WhiteKnight) => 'H',
-                    Some(Piece::WhiteBishop) => 'E',
-                    Some(Piece::WhiteAdvisor) => 'A',
-                    Some(Piece::WhiteKing) => 'K',
-                    Some(Piece::WhiteCannon) => 'C',
-                    Some(Piece::WhitePawn) => 'P',
+                    Some(Piece::RedRook) => 'R',
+                    Some(Piece::RedKnight) => 'H',
+                    Some(Piece::RedBishop) => 'E',
+                    Some(Piece::RedAdvisor) => 'A',
+                    Some(Piece::RedKing) => 'K',
+                    Some(Piece::RedCannon) => 'C',
+                    Some(Piece::RedPawn) => 'P',
                     Some(Piece::BlackRook) => 'r',
                     Some(Piece::BlackKnight) => 'h',
                     Some(Piece::BlackBishop) => 'e',
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn test_knight_leg_pin() {
         let mut pos = Position::new();
-        // White King at E0, White Advisor at F1, Black Knight at F2 (aligned to jump
+        // Red King at E0, Red Advisor at F1, Black Knight at F2 (aligned to jump
         // onto E0)
         pos.set("4k4/9/9/9/9/9/9/5h3/5A3/4K4 w - - 0 1").unwrap();
         // Since F1 blocks the Knight's jump, the Advisor is fully pinned and cannot

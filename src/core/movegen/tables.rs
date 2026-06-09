@@ -98,7 +98,7 @@ const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
     table
 }
 
-/// Precomputes Pawn attack masks for both White and Black Pawns.
+/// Precomputes Pawn attack masks for both Red and Black Pawns.
 ///
 /// * **Unpromoted (own side)**: Can only move exactly 1 step straight forward.
 /// * **Promoted (crossed river)**: Can move 1 step straight forward OR 1 step
@@ -106,7 +106,7 @@ const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
 const fn init_pawn_attacks() -> [[Bitboard; Square::COUNT]; 2] {
     let mut table = [[Bitboard::new(); Square::COUNT]; 2];
 
-    // Index 0: White Pawn
+    // Index 0: Red Pawn
     let mut from_idx = 0;
     while from_idx < Square::COUNT {
         let f = (from_idx % 9) as i8;
@@ -160,7 +160,7 @@ const fn init_pawn_attacks() -> [[Bitboard; Square::COUNT]; 2] {
 const fn init_pawn_attacks_to() -> [[Bitboard; Square::COUNT]; 2] {
     let mut table = [[Bitboard::new(); Square::COUNT]; 2];
 
-    // Index 0: White pawn attacking a square
+    // Index 0: Red pawn attacking a square
     let mut square_idx = 0;
     while square_idx < Square::COUNT {
         let f = (square_idx % 9) as i8;

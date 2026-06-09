@@ -151,16 +151,16 @@ mod tests {
         let b_move1 = Move::new(Square::E9, Square::D9);
         let b_move2 = Move::new(Square::D9, Square::E9);
 
-        // White moves to D0
+        // Red moves to D0
         pos.do_move(w_move1);
         // Black moves to D9
         pos.do_move(b_move1);
-        // White moves back to E0
+        // Red moves back to E0
         pos.do_move(w_move2);
         // Black moves back to E9
         pos.do_move(b_move2);
 
-        // Now White moves to D0 again (first repetition check at ply 5)
+        // Now Red moves to D0 again (first repetition check at ply 5)
         pos.do_move(w_move1);
 
         // Black moves to D9 again (repeating the state at ply 1)
@@ -199,43 +199,43 @@ mod tests {
     #[test]
     fn test_repetition_perpetual_check_repetition() {
         let mut pos = Position::new();
-        // White King at E0, White Rook at D1, Black King at D9
+        // Red King at E0, Red Rook at D1, Black King at D9
         pos.set("3k5/9/9/9/9/9/9/9/3R5/4K4 w - - 0 1").unwrap();
 
-        // White Rook checks: D1 to D8 (giving check)
+        // Red Rook checks: D1 to D8 (giving check)
         let r_check1 = Move::new(Square::D1, Square::D8);
         // Black King evades: D9 to E9 (not checking)
         let k_move1 = Move::new(Square::D9, Square::E9);
-        // White Rook checks again: D8 to E8 (giving check)
+        // Red Rook checks again: D8 to E8 (giving check)
         let r_check2 = Move::new(Square::D8, Square::E8);
         // Black King evades: E9 to D9
         let k_move2 = Move::new(Square::E9, Square::D9);
-        // White Rook checks again: E8 to D8 (giving check)
+        // Red Rook checks again: E8 to D8 (giving check)
         let r_check3 = Move::new(Square::E8, Square::D8);
 
-        // 1. White checks
+        // 1. Red checks
         pos.do_move(r_check1);
         assert!(pos.is_in_check(Side::Black));
 
         // 2. Black evades
         pos.do_move(k_move1);
 
-        // 3. White checks again
+        // 3. Red checks again
         pos.do_move(r_check2);
         assert!(pos.is_in_check(Side::Black));
 
         // 4. Black moves King back to D9
         pos.do_move(k_move2);
 
-        // 5. White checks again with Rook to D8 (repetition + check!)
+        // 5. Red checks again with Rook to D8 (repetition + check!)
         pos.do_move(r_check3);
 
-        // Now Black turn to move. White just gave the repeating check on all turns in
+        // Now Black turn to move. Red just gave the repeating check on all turns in
         // the loop.
         assert_eq!(pos.rule_judge(5), Some(score::mate_in(5)));
         assert!(pos.is_in_check(Side::Black));
 
-        // Black should win because White is perpetually checking!
+        // Black should win because Red is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)
         let mut transposition_table = TranspositionTable::new(1);
         let killers = KillerMoves::default();
