@@ -18,7 +18,7 @@ use crate::core::{
     bitboard::Bitboard,
     movegen::tables::{
         ADVISOR_ATTACKS, BISHOP_MAGICS, FILE_ATTACKS_BY_MASK, FILE_TABLE, KING_ATTACKS,
-        KNIGHT_MAGICS, KNIGHT_TO_TABLE, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
+        KNIGHT_MAGICS, KNIGHT_TO_MAGICS, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
     },
     types::Square,
 };
@@ -57,16 +57,12 @@ pub fn advisor_attacks(square: Square) -> Bitboard {
 
 #[inline]
 pub fn bishop_attacks(square: Square, occupied: Bitboard) -> Bitboard {
-    let entry = &BISHOP_MAGICS[square as usize];
-    let hash_idx = (occupied.raw() & entry.mask).wrapping_mul(entry.magic) >> 124;
-    entry.attacks[hash_idx as usize]
+    BISHOP_MAGICS[square as usize].attack(occupied)
 }
 
 #[inline]
 pub fn knight_attacks(square: Square, occupied: Bitboard) -> Bitboard {
-    let entry = &KNIGHT_MAGICS[square as usize];
-    let occ_idx = (occupied.raw() & entry.mask).wrapping_mul(entry.magic) >> 124;
-    entry.attacks[occ_idx as usize]
+    KNIGHT_MAGICS[square as usize].attack(occupied)
 }
 
 #[inline]
@@ -81,27 +77,7 @@ pub fn pawn_attacks_to(square: Square, side: Side) -> Bitboard {
 
 #[inline]
 pub fn knight_attacks_to(square: Square, occupied: Bitboard) -> Bitboard {
-    // --- Knight scanner (Horse-Leg / blocking-pin aware) ---
-    // Look up the precomputed entry for `square` in the reverse Knight attack
-    // table. Each entry stores up to 6 "eye" squares (the leg-blocking
-    // squares around `square`) and a 64-entry array of attack masks indexed
-    // by a 6-bit occupancy key.
-    let entry = &KNIGHT_TO_TABLE[square as usize];
-    let mut occ_idx = 0; // will become a 6-bit mask of which eye squares are occupied
-    let mut i = 0;
-    while i < 6 {
-        // For each potential eye square (the square a Knight must pass through on its
-        // L-move)...
-        if let Some(eye_sq) = entry.eyes[i] {
-            // ...set bit `i` in occ_idx if that eye square is currently occupied (leg is
-            // blocked).
-            if occupied.is_occupied(eye_sq) {
-                occ_idx |= 1 << i;
-            }
-        }
-        i += 1;
-    }
-    entry.attacks[occ_idx as usize]
+    KNIGHT_TO_MAGICS[square as usize].attack(occupied)
 }
 
 /// Computes horizontal and vertical attack/move targets for a Rook (Chariot).
@@ -237,6 +213,7 @@ mod tests {
     #[test]
     fn test_bishop_blocking() {
         let unblocked_attacks = bishop_attacks(Square::C0, Bitboard::new());
+        println!("{}", unblocked_attacks);
         let mut expected = 0u128;
         expected |= 1u128 << (2 * 9); // A2
         expected |= 1u128 << (2 * 9 + 4); // E2
@@ -246,6 +223,7 @@ mod tests {
         // blocked. C0 to A2 jumps over eye B1, which is index 2. So if only D1
         // is occupied (occ_idx = 1):
         let blocked_attacks = bishop_attacks(Square::C0, Square::D1.into());
+        println!("{}", blocked_attacks);
         let mut expected_blocked = 0u128;
         expected_blocked |= 1u128 << (2 * 9); // A2 is still valid
         assert_eq!(blocked_attacks.raw(), expected_blocked);

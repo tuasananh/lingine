@@ -2,20 +2,6 @@ use strum::EnumCount;
 
 use crate::core::{Bitboard, File, Rank, Side, Square};
 
-/// Represents precomputed attack targets for Knight checking paths.
-/// Used in `Position::checkers_to` to perform rapid, O(1) backward checks from
-/// the King. Matches Knight attacks coming from up to 8 directions, which can
-/// share up to 6 unique Horse Legs.
-#[derive(Clone, Copy)]
-pub struct KnightToEntry {
-    /// The 6 possible unique Horse Legs that can block any Knight's attack onto
-    /// this square.
-    pub eyes: [Option<Square>; 6],
-    /// Precomputed attack origin bitboards indexed by a 6-bit gathered blocker
-    /// occupancy mask (0 to 63).
-    pub attacks: [Bitboard; 64],
-}
-
 /// Holds precomputed horizontal rank attack/move masks for Rooks and Cannons.
 /// Indexed by the 9-bit rank occupancy state (0 to 511).
 #[derive(Clone, Copy)]
@@ -41,10 +27,10 @@ pub struct FileEntry {
 /// Precomputes valid orthogonal moves for the General (King) inside the Palace.
 /// Generals can only move 1 step orthogonally (up/down/left/right) and are
 /// strictly confined to the 3x3 Palace.
-const fn init_king_attacks() -> [Bitboard; 90] {
-    let mut table = [Bitboard::new(); 90];
+const fn init_king_attacks() -> [Bitboard; Square::COUNT] {
+    let mut table = [Bitboard::new(); Square::COUNT];
     let mut from_idx = 0;
-    while from_idx < 90 {
+    while from_idx < Square::COUNT {
         let f = (from_idx % 9) as i8;
         let r = (from_idx / 9) as i8;
         let is_white_palace = (f >= 3 && f <= 5) && (r >= 0 && r <= 2);
@@ -68,7 +54,7 @@ const fn init_king_attacks() -> [Bitboard; 90] {
                 }
                 i += 1;
             }
-            table[from_idx as usize] = unsafe { Bitboard::from_raw(mask) };
+            table[from_idx] = unsafe { Bitboard::from_raw(mask) };
         }
         from_idx += 1;
     }
@@ -78,10 +64,10 @@ const fn init_king_attacks() -> [Bitboard; 90] {
 /// Precomputes valid diagonal moves for Advisors inside the Palace.
 /// Advisors move exactly 1 step diagonally and are strictly confined to the
 /// Palace. There are exactly 5 valid Palace squares for an Advisor.
-const fn init_advisor_attacks() -> [Bitboard; 90] {
-    let mut table = [Bitboard::new(); 90];
+const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
+    let mut table = [Bitboard::new(); Square::COUNT];
     let mut from_idx = 0;
-    while from_idx < 90 {
+    while from_idx < Square::COUNT {
         let f = (from_idx % 9) as i8;
         let r = (from_idx / 9) as i8;
         let is_white_palace = (f >= 3 && f <= 5) && (r >= 0 && r <= 2);
@@ -105,7 +91,7 @@ const fn init_advisor_attacks() -> [Bitboard; 90] {
                 }
                 i += 1;
             }
-            table[from_idx as usize] = unsafe { Bitboard::from_raw(mask) };
+            table[from_idx] = unsafe { Bitboard::from_raw(mask) };
         }
         from_idx += 1;
     }
@@ -117,12 +103,12 @@ const fn init_advisor_attacks() -> [Bitboard; 90] {
 /// * **Unpromoted (own side)**: Can only move exactly 1 step straight forward.
 /// * **Promoted (crossed river)**: Can move 1 step straight forward OR 1 step
 ///   horizontally (left/right).
-const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
-    let mut table = [[Bitboard::new(); 90]; 2];
+const fn init_pawn_attacks() -> [[Bitboard; Square::COUNT]; 2] {
+    let mut table = [[Bitboard::new(); Square::COUNT]; 2];
 
     // Index 0: White Pawn
     let mut from_idx = 0;
-    while from_idx < 90 {
+    while from_idx < Square::COUNT {
         let f = (from_idx % 9) as i8;
         let r = (from_idx / 9) as i8;
         let mut mask = 0u128;
@@ -138,13 +124,13 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Right sideways move
             }
         }
-        table[0][from_idx as usize] = unsafe { Bitboard::from_raw(mask) };
+        table[0][from_idx] = unsafe { Bitboard::from_raw(mask) };
         from_idx += 1;
     }
 
     // Index 1: Black Pawn
     let mut from_idx = 0;
-    while from_idx < 90 {
+    while from_idx < Square::COUNT {
         let f = (from_idx % 9) as i8;
         let r = (from_idx / 9) as i8;
         let mut mask = 0u128;
@@ -160,7 +146,7 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Right sideways move
             }
         }
-        table[1][from_idx as usize] = unsafe { Bitboard::from_raw(mask) };
+        table[1][from_idx] = unsafe { Bitboard::from_raw(mask) };
         from_idx += 1;
     }
 
@@ -171,12 +157,12 @@ const fn init_pawn_attacks() -> [[Bitboard; 90]; 2] {
 /// Represents which source squares a Pawn of the given color could have come
 /// from to attack the target square. Used in `Position::checkers_to` to check
 /// Pawn checks.
-const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
-    let mut table = [[Bitboard::new(); 90]; 2];
+const fn init_pawn_attacks_to() -> [[Bitboard; Square::COUNT]; 2] {
+    let mut table = [[Bitboard::new(); Square::COUNT]; 2];
 
     // Index 0: White pawn attacking a square
     let mut square_idx = 0;
-    while square_idx < 90 {
+    while square_idx < Square::COUNT {
         let f = (square_idx % 9) as i8;
         let r = (square_idx / 9) as i8;
         let mut mask = 0u128;
@@ -191,13 +177,13 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Came from right
             }
         }
-        table[0][square_idx as usize] = unsafe { Bitboard::from_raw(mask) };
+        table[0][square_idx] = unsafe { Bitboard::from_raw(mask) };
         square_idx += 1;
     }
 
     // Index 1: Black pawn attacking a square
     let mut square_idx = 0;
-    while square_idx < 90 {
+    while square_idx < Square::COUNT {
         let f = (square_idx % 9) as i8;
         let r = (square_idx / 9) as i8;
         let mut mask = 0u128;
@@ -212,7 +198,7 @@ const fn init_pawn_attacks_to() -> [[Bitboard; 90]; 2] {
                 mask |= 1 << (r * 9 + f + 1); // Came from right
             }
         }
-        table[1][square_idx as usize] = unsafe { Bitboard::from_raw(mask) };
+        table[1][square_idx] = unsafe { Bitboard::from_raw(mask) };
         square_idx += 1;
     }
 
@@ -373,138 +359,6 @@ const fn init_file_table() -> [FileEntry; 10] {
     table
 }
 
-/// Precomputes Knight backward attackers.
-/// Gathers a 6-bit blocker index corresponding to the Horse Legs.
-const fn init_knight_to_table() -> [KnightToEntry; 90] {
-    let mut table = [KnightToEntry {
-        eyes: [None; 6],
-        attacks: [Bitboard::new(); 64],
-    }; 90];
-    let mut from_idx = 0;
-    while from_idx < 90 {
-        let f = (from_idx % 9) as i8;
-        let r = (from_idx / 9) as i8;
-
-        let jump_offsets = [
-            (1, 2),
-            (-1, 2),
-            (1, -2),
-            (-1, -2),
-            (2, 1),
-            (2, -1),
-            (-2, 1),
-            (-2, -1),
-        ];
-
-        let mut unique_legs = [None; 6];
-        let mut num_legs = 0;
-
-        let mut i = 0;
-        while i < 8 {
-            let (df, dr) = jump_offsets[i];
-            let from_f = f - df;
-            let from_r = r - dr;
-            if from_f >= 0 && from_f < 9 && from_r >= 0 && from_r < 10 {
-                let leg_f = from_f
-                    + if df == 2 {
-                        1
-                    } else if df == -2 {
-                        -1
-                    } else {
-                        0
-                    };
-                let leg_r = from_r
-                    + if dr == 2 {
-                        1
-                    } else if dr == -2 {
-                        -1
-                    } else {
-                        0
-                    };
-                let leg_sq = Square::from_repr((leg_r * 9 + leg_f) as u8).unwrap();
-
-                let mut found = false;
-                let mut j = 0;
-                while j < num_legs {
-                    if let Some(l) = unique_legs[j]
-                        && l as u8 == leg_sq as u8
-                    {
-                        found = true;
-                        break;
-                    }
-                    j += 1;
-                }
-                if !found {
-                    unique_legs[num_legs] = Some(leg_sq);
-                    num_legs += 1;
-                }
-            }
-            i += 1;
-        }
-
-        let mut j = 0;
-        while j < num_legs {
-            table[from_idx as usize].eyes[j] = unique_legs[j];
-            j += 1;
-        }
-
-        let mut occ_idx = 0;
-        while occ_idx < 64 {
-            let mut mask = 0u128;
-
-            let mut i = 0;
-            while i < 8 {
-                let (df, dr) = jump_offsets[i];
-                let from_f = f - df;
-                let from_r = r - dr;
-                if from_f >= 0 && from_f < 9 && from_r >= 0 && from_r < 10 {
-                    let leg_f = from_f
-                        + if df == 2 {
-                            1
-                        } else if df == -2 {
-                            -1
-                        } else {
-                            0
-                        };
-                    let leg_r = from_r
-                        + if dr == 2 {
-                            1
-                        } else if dr == -2 {
-                            -1
-                        } else {
-                            0
-                        };
-                    let leg_sq = Square::from_repr((leg_r * 9 + leg_f) as u8).unwrap();
-
-                    let mut leg_idx = 0;
-                    let mut found = false;
-                    let mut j = 0;
-                    while j < num_legs {
-                        if let Some(l) = unique_legs[j]
-                            && l as u8 == leg_sq as u8
-                        {
-                            leg_idx = j;
-                            found = true;
-                            break;
-                        }
-                        j += 1;
-                    }
-
-                    if found && (occ_idx & (1 << leg_idx)) == 0 {
-                        mask |= 1 << (from_r * 9 + from_f);
-                    }
-                }
-                i += 1;
-            }
-            table[from_idx as usize].attacks[occ_idx] = unsafe { Bitboard::from_raw(mask) };
-            occ_idx += 1;
-        }
-
-        from_idx += 1;
-    }
-    table
-}
-
 // Precomputed static lookup tables dissolved at compile-time to eliminate
 // thread checks, lock contention, and atomic operations during perft search
 // loops.
@@ -514,7 +368,6 @@ pub static PAWN_ATTACKS: [[Bitboard; Square::COUNT]; Side::COUNT] = init_pawn_at
 pub static PAWN_ATTACKS_TO: [[Bitboard; Square::COUNT]; 2] = init_pawn_attacks_to();
 pub static RANK_TABLE: [RankEntry; File::COUNT] = init_rank_table();
 pub static FILE_TABLE: [FileEntry; Rank::COUNT] = init_file_table();
-pub static KNIGHT_TO_TABLE: [KnightToEntry; Square::COUNT] = init_knight_to_table();
 
 const fn init_file_attacks_by_mask() -> [[Bitboard; 1024]; 9] {
     let mut table = [[Bitboard::new(); 1024]; 9];
@@ -544,11 +397,20 @@ pub static FILE_ATTACKS_BY_MASK: [[Bitboard; 1024]; 9] = init_file_attacks_by_ma
 // COMPILE-TIME MAGIC BITBOARD GENERATOR FOR LEAPERS
 // ============================================================================
 
-#[derive(Clone, Copy, Default)]
-pub struct LeaperMagic {
+#[derive(Clone, Copy)]
+pub struct Magic<const SIZE: usize> {
     pub mask: u128,
     pub magic: u128,
-    pub attacks: [Bitboard; 16],
+    pub attacks: [Bitboard; SIZE],
+}
+
+impl<const SIZE: usize> Magic<SIZE> {
+    #[inline]
+    pub const fn attack(&self, occupied: Bitboard) -> Bitboard {
+        let occ_idx =
+            (occupied.raw() & self.mask).wrapping_mul(self.magic) >> (128 - SIZE.trailing_zeros());
+        self.attacks[occ_idx as usize]
+    }
 }
 
 // 1. A Deterministic PRNG allowed in const fn
@@ -632,54 +494,81 @@ const fn compute_bishop_attacks(sq: usize, occ: u128) -> u128 {
     attacks
 }
 
-// 3. The Compile-Time Brute Forcer
-const fn build_leaper_magics(is_knight: bool) -> [LeaperMagic; 90] {
-    // We can't use generic default traits in const fn easily, so manual init
-    let empty_magic = LeaperMagic {
+const fn compute_knight_to_attacks(sq: usize, occ: u128) -> u128 {
+    let mut attacks = 0u128;
+    let r = (sq / 9) as i32;
+    let f = (sq % 9) as i32;
+
+    // The 8 possible originating squares for a knight targeting `sq`
+    let origins_dr = [2, 2, -2, -2, 1, 1, -1, -1];
+    let origins_df = [1, -1, 1, -1, 2, -2, 2, -2];
+
+    let mut i = 0;
+    while i < 8 {
+        let or = r + origins_dr[i];
+        let of = f + origins_df[i];
+
+        // If the origin square is valid on the 9x10 board...
+        if or >= 0 && or < 10 && of >= 0 && of < 9 {
+            // The blocking leg is always diagonally adjacent to the destination
+            // square in the direction of the origin square.
+            let leg_r = r + if origins_dr[i] > 0 { 1 } else { -1 };
+            let leg_f = f + if origins_df[i] > 0 { 1 } else { -1 };
+
+            let leg_sq = (leg_r * 9 + leg_f) as usize;
+
+            // If the leg is empty, the incoming attack is valid
+            if (occ & (1 << leg_sq)) == 0 {
+                attacks |= 1 << (or * 9 + of);
+            }
+        }
+        i += 1;
+    }
+    attacks
+}
+
+pub enum LeaperType {
+    Knight,
+    Bishop,
+    KnightTo,
+}
+
+const fn build_magics<const SIZE: usize, const SHIFT: usize>(
+    piece: LeaperType,
+    dirs_dr: [i32; SHIFT],
+    dirs_df: [i32; SHIFT],
+) -> [Magic<SIZE>; Square::COUNT] {
+    assert!(
+        SIZE.trailing_zeros() == SHIFT as u32,
+        "Shift must match trailing zeros of SIZE"
+    );
+
+    let mut magics = [Magic::<SIZE> {
         mask: 0,
         magic: 0,
-        attacks: [Bitboard::new(); 16],
-    };
-    let mut magics = [empty_magic; 90];
+        attacks: [Bitboard::new(); SIZE],
+    }; Square::COUNT];
 
     let mut sq = 0;
-    while sq < 90 {
+    while sq < Square::COUNT {
         let r = (sq / 9) as i32;
         let f = (sq % 9) as i32;
         let mut mask = 0u128;
 
-        if is_knight {
-            if r < 9 {
-                mask |= 1 << (((r + 1) * 9 + f) as usize);
+        let mut i = 0;
+        while i < SHIFT {
+            let er = r + dirs_dr[i];
+            let ef = f + dirs_df[i];
+            if er >= 0 && er < 10 && ef >= 0 && ef < 9 {
+                mask |= 1 << ((er * 9 + ef) as usize);
             }
-            if r > 0 {
-                mask |= 1 << (((r - 1) * 9 + f) as usize);
-            }
-            if f < 8 {
-                mask |= 1 << ((r * 9 + f + 1) as usize);
-            }
-            if f > 0 {
-                mask |= 1 << ((r * 9 + f - 1) as usize);
-            }
-        } else {
-            let dirs_dr = [1, 1, -1, -1];
-            let dirs_df = [1, -1, 1, -1];
-            let mut i = 0;
-            while i < 4 {
-                let er = r + dirs_dr[i];
-                let ef = f + dirs_df[i];
-                if er >= 0 && er < 10 && ef >= 0 && ef < 9 {
-                    mask |= 1 << ((er * 9 + ef) as usize);
-                }
-                i += 1;
-            }
+            i += 1;
         }
 
-        // Extract bit positions
-        let mut bits = [0; 4];
+        let mut bits = [0; SHIFT];
         let mut bit_count = 0;
         let mut i = 0;
-        while i < 128 && bit_count < 4 {
+        while i < 128 && bit_count < SHIFT {
             if (mask & (1 << i)) != 0 {
                 bits[bit_count] = i;
                 bit_count += 1;
@@ -687,50 +576,44 @@ const fn build_leaper_magics(is_knight: bool) -> [LeaperMagic; 90] {
             i += 1;
         }
 
-        // Pre-calculate occupancies and reference attacks
-        let combinations = 1 << bit_count;
-        let mut occupancies = [0u128; 16];
-        let mut ref_attacks = [0u128; 16];
+        let mut occupancies = [0u128; SIZE];
+        let mut ref_attacks = [0u128; SIZE];
         let mut j = 0;
-        while j < combinations {
+        while j < SIZE {
             let mut occ = 0u128;
-            if (j & 1) != 0 {
-                occ |= 1 << bits[0];
+            let mut k = 0;
+            while k < SHIFT {
+                if (j & (1 << k)) != 0 {
+                    occ |= 1 << bits[k];
+                }
+                k += 1;
             }
-            if (j & 2) != 0 {
-                occ |= 1 << bits[1];
-            }
-            if (j & 4) != 0 {
-                occ |= 1 << bits[2];
-            }
-            if (j & 8) != 0 {
-                occ |= 1 << bits[3];
-            }
+
             occupancies[j] = occ;
-            ref_attacks[j] = if is_knight {
-                compute_knight_attacks(sq, occ)
-            } else {
-                compute_bishop_attacks(sq, occ)
+
+            // Dispatch to the correct attack generator
+            ref_attacks[j] = match piece {
+                LeaperType::Knight => compute_knight_attacks(sq, occ),
+                LeaperType::Bishop => compute_bishop_attacks(sq, occ),
+                LeaperType::KnightTo => compute_knight_to_attacks(sq, occ),
             };
             j += 1;
         }
 
-        // Search for the magic number!
-        // We use a fixed 124 shift (128 - 4 bits) for all squares to guarantee a 0..15 index.
-        let shift = 124;
+        let shift = 128 - SHIFT;
         let mut prng_state = 0x9876543210ABCDEF_1234567890ABCDEF + sq as u128;
         let mut found_magic = 0;
-        let mut final_attacks = [Bitboard::new(); 16];
-
+        let mut final_attacks = [Bitboard::new(); SIZE];
         let mut searching = true;
+
         while searching {
             let candidate = sparse_random(&mut prng_state);
-            let mut used = [false; 16];
-            let mut attacks = [0u128; 16];
+            let mut used = [false; SIZE];
+            let mut attacks = [0u128; SIZE];
             let mut fail = false;
 
             let mut k = 0;
-            while k < combinations {
+            while k < SIZE {
                 let hash_idx = (occupancies[k].wrapping_mul(candidate) >> shift) as usize;
                 if used[hash_idx] {
                     if attacks[hash_idx] != ref_attacks[k] {
@@ -747,7 +630,7 @@ const fn build_leaper_magics(is_knight: bool) -> [LeaperMagic; 90] {
             if !fail {
                 found_magic = candidate;
                 let mut idx = 0;
-                while idx < 16 {
+                while idx < SIZE {
                     final_attacks[idx] = unsafe { Bitboard::from_raw(attacks[idx]) };
                     idx += 1;
                 }
@@ -755,7 +638,7 @@ const fn build_leaper_magics(is_knight: bool) -> [LeaperMagic; 90] {
             }
         }
 
-        magics[sq] = LeaperMagic {
+        magics[sq] = Magic {
             mask,
             magic: found_magic,
             attacks: final_attacks,
@@ -766,5 +649,12 @@ const fn build_leaper_magics(is_knight: bool) -> [LeaperMagic; 90] {
 }
 
 // These run at compile time!
-pub static KNIGHT_MAGICS: [LeaperMagic; 90] = build_leaper_magics(true);
-pub static BISHOP_MAGICS: [LeaperMagic; 90] = build_leaper_magics(false);
+pub static KNIGHT_MAGICS: [Magic<16>; Square::COUNT] =
+    build_magics::<16, 4>(LeaperType::Knight, [1, -1, 0, 0], [0, 0, 1, -1]);
+
+pub static BISHOP_MAGICS: [Magic<16>; Square::COUNT] =
+    build_magics::<16, 4>(LeaperType::Bishop, [1, 1, -1, -1], [1, -1, 1, -1]);
+
+// Backward Knights share the Bishop's blocking square offsets!
+pub static KNIGHT_TO_MAGICS: [Magic<16>; Square::COUNT] =
+    build_magics::<16, 4>(LeaperType::KnightTo, [1, 1, -1, -1], [1, -1, 1, -1]);
