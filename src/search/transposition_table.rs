@@ -71,6 +71,7 @@ pub struct Entry {
 }
 
 impl Entry {
+    #[inline]
     pub fn is_cutoff(&self, alpha: Score, beta: Score, depth: i8) -> bool {
         if self.depth < depth {
             return false;

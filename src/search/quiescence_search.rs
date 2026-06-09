@@ -61,25 +61,12 @@ impl super::Searcher<'_> {
             .transposition_table
             .probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
-            if value.depth >= depth {
-                match value.bound {
-                    Bound::Exact => return value.score,
-                    Bound::Alpha => {
-                        if value.score <= alpha {
-                            return value.score;
-                        }
-                    }
-                    Bound::Beta => {
-                        if value.score >= beta {
-                            return value.score;
-                        }
-                    }
-                }
-            } else {
-                // Even though the TT entry is not deep enough to be directly used, we can still
-                // use the best move for move ordering and singular extensions.
-                best_move = value.best_move;
+            if value.is_cutoff(alpha, beta, depth) {
+                return value.score;
             }
+            // Even though the TT entry is not deep enough to be directly used, we can still
+            // use the best move for move ordering and singular extensions.
+            best_move = value.best_move;
         };
 
         let mut moves = MoveList::new();
