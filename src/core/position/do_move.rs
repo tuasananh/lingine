@@ -1,7 +1,4 @@
-use crate::{
-    core::{Move, Piece, PieceType, Position, Side, Square, StateInfo, position::ZOBRIST},
-    eval::{piece_material_value, piece_square_table_value},
-};
+use crate::core::{Move, Piece, PieceType, Position, Side, Square, StateInfo, position::ZOBRIST};
 
 impl Position {
     /// Safely introduces a piece onto a board square, updating the type/color
@@ -48,45 +45,46 @@ impl Position {
         let rule60 = last_state.rule60;
         let rule_repetition = last_state.rule_repetition;
         let old_zobrist = self.zobrist_hash;
-        let mut material_score = last_state.material_score;
-        let mut piece_square_table_score = last_state.piece_square_table_score;
+
+        let mut mg_score = last_state.mg_score;
+        let mut eg_score = last_state.eg_score;
+        let mut phase = last_state.phase;
 
         let piece = piece.expect("Cannot do_move with no piece at the source square");
 
+        let from_val = crate::eval::piece_material_value_tapered(piece, from);
+        let to_val = crate::eval::piece_material_value_tapered(piece, to);
+        let from_pst =
+            crate::eval::piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
+        let to_pst =
+            crate::eval::piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
+
         match piece.color() {
             Side::Red => {
-                material_score -= piece_material_value(piece, from);
-                piece_square_table_score -=
-                    piece_square_table_value(piece.piece_type(), Side::Red, from);
-                material_score += piece_material_value(piece, to);
-                piece_square_table_score +=
-                    piece_square_table_value(piece.piece_type(), Side::Red, to);
+                mg_score = mg_score - from_val.mg - from_pst.mg + to_val.mg + to_pst.mg;
+                eg_score = eg_score - from_val.eg - from_pst.eg + to_val.eg + to_pst.eg;
             }
             Side::Black => {
-                material_score += piece_material_value(piece, from);
-                piece_square_table_score +=
-                    piece_square_table_value(piece.piece_type(), Side::Black, from);
-
-                material_score -= piece_material_value(piece, to);
-                piece_square_table_score -=
-                    piece_square_table_value(piece.piece_type(), Side::Black, to);
+                mg_score = mg_score + from_val.mg + from_pst.mg - to_val.mg - to_pst.mg;
+                eg_score = eg_score + from_val.eg + from_pst.eg - to_val.eg - to_pst.eg;
             }
         }
 
-        // 2. Remove captured piece from to (if any)
-        if let Some(piece) = captured {
-            match piece.color() {
+        if let Some(cap) = captured {
+            let cap_val = crate::eval::piece_material_value_tapered(cap, to);
+            let cap_pst =
+                crate::eval::piece_square_table_value_tapered(cap.piece_type(), cap.color(), to);
+            match cap.color() {
                 Side::Red => {
-                    material_score -= piece_material_value(piece, to);
-                    piece_square_table_score -=
-                        piece_square_table_value(piece.piece_type(), Side::Red, to);
+                    mg_score -= cap_val.mg + cap_pst.mg;
+                    eg_score -= cap_val.eg + cap_pst.eg;
                 }
                 Side::Black => {
-                    material_score += piece_material_value(piece, to);
-                    piece_square_table_score +=
-                        piece_square_table_value(piece.piece_type(), Side::Black, to);
+                    mg_score += cap_val.mg + cap_pst.mg;
+                    eg_score += cap_val.eg + cap_pst.eg;
                 }
             }
+            phase -= crate::eval::piece_phase_weight(cap.piece_type());
         }
 
         self.put_piece(from, None);
@@ -117,8 +115,9 @@ impl Position {
             rule60: new_rule60,
             rule_repetition: new_rule_repetition,
             in_check,
-            material_score,
-            piece_square_table_score,
+            mg_score,
+            eg_score,
+            phase,
         });
 
         // Toggle side to move

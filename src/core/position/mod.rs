@@ -33,11 +33,12 @@ pub struct StateInfo {
     pub rule_repetition: u16,
     /// Whether each color [Red, Black] was in check in this position state.
     pub in_check: [bool; Side::COUNT],
-    /// Precalculated incremental material score (from Red's perspective)
-    pub material_score: Score,
-    /// Precalculated incremental piece-square table positional score (from
-    /// Red's perspective)
-    pub piece_square_table_score: Score,
+    /// Precalculated incremental middlegame score (from Red's perspective)
+    pub mg_score: Score,
+    /// Precalculated incremental endgame score (from Red's perspective)
+    pub eg_score: Score,
+    /// Precalculated incremental game phase
+    pub phase: i32,
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn
@@ -275,7 +276,10 @@ impl Position {
         self.game_ply = (fullmove.saturating_sub(1) * 2) + (self.side_to_move as u16);
 
         let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
-        let (material_score, piece_square_table_score) = self.compute_evaluation_scores();
+
+        let (mg_score, eg_score) = self.compute_tapered_evaluation_scores();
+        let phase = self.calculate_board_phase();
+
         self.history.push(StateInfo {
             last_move: Move::NULL,
             captured_piece: None,
@@ -283,8 +287,9 @@ impl Position {
             rule60,
             rule_repetition: 0,
             in_check,
-            material_score,
-            piece_square_table_score,
+            mg_score,
+            eg_score,
+            phase,
         });
 
         Ok(())

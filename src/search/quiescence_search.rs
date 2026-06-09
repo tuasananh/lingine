@@ -1,5 +1,6 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, Side, generate_moves, score},
+    eval::evaluate,
     search::{Bound, Entry},
     tt_value,
 };
@@ -25,7 +26,7 @@ impl super::Searcher<'_> {
         // Base case: to avoid infinite recursion and stack overflow from perpetual
         // checks
         if depth <= -12 {
-            let stand_pat = self.pos.evaluate();
+            let stand_pat = evaluate(&self.pos);
             return if self.pos.side_to_move() == Side::Red {
                 stand_pat
             } else {
@@ -44,7 +45,7 @@ impl super::Searcher<'_> {
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
-            let stand_pat = self.pos.evaluate();
+            let stand_pat = evaluate(&self.pos);
             best_score = if self.pos.side_to_move() == Side::Red {
                 stand_pat
             } else {
