@@ -145,6 +145,16 @@ impl Position {
         self.bitboard_by_color[color as usize]
     }
 
+    #[inline]
+    pub fn bitboard_of(&self, color: Side, piece_type: PieceType) -> Bitboard {
+        self.bitboard_by_color(color) & self.bitboard_by_type(piece_type)
+    }
+
+    #[inline]
+    pub fn bitboard_occupied(&self) -> Bitboard {
+        self.bitboard_by_color(Side::Red) | self.bitboard_by_color(Side::Black)
+    }
+
     /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
