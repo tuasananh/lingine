@@ -35,8 +35,6 @@ pub struct SharedContext<'a> {
     pub transposition_table: &'a mut TranspositionTable,
     /// History heuristic table to prioritize frequently successful quiet moves.
     pub history_moves: &'a mut HistoryMoves,
-    /// Current search sequence age.
-    pub age: u8,
     /// Track the running status of the search, may be stopped in another
     /// thread.
     pub keep_running: Arc<RunningStatus>,
@@ -184,7 +182,6 @@ mod tests {
             shared: SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
                 transposition_table: &mut transposition_table,
-                age: 1,
                 history_moves: &mut history_moves,
             },
             current_root_depth: 0,
@@ -253,7 +250,6 @@ mod tests {
             shared: SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
                 transposition_table: &mut transposition_table,
-                age: 1,
                 history_moves: &mut history_moves,
             },
             current_root_depth: 0,

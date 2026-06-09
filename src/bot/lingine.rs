@@ -9,32 +9,16 @@ use crate::uci::{
     SetOptionParameters, UciId, UciOption,
 };
 
-/// A real, functional [`Engine`] implementation mapping to our search and
-/// evaluation.
+#[derive(Default)]
 pub struct Lingine {
-    /// Internal board state tracker.
+    /// Current position of the engine.
     position: Position,
-    /// Transposition table to cache evaluated search nodes.
-    ///
-    /// Find out more: https://www.chessprogramming.org/Transposition_Table
+    /// Transposition table for caching results of previously evaluated positions.
     transposition_table: TranspositionTable,
-    /// Generational sequence age to track outdated transposition table entries,
-    /// used in [`crate::search::TranspositionTable::store`] to determine
-    /// whether to replace an existing entry.
-    age: u8,
+    /// The history heuristic table, which tracks the effectiveness of quiet moves.
+    history_moves: HistoryMoves,
     /// Shared flag to indicate whether the engine should keep searching
     keep_running: Arc<RunningStatus>,
-}
-
-impl Default for Lingine {
-    fn default() -> Self {
-        Self {
-            position: Position::default(),
-            transposition_table: TranspositionTable::new(16), // Default to 16 MB
-            age: 0,
-            keep_running: Arc::new(RunningStatus::default()),
-        }
-    }
 }
 
 impl Lingine {
@@ -88,7 +72,6 @@ impl Engine for Lingine {
         eprintln!("debug: ucinewgame");
         self.position = Position::new();
         self.transposition_table.clear();
-        self.age = 0;
     }
 
     fn register(&self, params: RegisterParameters) {
@@ -148,15 +131,7 @@ impl Engine for Lingine {
     }
 
     fn go(&mut self, params: GoParameters) -> Result<BestMove> {
-        // Increment the age generation at the start of a search session
-        self.age = self.age.wrapping_add(1);
-
-        // Calculate time limit for this search based on the provided parameters and the
-        // side to move. This will help us determine how long to search before returning
-        // a best move.
         let time_manager = TimeManager::new(&params, self.position.side_to_move());
-
-        let mut history_table = HistoryMoves::default();
 
         let best_move = Searcher::start_search(
             self.position.clone(),
@@ -164,8 +139,7 @@ impl Engine for Lingine {
             SharedContext {
                 keep_running: self.keep_running.clone(),
                 transposition_table: &mut self.transposition_table,
-                history_moves: &mut history_table,
-                age: self.age,
+                history_moves: &mut self.history_moves,
             },
         );
 

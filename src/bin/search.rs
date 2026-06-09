@@ -56,7 +56,6 @@ fn main() -> anyhow::Result<()> {
             keep_running: stop.clone(),
             transposition_table: &mut transposition_table,
             history_moves: &mut history_moves,
-            age: 0,
         },
     );
     let duration = start.elapsed();

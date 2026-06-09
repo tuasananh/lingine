@@ -171,6 +171,7 @@ impl TranspositionTable {
 
     /// Resets all transposition entries back to defaults.
     pub fn clear(&mut self) {
+        self.age = 0;
         for entry in self.table.iter_mut() {
             *entry = Storage::default();
         }
