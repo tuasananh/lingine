@@ -1,7 +1,7 @@
 use strum::EnumCount;
 
 use crate::core::{
-    Bitboard, Move, Piece, PieceType, Score, Side, Square, cannon_attacks, knight_attacks,
+    Bitboard, Move, Piece, PieceType, Score, Side, Square, cannon_captures, knight_attacks,
     pawn_attacks, rook_attacks, score,
 };
 
@@ -55,7 +55,7 @@ impl super::Position {
             // Generate attacks from `from`
             let mut attacks = match ptype {
                 PieceType::Rook => rook_attacks(from, occupied),
-                PieceType::Cannon => cannon_attacks(from, occupied),
+                PieceType::Cannon => cannon_captures(from, occupied),
                 PieceType::Knight => knight_attacks(from, occupied),
                 PieceType::Pawn => pawn_attacks(from, mover),
                 _ => Bitboard::new(),

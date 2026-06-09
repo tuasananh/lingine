@@ -21,36 +21,50 @@ pub fn gather_file_bits(bits: u128, f: usize) -> usize {
     ((low & 0x1F) | ((high & 0x1F) << 5)) as usize
 }
 
+/// Returns squares the King can move to from `square` (1-step orthogonal,
+/// palace-confined). Does not filter friendly pieces.
 #[inline]
 pub fn king_attacks(square: Square) -> Bitboard {
     KING_ATTACKS[square as usize]
 }
 
+/// Returns squares the Advisor can move to from `square` (1-step diagonal,
+/// palace-confined). Does not filter friendly pieces.
 #[inline]
 pub fn advisor_attacks(square: Square) -> Bitboard {
     ADVISOR_ATTACKS[square as usize]
 }
 
+/// Returns squares the Bishop can move to from `square` given `occupied`.
+/// Blocked if the intervening eye square is occupied.
 #[inline]
 pub fn bishop_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     BISHOP_MAGICS[square as usize].attack(occupied)
 }
 
+/// Returns squares the Knight can move to from `square` given `occupied`.
+/// Blocked if the adjacent leg square in the movement direction is occupied.
 #[inline]
 pub fn knight_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     KNIGHT_MAGICS[square as usize].attack(occupied)
 }
 
+/// Returns squares the Pawn at `square` can move to, given its `side`.
+/// Forward-only before crossing the river; adds sideways moves after.
 #[inline]
 pub fn pawn_attacks(square: Square, side: Side) -> Bitboard {
     PAWN_ATTACKS[side as usize][square as usize]
 }
 
+/// Returns squares from which a Pawn of `side` could attack `square`.
+/// The reverse of `pawn_attacks`; used for check detection.
 #[inline]
 pub fn pawn_attacks_to(square: Square, side: Side) -> Bitboard {
     PAWN_ATTACKS_TO[side as usize][square as usize]
 }
 
+/// Returns squares from which a Knight could attack `square` given `occupied`.
+/// The reverse of `knight_attacks`; used for check detection.
 #[inline]
 pub fn knight_attacks_to(square: Square, occupied: Bitboard) -> Bitboard {
     KNIGHT_TO_MAGICS[square as usize].attack(occupied)
@@ -75,12 +89,21 @@ fn sliding_attacks<const ROOK: bool>(square: Square, occupied: Bitboard) -> Bitb
     rank_bb | FILE_ATTACKS_BY_MASK[f][file_mask as usize]
 }
 
+/// Returns all squares reachable by a Rook from `square` given `occupied`:
+/// slides orthogonally in all four directions, stopping on the first blocker
+/// (inclusive). Includes both quiet and capture targets; does not filter
+/// friendly pieces.
 #[inline]
 pub fn rook_attacks(sq: Square, occ: Bitboard) -> Bitboard {
     sliding_attacks::<true>(sq, occ)
 }
+
+/// Returns squares the Cannon can capture on from `sq` given `occ`: only
+/// squares with exactly one intervening piece (the screen) along a rank or
+/// file. Quiet moves are not included — use `rook_attacks` for those.
+/// Does not filter friendly pieces.
 #[inline]
-pub fn cannon_attacks(sq: Square, occ: Bitboard) -> Bitboard {
+pub fn cannon_captures(sq: Square, occ: Bitboard) -> Bitboard {
     sliding_attacks::<false>(sq, occ)
 }
 
@@ -142,12 +165,12 @@ mod tests {
         // Cannon quiet attacks are 0 on an empty board (cannon_attacks only computes
         // leap captures)
         let empty = Bitboard::new();
-        let att_cannon_a0 = cannon_attacks(Square::A0, empty);
+        let att_cannon_a0 = cannon_captures(Square::A0, empty);
         assert_eq!(att_cannon_a0.raw(), 0);
 
         // Cannon at A0, blocker (screen) at A2, and enemy at A5
         let occupied = unsafe { Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << (5 * 9))) };
-        let att_cannon_blocked = cannon_attacks(Square::A0, occupied);
+        let att_cannon_blocked = cannon_captures(Square::A0, occupied);
         // Upwards file leap capture target behind screen A2: A5.
 
         // General can move orthogonally inside Palace: D0, F0, E1

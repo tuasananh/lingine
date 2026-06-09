@@ -1,5 +1,5 @@
 use crate::core::{
-    Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_attacks, knight_attacks_to,
+    Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_captures, knight_attacks_to,
     pawn_attacks_to, rook_attacks,
 };
 
@@ -98,26 +98,19 @@ impl Position {
 
         let pawn_attackers = pawn_attacks_to(square, attacker) & opponent_pawns;
         let knight_attackers = knight_attacks_to(square, occupied) & opponent_knights;
-        let rook_atk = rook_attacks(square, occupied);
 
         // Intersect with attacker Rooks AND the attacker King: under the Flying General
         // rule, two Kings facing each other on an open file counts as a check
         // (treated as a Rook attack).
-        let rook_attackers = rook_atk & (opponent_rooks | opponent_king);
+        let rook_attackers = rook_attacks(square, occupied) & (opponent_rooks | opponent_king);
 
         // --- Cannon scanner (platform-leap captures) ---
         // Compute Cannon attack squares from `square`: Cannons capture by leaping over
         // exactly one intervening piece (the "platform"). `cannon_attacks`
         // returns squares that have exactly one piece between them and `square`
         // along a rank or file.
-        let cannon_atk = cannon_attacks(square, occupied);
-        // Intersect with attacker Cannons only (Kings/Rooks cannot leap over
-        // platforms).
-        let cannon_attackers = cannon_atk & opponent_cannons;
+        let cannon_attackers = cannon_captures(square, occupied) & opponent_cannons;
 
-        // Union all four attacker bitboards into a single result: every square occupied
-        // by an attacker-colored piece that can reach `square` under the
-        // current board occupancy.
         pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
     }
 
@@ -187,7 +180,7 @@ impl Position {
         let knight_attackers = knight_attacks_to(square, occupied) & opponent_knights;
         let rook_atk = rook_attacks(square, occupied);
         let rook_attackers = rook_atk & (opponent_rooks | opponent_king);
-        let cannon_atk = cannon_attacks(square, occupied);
+        let cannon_atk = cannon_captures(square, occupied);
         let cannon_attackers = cannon_atk & opponent_cannons;
 
         pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
