@@ -13,9 +13,11 @@ use crate::uci::{
 pub struct Lingine {
     /// Current position of the engine.
     position: Position,
-    /// Transposition table for caching results of previously evaluated positions.
+    /// Transposition table for caching results of previously evaluated
+    /// positions.
     transposition_table: TranspositionTable,
-    /// The history heuristic table, which tracks the effectiveness of quiet moves.
+    /// The history heuristic table, which tracks the effectiveness of quiet
+    /// moves.
     history_moves: HistoryMoves,
     /// Shared flag to indicate whether the engine should keep searching
     keep_running: Arc<RunningStatus>,
