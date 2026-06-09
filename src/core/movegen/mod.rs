@@ -27,184 +27,105 @@ pub enum MoveGenType {
     Legal,
 }
 
-/// Generates valid orthogonal moves for the General (King) inside the Palace.
-fn generate_king_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
-    let from_sq = pos.king_square(us);
-    let us_pieces = pos.bitboard_by_color(us);
-    let mut target_bb = king_attacks(from_sq) & !us_pieces;
-    while let Some(to_sq) = target_bb.pop_lsb() {
-        moves.push(Move::new(from_sq, to_sq));
-    }
-}
-
-/// Generates diagonal moves for Advisors inside the Palace.
-fn generate_advisor_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
-    let us_pieces = pos.bitboard_by_color(us);
-    let mut advisors = pos.bitboard_by_type(PieceType::Advisor) & us_pieces;
-    while let Some(from_sq) = advisors.pop_lsb() {
-        let mut target_bb = advisor_attacks(from_sq) & !us_pieces;
-        while let Some(to_sq) = target_bb.pop_lsb() {
-            moves.push(Move::new(from_sq, to_sq));
-        }
-    }
-}
-
-/// Generates diagonal moves for Elephants (Bishops), checking diagonal blocker
-/// intermediate eyes.
-fn generate_bishop_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
-    let us_pieces = pos.bitboard_by_color(us);
-    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
-    let mut bishops = pos.bitboard_by_type(PieceType::Bishop) & us_pieces;
-
-    while let Some(from_sq) = bishops.pop_lsb() {
-        let mut target_bb = bishop_attacks(from_sq, occupied) & !us_pieces;
-        while let Some(to_sq) = target_bb.pop_lsb() {
-            moves.push(Move::new(from_sq, to_sq));
-        }
-    }
-}
-
-/// Generates L-shaped moves for Horses (Knights), checking intermediate
-/// orthogonal blocker leg squares.
-fn generate_knight_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
-    let us_pieces = pos.bitboard_by_color(us);
-    let occupied = pos.bitboard_occupied();
-    let mut knights = pos.bitboard_by_type(PieceType::Knight) & us_pieces;
-
-    while let Some(from_sq) = knights.pop_lsb() {
-        let mut target_bb = knight_attacks(from_sq, occupied) & !us_pieces;
-        while let Some(to_sq) = target_bb.pop_lsb() {
-            moves.push(Move::new(from_sq, to_sq));
-        }
-    }
-}
-
-/// Generates moves for Soldiers (Pawns) based on whether they have crossed the
-/// river or not.
-fn generate_pawn_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
-    let us_pieces = pos.bitboard_by_color(us);
-    let mut pawns = pos.bitboard_by_type(PieceType::Pawn) & us_pieces;
-
-    while let Some(from_sq) = pawns.pop_lsb() {
-        let mut target_bb = pawn_attacks(from_sq, us) & !us_pieces;
-        while let Some(to_sq) = target_bb.pop_lsb() {
-            moves.push(Move::new(from_sq, to_sq));
-        }
-    }
-}
-
-/// Generates horizontal and vertical sliding moves for Chariots (Rooks) in O(1)
-/// lookups.
-fn generate_rook_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_WHITE { Side::Red } else { Side::Black };
-    let us_pieces = pos.bitboard_by_color(us);
-    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
-    let mut rooks = pos.bitboard_by_type(PieceType::Rook) & us_pieces;
-
-    while let Some(from_sq) = rooks.pop_lsb() {
-        let from_idx = from_sq as usize;
-        let f = from_idx % 9;
-        let r = from_idx / 9;
-
-        // 1. Rank attacks
-        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
-        let us_rank_mask = ((us_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
-        let mut rank_attack_mask = RANK_TABLE[f].rook[rank_occ] & !us_rank_mask;
-
-        while rank_attack_mask != 0 {
-            let f_to = rank_attack_mask.trailing_zeros() as usize;
-            rank_attack_mask &= rank_attack_mask - 1;
-            let to_sq = Square::from_repr((r * 9 + f_to) as u8).unwrap();
-            moves.push(Move::new(from_sq, to_sq));
-        }
-
-        // 2. File attacks
-        let file_occ = gather_file_bits(occupied.raw(), f);
-        let us_file_mask = gather_file_bits(us_pieces.raw(), f) as u16;
-        let mut file_attack_mask = FILE_TABLE[r].rook[file_occ] & !us_file_mask;
-
-        while file_attack_mask != 0 {
-            let r_to = file_attack_mask.trailing_zeros() as usize;
-            file_attack_mask &= file_attack_mask - 1;
-            let to_sq = Square::from_repr((r_to * 9 + f) as u8).unwrap();
-            moves.push(Move::new(from_sq, to_sq));
-        }
-    }
-}
-
-/// Generates horizontal and vertical moves/leap captures for Cannons in O(1)
-/// lookups.
-fn generate_cannon_moves<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
+/// Generates all pseudo-legal moves in a single pass.
+fn generate_pseudo_legal<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
     let us = if IS_WHITE { Side::Red } else { Side::Black };
     let them = us.opposite();
     let us_pieces = pos.bitboard_by_color(us);
     let them_pieces = pos.bitboard_by_color(them);
-    let occupied = pos.bitboard_by_color(Side::Red) | pos.bitboard_by_color(Side::Black);
-    let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
+    let occupied = pos.bitboard_occupied();
 
-    while let Some(from_sq) = cannons.pop_lsb() {
-        let from_idx = from_sq as usize;
-        let f = from_idx % 9;
-        let r = from_idx / 9;
+    // Macro to eliminate the repetitive nested loops for leaper pieces
+    macro_rules! gen_leapers {
+        ($pieces:expr, |$from:ident| $targets:expr) => {
+            let mut pieces = $pieces;
+            while let Some($from) = pieces.pop_lsb() {
+                let mut targets = ($targets) & !us_pieces;
+                while let Some(to_sq) = targets.pop_lsb() {
+                    moves.push(Move::new($from, to_sq));
+                }
+            }
+        };
+    }
 
-        // 1. Rank moves (horizontal quiet + leap captures)
+    // 1. King
+    let king_sq = pos.king_square(us);
+    let mut king_targets = king_attacks(king_sq) & !us_pieces;
+    while let Some(to_sq) = king_targets.pop_lsb() {
+        moves.push(Move::new(king_sq, to_sq));
+    }
+
+    // 2. Leapers
+    gen_leapers!(
+        pos.bitboard_by_type(PieceType::Advisor) & us_pieces,
+        |from| advisor_attacks(from)
+    );
+    gen_leapers!(
+        pos.bitboard_by_type(PieceType::Bishop) & us_pieces,
+        |from| bishop_attacks(from, occupied)
+    );
+    gen_leapers!(
+        pos.bitboard_by_type(PieceType::Knight) & us_pieces,
+        |from| knight_attacks(from, occupied)
+    );
+    gen_leapers!(pos.bitboard_by_type(PieceType::Pawn) & us_pieces, |from| {
+        pawn_attacks(from, us)
+    });
+
+    // Macro to eliminate repetitive slider bit extraction
+    macro_rules! gen_sliders {
+        ($from:expr, $mask:expr, |$idx:ident| $to_sq_expr:expr) => {
+            let mut m = $mask;
+            while m != 0 {
+                let $idx = m.trailing_zeros() as usize;
+                m &= m - 1;
+                moves.push(Move::new(
+                    $from,
+                    Square::from_repr(($to_sq_expr) as u8).unwrap(),
+                ));
+            }
+        };
+    }
+
+    // 3. Rooks
+    let mut rooks = pos.bitboard_by_type(PieceType::Rook) & us_pieces;
+    while let Some(from) = rooks.pop_lsb() {
+        let (f, r) = (from as usize % 9, from as usize / 9);
+
         let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
-        let them_rank_mask = ((them_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
+        let us_rank = ((us_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
+        gen_sliders!(from, RANK_TABLE[f].rook[rank_occ] & !us_rank, |f_to| r * 9
+            + f_to);
 
-        let rank_quiet_mask =
-            RANK_TABLE[f].rook[rank_occ] & !((occupied.raw() >> (r * 9)) & 0x1FF) as u16;
-        let rank_capture_mask = RANK_TABLE[f].cannon[rank_occ] & them_rank_mask;
-
-        let mut rank_attack_mask = rank_quiet_mask | rank_capture_mask;
-        while rank_attack_mask != 0 {
-            let f_to = rank_attack_mask.trailing_zeros() as usize;
-            rank_attack_mask &= rank_attack_mask - 1;
-            let to_sq = Square::from_repr((r * 9 + f_to) as u8).unwrap();
-            moves.push(Move::new(from_sq, to_sq));
-        }
-
-        // 2. File moves (vertical quiet + leap captures)
         let file_occ = gather_file_bits(occupied.raw(), f);
-        let them_file_mask = gather_file_bits(them_pieces.raw(), f) as u16;
-        let occ_file_mask = gather_file_bits(occupied.raw(), f) as u16;
+        let us_file = gather_file_bits(us_pieces.raw(), f) as u16;
+        gen_sliders!(from, FILE_TABLE[r].rook[file_occ] & !us_file, |r_to| r_to
+            * 9
+            + f);
+    }
 
-        let file_quiet_mask = FILE_TABLE[r].rook[file_occ] & !occ_file_mask;
-        let file_capture_mask = FILE_TABLE[r].cannon[file_occ] & them_file_mask;
+    // 4. Cannons
+    let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
+    while let Some(from) = cannons.pop_lsb() {
+        let (f, r) = (from as usize % 9, from as usize / 9);
 
-        let mut file_attack_mask = file_quiet_mask | file_capture_mask;
-        while file_attack_mask != 0 {
-            let r_to = file_attack_mask.trailing_zeros() as usize;
-            file_attack_mask &= file_attack_mask - 1;
-            let to_sq = Square::from_repr((r_to * 9 + f) as u8).unwrap();
-            moves.push(Move::new(from_sq, to_sq));
-        }
+        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+        let them_rank = ((them_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
+        let r_quiet = RANK_TABLE[f].rook[rank_occ] & !(rank_occ as u16);
+        let r_cap = RANK_TABLE[f].cannon[rank_occ] & them_rank;
+        gen_sliders!(from, r_quiet | r_cap, |f_to| r * 9 + f_to);
+
+        let file_occ = gather_file_bits(occupied.raw(), f);
+        let them_file = gather_file_bits(them_pieces.raw(), f) as u16;
+        let f_quiet = FILE_TABLE[r].rook[file_occ] & !(file_occ as u16);
+        let f_cap = FILE_TABLE[r].cannon[file_occ] & them_file;
+        gen_sliders!(from, f_quiet | f_cap, |r_to| r_to * 9 + f);
     }
 }
 
-/// Orchestrates move generators for all piece types, returning the total
-/// pseudo-legal move count.
-fn generate_pseudo_legal<const IS_WHITE: bool>(pos: &Position, moves: &mut MoveList) {
-    generate_king_moves::<IS_WHITE>(pos, moves);
-    generate_advisor_moves::<IS_WHITE>(pos, moves);
-    generate_bishop_moves::<IS_WHITE>(pos, moves);
-    generate_knight_moves::<IS_WHITE>(pos, moves);
-    generate_pawn_moves::<IS_WHITE>(pos, moves);
-    generate_rook_moves::<IS_WHITE>(pos, moves);
-    generate_cannon_moves::<IS_WHITE>(pos, moves);
-}
-
 /// The main entry point for move generation.
-/// Filters pseudo-legal moves into legal moves (e.g. by ensuring the King is
-/// not left in check) and respects the target `MoveGenType` request (Legal,
-/// PseudoLegal, Quiets, Captures, Evasions).
 pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveList) {
-    let color = pos.side_to_move();
-    match color {
+    match pos.side_to_move() {
         Side::Red => generate_pseudo_legal::<true>(pos, moves),
         Side::Black => generate_pseudo_legal::<false>(pos, moves),
     };
@@ -213,29 +134,18 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
         return;
     }
 
-    // Filter legal moves depending on the generation type
-    let mut write_idx = 0;
-    for read_idx in 0..moves.len() {
-        let m = moves[read_idx];
-        let is_legal = pos.legal(m);
-        let keep = if is_legal {
-            match gen_type {
-                MoveGenType::Legal | MoveGenType::Evasions => true,
-                MoveGenType::Captures => !pos.is_empty(m.to()),
-                MoveGenType::Quiets => pos.is_empty(m.to()),
-                _ => false,
-            }
-        } else {
-            false
-        };
-
-        if keep {
-            moves[write_idx] = m;
-            write_idx += 1
+    // Leverage ArrayVec's native `retain` instead of a manual two-pointer loop
+    moves.retain(|m| {
+        if !pos.legal(*m) {
+            return false;
         }
-    }
-
-    moves.truncate(write_idx);
+        match gen_type {
+            MoveGenType::Legal | MoveGenType::Evasions => true,
+            MoveGenType::Captures => !pos.is_empty(m.to()),
+            MoveGenType::Quiets => pos.is_empty(m.to()),
+            MoveGenType::PseudoLegal => unreachable!(),
+        }
+    });
 }
 
 #[cfg(test)]
