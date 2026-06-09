@@ -1,13 +1,10 @@
 use anyhow::Result;
-use simple_logger::SimpleLogger;
 
-use lingine::{bot::Lingine, uci::Handler};
+use lingine::bot::Lingine;
+use lingine::uci::message_loop;
 
 fn main() -> Result<()> {
-    SimpleLogger::new().init()?;
     let bot = Lingine::new();
-    let uci_handler = Handler::new(bot);
-    let reader = std::io::stdin().lock();
-    uci_handler.run(reader)?;
+    message_loop(bot);
     Ok(())
 }

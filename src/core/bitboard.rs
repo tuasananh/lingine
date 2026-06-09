@@ -1,22 +1,18 @@
-//! Bitboard representation of the 9x10 Xiangqi board.
-//!
-//! The board has 90 squares, represented by the first 90 bits (0..89) of a
-//! `u128`. Bit indices are mapped in rank-major order using `rank_index * 9 +
-//! file_index`. Bits 90 to 127 are unused.
-//!
-//! High performance is achieved by utilizing bitwise operations for move
-//! generation, board occupancy tracking, and attack calculations.
-
 use std::fmt::Display;
 
 use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use strum::EnumCount;
 
-use crate::core::types::{Color, File, Rank, Square};
+use crate::core::types::{File, Rank, Side, Square};
 
-/// Represents the occupancy or attack targets on the 90-square Xiangqi board.
-/// Packaged inside a `u128` wrapper where bits 0 to 89 correspond to the
-/// squares A0 (0) to I9 (89). The upper bits (90 to 127) are unused.
+/// Bitboard representation of the 9x10 Xiangqi board.
+///
+/// The board has 90 squares, represented by the first 90 bits (0..89) of a
+/// `u128`. Bit indices are mapped in rank-major order using `rank_index * 9 +
+/// file_index`. Bits 90 to 127 are unused.
+///
+/// High performance is achieved by utilizing bitwise operations for move
+/// generation, board occupancy tracking, and attack calculations.
 #[derive(
     BitAnd,
     BitAndAssign,
@@ -30,14 +26,9 @@ use crate::core::types::{Color, File, Rank, Square};
     PartialEq,
     Eq,
     Debug,
+    Default,
 )]
 pub struct Bitboard(u128);
-
-impl Default for Bitboard {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl Bitboard {
     /// Creates a new, completely empty bitboard (all bits set to 0).
@@ -47,8 +38,14 @@ impl Bitboard {
     }
 
     /// Make a bitboard directly from a raw `u128` value.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the provided `u128` value only has bits set
+    /// in the range 0..89, as bits 90 to 127 are unused and may lead to
+    /// undefined behavior
     #[inline]
-    pub const fn from_raw(bitboard: u128) -> Self {
+    pub const unsafe fn from_raw(bitboard: u128) -> Self {
         Self(bitboard)
     }
 
@@ -67,25 +64,25 @@ impl Bitboard {
 
     /// Verifies if a given square bit is active (set to 1) in the bitboard.
     #[inline]
-    pub fn is_occupied(&self, square: Square) -> bool {
+    pub const fn is_occupied(&self, square: Square) -> bool {
         (self.0 & (1u128 << (square as u8))) != 0
     }
 
     /// Activates (sets to 1) the bit corresponding to the given square.
     #[inline]
-    pub fn set_bit(&mut self, square: Square) {
+    pub const fn set_bit(&mut self, square: Square) {
         self.0 |= 1u128 << (square as u8);
     }
 
     /// Deactivates (clears to 0) the bit corresponding to the given square.
     #[inline]
-    pub fn clear_bit(&mut self, square: Square) {
+    pub const fn clear_bit(&mut self, square: Square) {
         self.0 &= !(1u128 << (square as u8));
     }
 
     /// Returns the number of active squares (bits set to 1) in the bitboard.
     #[inline]
-    pub fn count_ones(&self) -> u32 {
+    pub const fn count_ones(&self) -> u32 {
         self.0.count_ones()
     }
 
@@ -94,7 +91,7 @@ impl Bitboard {
     /// the bitboard is empty. Used for rapid, zero-overhead sequence
     /// generation and iterator-like popping of pieces.
     #[inline]
-    pub fn pop_lsb(&mut self) -> Option<Square> {
+    pub const fn pop_lsb(&mut self) -> Option<Square> {
         if self.0 == 0 {
             None
         } else {
@@ -117,19 +114,6 @@ impl Bitboard {
     pub const fn const_and(&self, b: Self) -> Self {
         Self(self.0 & b.0)
     }
-
-    /// A compile-time precomputed mask representing both Palace zones (3x3
-    /// squares at the center-bottom and center-top). Used to validate
-    /// Advisor and King moves which are strictly restricted to the Palace.
-    ///
-    /// * **White Palace**: Squares D0, E0, F0, D1, E1, F1, D2, E2, F2 (indexes
-    ///   3..5, 12..14, 21..23).
-    /// * **Black Palace**: Squares D7, E7, F7, D8, E8, F8, D9, E9, F9 (indexes
-    ///   66..68, 75..77, 84..86).
-    ///
-    /// Combined bitwise mask = `0x70381C0000000000E07038u128` (active bits
-    /// corresponding exactly to these indices).
-    pub const PALACE: Self = Self(0x70381C0000000000E07038u128);
 
     /// Constructs a bitboard with all bits active along the specified vertical
     /// column (`File`).
@@ -165,45 +149,19 @@ impl Bitboard {
 
     /// Returns a precomputed bitboard covering one half of the board (5 ranks)
     /// for a given player:
-    ///
-    /// * **White Side**: Ranks R0 to R4 (indices 0 to 44).
-    /// * **Black Side**: Ranks R5 to R9 (indices 45 to 89).
-    pub const fn side(color: Color) -> Self {
+    pub const fn side(color: Side) -> Self {
         match color {
-            Color::White => Self::rank(Rank::R0)
+            Side::Red => Self::rank(Rank::R0)
                 .const_or(Self::rank(Rank::R1))
                 .const_or(Self::rank(Rank::R2))
                 .const_or(Self::rank(Rank::R3))
                 .const_or(Self::rank(Rank::R4)),
-            Color::Black => Self::rank(Rank::R5)
+            Side::Black => Self::rank(Rank::R5)
                 .const_or(Self::rank(Rank::R6))
                 .const_or(Self::rank(Rank::R7))
                 .const_or(Self::rank(Rank::R8))
                 .const_or(Self::rank(Rank::R9)),
         }
-    }
-
-    /// A precomputed mask representing vertical pawn starting paths (Files FA,
-    /// FC, FE, FG, FI). In Xiangqi, Pawns can only cross the river and move
-    /// sideways on files A, C, E, G, I before promotion.
-    pub const PAWN_FILE: Self = Self::file(File::FA)
-        .const_or(Self::file(File::FC))
-        .const_or(Self::file(File::FE))
-        .const_or(Self::file(File::FG))
-        .const_or(Self::file(File::FI));
-
-    /// Computes the valid Pawn board zone for the given color.
-    /// Prior to crossing the river (opponent's side), Pawns can only move
-    /// straight forward. Once they cross, they can move forward or
-    /// horizontally sideways (left/right).
-    pub const fn pawn(color: Color) -> Self {
-        let other_side = Self::side(color.opposite());
-        let my_side = Self::PAWN_FILE.const_and(match color {
-            Color::White => Self::rank(Rank::R3).const_or(Self::rank(Rank::R4)),
-            Color::Black => Self::rank(Rank::R5).const_or(Self::rank(Rank::R6)),
-        });
-
-        my_side.const_or(other_side)
     }
 }
 
@@ -261,13 +219,8 @@ impl Display for Bitboard {
 mod tests {
     use crate::core::{
         bitboard::Bitboard,
-        types::{Color, File, Rank},
+        types::{File, Rank, Side},
     };
-
-    #[test]
-    fn test_print_palace() {
-        println!("{}", Bitboard::PALACE);
-    }
 
     #[test]
     fn test_print_rank_bitboard() {
@@ -284,23 +237,12 @@ mod tests {
     }
 
     #[test]
-    fn test_print_pawn_file_bitboard() {
-        println!("{}", Bitboard::PAWN_FILE);
-    }
-
-    #[test]
-    fn test_print_white_side_bitboard() {
-        println!("{}", Bitboard::side(Color::White));
+    fn test_print_red_side_bitboard() {
+        println!("{}", Bitboard::side(Side::Red));
     }
 
     #[test]
     fn test_print_black_side_bitboard() {
-        println!("{}", Bitboard::side(Color::Black));
-    }
-
-    #[test]
-    fn test_print_pawn_bitboard() {
-        println!("{}", Bitboard::pawn(Color::White));
-        println!("{}", Bitboard::pawn(Color::Black));
+        println!("{}", Bitboard::side(Side::Black));
     }
 }

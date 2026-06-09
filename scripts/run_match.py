@@ -67,6 +67,9 @@ def main():
         "-s", "--skip-build", action="store_true", help="Skip cargo build"
     )
     parser.add_argument("--sprt", help="SPRT termination parameters")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output"
+    )
 
     args = parser.parse_args()
 
@@ -153,6 +156,9 @@ def main():
             pgnout,
         ]
     )
+
+    if args.verbose:
+        cli_args += ["-debug"]
 
     if args.sprt:
         cli_args.extend(["-sprt", args.sprt])

@@ -1,8 +1,8 @@
 use clap::Parser;
 use lingine::core::Position;
-use lingine::search::{Search, SearchParameters, TranspositionTable};
+use lingine::search::{HistoryMoves, Searcher, SharedContext, TranspositionTable};
+use lingine::uci::RunningStatus;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -32,43 +32,48 @@ fn main() -> anyhow::Result<()> {
     pos.set(&args.fen)?;
 
     let mut transposition_table = TranspositionTable::new(args.hash);
-    let stop = Arc::new(AtomicBool::new(false));
+    let stop = Arc::new(RunningStatus::default());
 
     println!("Board FEN:    {}", args.fen);
     println!("Search Depth: {}", args.depth);
     println!("Table Size:   {} MB", args.hash);
     println!("Searching...\n");
 
-    let (tx, _rx) = std::sync::mpsc::channel();
-    let mut history_table = [[[0i32; 90]; 90]; 2];
+    let mut history_moves = HistoryMoves::default();
 
     let start = Instant::now();
-    let (score, best_move, nodes) = Search::start_search(SearchParameters {
+    let time_manager = lingine::search::TimeManager::new(
+        &lingine::uci::GoParameters {
+            depth: Some(args.depth as u32),
+            ..Default::default()
+        },
+        pos.side_to_move(),
+    );
+    let best_move = Searcher::start_search(
         pos,
-        stop: stop.clone(),
-        max_depth: args.depth as i8,
-        allocated_time: None,
-        transposition_table: &mut transposition_table,
-        history_table: &mut history_table,
-        tx,
-        age: 0,
-    });
+        time_manager,
+        SharedContext {
+            keep_running: stop.clone(),
+            transposition_table: &mut transposition_table,
+            history_moves: &mut history_moves,
+        },
+    );
     let duration = start.elapsed();
 
-    let nps = if duration.as_secs_f64() > 0.0001 {
-        (nodes as f64 / duration.as_secs_f64()) as u64
-    } else {
-        0
-    };
+    // let nps = if duration.as_secs_f64() > 0.0001 {
+    //     (nodes as f64 / duration.as_secs_f64()) as u64
+    // } else {
+    //     0
+    // };
 
     println!("========================================");
     println!("   SEARCH RESULTS                       ");
     println!("========================================");
     println!("Best Move: {}", best_move.to_uci_string());
-    println!("Score:     {} cp", score);
-    println!("Nodes:     {}", nodes);
+    // println!("Score:     {} cp", score);
+    // println!("Nodes:     {}", nodes);
     println!("Time:      {:.3} s", duration.as_secs_f64());
-    println!("NPS:       {} nodes/sec", nps);
+    // println!("NPS:       {} nodes/sec", nps);
     println!("========================================");
 
     Ok(())
