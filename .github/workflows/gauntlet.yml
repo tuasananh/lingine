@@ -8,10 +8,15 @@ on:
     branches: ["**"]
   workflow_dispatch:
     inputs:
-      games:
-        description: "Number of gauntlet games per version"
+      gauntlet_games:
+        description: "Number of gauntlet games per opponent ELO tier"
         required: false
-        default: "10"
+        default: "50"
+        type: string
+      match_games:
+        description: "Number of games for each 1v1 match"
+        required: false
+        default: "100"
         type: string
       concurrency:
         description: "Number of parallel games (0 = auto)"
@@ -26,18 +31,18 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: write # needed to post PR comments
+      pull-requests: write
 
     outputs:
       report_path: ${{ steps.summary.outputs.report_path }}
       sha: ${{ steps.commit.outputs.sha }}
 
     steps:
-      # ── 1. Checkout current commit ────────────────────────────────────────
+      # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # full history so we can check out arbitrary tags
+          fetch-depth: 0
 
       # ── 2. Rust toolchain + cache ─────────────────────────────────────────
       - name: Install Rust toolchain
@@ -48,7 +53,7 @@ jobs:
 
       # ── 3. Python ─────────────────────────────────────────────────────────
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -68,49 +73,47 @@ jobs:
         run: |
           SHA=$(git rev-parse --short HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          # On a tag push GITHUB_REF_NAME is the tag (e.g. v1.6.5); on a
-          # branch push it is the branch name.
           REF="${GITHUB_REF_NAME:-$SHA}"
           SAFE_REF="${REF//\//-}"
           echo "label=commit-${SAFE_REF}-${SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Copy commit binary to historical/
+      - name: Register commit binary in historical/
         run: |
           mkdir -p historical
           LABEL="${{ steps.commit.outputs.label }}"
           cp ./target/release/lingine "historical/lingine-${LABEL}"
           chmod +x "historical/lingine-${LABEL}"
-          echo "Commit binary registered as: historical/lingine-${LABEL}"
+          echo "Registered: historical/lingine-${LABEL}"
 
-      # ── 6. Fetch v1.0.0-base binary ───────────────────────────────────────
-      # Tries the release asset first; falls back to compiling from the tag.
-      # Change BASELINE_TAG to "v1.0.0" once that tag ships a binary.
-      - name: Fetch v1.0.0-base binary
-        id: baseline
+      # ── 6. Build v1.0.0-base in an isolated worktree ─────────────────────
+      # We use a git worktree so the baseline compiles in its own directory
+      # and never touches the current working tree's source files.
+      - name: Build v1.0.0-base binary
         run: |
           BASELINE_TAG="v1.0.0"
-          mkdir -p historical
+          BIN_DEST="historical/lingine-1.0.0-base"
 
-          echo "Fetching pre-built binary for ${BASELINE_TAG} …"
+          # First try a pre-built release asset
           URL="https://github.com/${{ github.repository }}/releases/download/${BASELINE_TAG}/lingine-linux-x86_64"
-          HTTP=$(curl -sLo historical/lingine-1.0.0-base -w "%{http_code}" \
+          HTTP=$(curl -sLo "$BIN_DEST" -w "%{http_code}" \
                    -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+
           if [ "$HTTP" = "200" ]; then
-            chmod +x historical/lingine-1.0.0-base
+            chmod +x "$BIN_DEST"
             echo "Downloaded pre-built ${BASELINE_TAG} binary."
           else
-            echo "Pre-built binary not found (HTTP ${HTTP}). Compiling from tag ${BASELINE_TAG} …"
-            git checkout "tags/${BASELINE_TAG}" -- .
+            echo "No pre-built binary (HTTP ${HTTP}). Compiling ${BASELINE_TAG} in isolated worktree…"
+            git worktree add /tmp/baseline-build "tags/${BASELINE_TAG}"
+            cd /tmp/baseline-build
             cargo build --release
-            cp ./target/release/lingine historical/lingine-1.0.0-base
-            chmod +x historical/lingine-1.0.0-base
-            git checkout HEAD -- .
+            cd -
+            cp /tmp/baseline-build/target/release/lingine "$BIN_DEST"
+            chmod +x "$BIN_DEST"
+            git worktree remove --force /tmp/baseline-build
+            echo "Built ${BASELINE_TAG} binary."
           fi
 
       # ── 7. Fetch latest published release binary ──────────────────────────
-      # On a tag push the "latest" release is the one being created (still a
-      # draft), so we resolve the latest *published* release via the API and
-      # skip if none exists yet.
       - name: Fetch latest release binary
         id: latest_release
         run: |
@@ -128,19 +131,24 @@ jobs:
 
             SAFE_TAG="${LATEST_TAG//\//-}"
             BIN_NAME="lingine-${SAFE_TAG}-latest"
+
             URL="https://github.com/${{ github.repository }}/releases/download/${LATEST_TAG}/lingine-linux-x86_64"
             HTTP=$(curl -sLo "historical/${BIN_NAME}" -w "%{http_code}" \
                      -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+
             if [ "$HTTP" = "200" ]; then
               chmod +x "historical/${BIN_NAME}"
               echo "Downloaded pre-built ${LATEST_TAG} binary."
             else
-              echo "Pre-built binary not found (HTTP ${HTTP}). Compiling from tag ${LATEST_TAG} …"
-              git checkout "tags/${LATEST_TAG}" -- .
+              echo "No pre-built binary (HTTP ${HTTP}). Compiling ${LATEST_TAG} in isolated worktree…"
+              git worktree add /tmp/latest-build "tags/${LATEST_TAG}"
+              cd /tmp/latest-build
               cargo build --release
-              cp ./target/release/lingine "historical/${BIN_NAME}"
+              cd -
+              cp /tmp/latest-build/target/release/lingine "historical/${BIN_NAME}"
               chmod +x "historical/${BIN_NAME}"
-              git checkout HEAD -- .
+              git worktree remove --force /tmp/latest-build
+              echo "Built ${LATEST_TAG} binary."
             fi
           fi
 
@@ -148,7 +156,7 @@ jobs:
       - name: Run gauntlet evaluation
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
-          GAMES="${{ inputs.games || '10' }}"
+          GAMES="${{ inputs.gauntlet_games || '50' }}"
           CONC="${{ inputs.concurrency || '2' }}"
 
           python ./scripts/run_historical_evals.py \
@@ -161,7 +169,7 @@ jobs:
       - name: Match — commit vs v1.0.0-base
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
-          GAMES="${{ inputs.games || '10' }}"
+          GAMES="${{ inputs.match_games || '100' }}"
           CONC="${{ inputs.concurrency || '2' }}"
 
           python ./scripts/run_match.py \
@@ -176,7 +184,7 @@ jobs:
           LABEL="${{ steps.commit.outputs.label }}"
           LATEST_TAG="${{ steps.latest_release.outputs.tag }}"
           SAFE_TAG="${LATEST_TAG//\//-}"
-          GAMES="${{ inputs.games || '10' }}"
+          GAMES="${{ inputs.match_games || '100' }}"
           CONC="${{ inputs.concurrency || '2' }}"
 
           python ./scripts/run_match.py \
@@ -194,6 +202,7 @@ jobs:
       # ── 11. Assemble CI summary markdown ──────────────────────────────────
       - name: Assemble CI summary markdown
         id: summary
+        if: always()
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
           REPORT="matches/historical/reports/${LABEL}_comprehensive_report.md"
@@ -207,11 +216,10 @@ jobs:
             if [ -f "$REPORT" ]; then
               cat "$REPORT"
             else
-              echo "_Comprehensive report not generated._"
+              echo "_Comprehensive report not generated (job may have failed earlier)._"
             fi
 
             echo ""
-            echo "---"
             echo "### ⚔️ vs v1.0.0-base"
             if [ -f matches/ci/commit-vs-base/summary.md ]; then
               cat matches/ci/commit-vs-base/summary.md
@@ -221,7 +229,6 @@ jobs:
 
             if [ -n "$LATEST" ]; then
               echo ""
-              echo "---"
               echo "### ⚔️ vs ${LATEST} (latest release)"
               if [ -f "matches/ci/commit-vs-latest/summary.md" ]; then
                 cat matches/ci/commit-vs-latest/summary.md
@@ -233,14 +240,14 @@ jobs:
 
           echo "report_path=$OUT" >> "$GITHUB_OUTPUT"
 
-      # ── 12. GitHub Job Summary (always visible in Actions tab) ────────────
+      # ── 12. GitHub Job Summary ────────────────────────────────────────────
       - name: Write to GitHub Job Summary
-        if: always()
+        if: always() && steps.summary.outputs.report_path != ''
         run: cat "${{ steps.summary.outputs.report_path }}" >> "$GITHUB_STEP_SUMMARY"
 
       # ── 13. PR comment ────────────────────────────────────────────────────
       - name: Post report as PR comment
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.summary.outputs.report_path != ''
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: gauntlet-eval
@@ -248,8 +255,8 @@ jobs:
 
       # ── 14. Upload artefacts ──────────────────────────────────────────────
       - name: Upload eval artefacts
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: always() && steps.summary.outputs.report_path != ''
+        uses: actions/upload-artifact@v5
         with:
           name: gauntlet-eval-${{ steps.commit.outputs.sha }}
           path: |
@@ -259,9 +266,6 @@ jobs:
             matches/historical/gauntlets/
 
   # ── Post eval report into the draft release ────────────────────────────────
-  # Only runs when the trigger is a tag push (i.e. a release is being cut).
-  # It waits for the gauntlet job, then appends the report to the draft release
-  # body that release.yml already created with softprops/action-gh-release.
   post-to-release:
     name: Append Eval Report to Draft Release
     needs: gauntlet
@@ -269,18 +273,16 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
 
     permissions:
-      contents: write # required to edit the draft release body
+      contents: write
 
     steps:
       - name: Download eval report artefact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: gauntlet-eval-${{ needs.gauntlet.outputs.sha }}
           path: eval-results
 
-      # release.yml's create-draft-release job may still be running in
-      # parallel (it builds 3 platform binaries first). Poll until the draft
-      # release for this tag exists before we try to edit it.
+      # Poll until the draft release created by release.yml exists
       - name: Wait for draft release to be created
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -297,12 +299,11 @@ jobs:
               echo "release_id=${RELEASE_ID}" >> "$GITHUB_ENV"
               break
             fi
-            echo "  attempt ${i}/20 — not yet available, retrying in 30 s …"
+            echo "  attempt ${i}/20 — not yet available, retrying in 30s…"
             sleep 30
           done
           if [ -z "$RELEASE_ID" ]; then
             echo "::warning::Draft release not found after 10 minutes. Skipping body update."
-            exit 0
           fi
 
       - name: Append eval report to draft release body
@@ -310,16 +311,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
           REPORT_FILE="eval-results/ci_eval_report.md"
 
-          # Fetch the current draft body (may already contain auto-generated notes)
           CURRENT_BODY=$(gh api \
             "repos/${{ github.repository }}/releases/${release_id}" \
             --jq '.body // ""')
 
-          # Build the new body: existing notes + separator + eval report
-          # (Use printf so the literal --- doesn't trip the YAML parser)
+          # Append with a separator (printf avoids bare --- tripping the YAML parser)
           SEPARATOR="$(printf '\n\n%s\n\n' '---')"
           printf '%s%s%s' "$CURRENT_BODY" "$SEPARATOR" "$(cat "$REPORT_FILE")" \
             > /tmp/new_body.md
@@ -329,4 +327,4 @@ jobs:
             "repos/${{ github.repository }}/releases/${release_id}" \
             --field body=@/tmp/new_body.md
 
-          echo "✅ Eval report appended to draft release ${TAG}."
+          echo "Eval report appended to draft release ${GITHUB_REF_NAME}."
