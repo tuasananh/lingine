@@ -53,7 +53,8 @@ impl super::Searcher<'_> {
             Default::default(),
         );
 
-        // If the search fails, we need to re-search with the full window to get the correct score and PV.
+        // If the search fails, we need to re-search with the full window to get the
+        // correct score and PV.
         if alpha < score && score < beta {
             score =
                 -self.negamax::<false, PV>(depth - 1, ply + 1, -beta, -alpha, Default::default());
@@ -104,7 +105,8 @@ mod tests {
         pvt.update_best_move(2, Move::new(Square::C1, Square::C2));
         assert_eq!(pvt.get_line(2), &[Move::new(Square::C1, Square::C2)]);
 
-        // 2. Node at ply 1 evaluates its children, finds a move that leads to the ply 2 move
+        // 2. Node at ply 1 evaluates its children, finds a move that leads to the ply 2
+        //    move
         pvt.update_best_move(1, Move::new(Square::B1, Square::B2));
         assert_eq!(
             pvt.get_line(1),
@@ -139,7 +141,8 @@ mod tests {
         pvt.update_best_move(2, Move::new(Square::E1, Square::E2));
         pvt.update_best_move(1, Move::new(Square::D1, Square::D2));
 
-        // Ply 1 should now reflect the new line, completely overwriting the B/C sequence
+        // Ply 1 should now reflect the new line, completely overwriting the B/C
+        // sequence
         assert_eq!(
             pvt.get_line(1),
             &[
