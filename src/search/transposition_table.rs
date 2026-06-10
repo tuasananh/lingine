@@ -87,7 +87,7 @@ impl Entry {
 #[derive(Clone, Debug)]
 struct Storage {
     /// Zobrist board hash key.
-    pub key: Key,
+    pub key: Key, // 8 bytes
     /// The evaluation score (may be relative to mate).
     pub score: Score, // 4 bytes
     /// The best move found at this position. The upper bits of this Move encode
@@ -105,6 +105,11 @@ struct Storage {
 
 const _: () = assert!(
     std::mem::size_of::<Storage>() == 16,
+    "Storage struct must be exactly 16 bytes for optimal memory usage and cache performance."
+);
+
+const _: () = assert!(
+    std::mem::size_of::<Option<Storage>>() == 16,
     "Storage struct must be exactly 16 bytes for optimal memory usage and cache performance."
 );
 

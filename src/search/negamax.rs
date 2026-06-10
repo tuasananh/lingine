@@ -4,12 +4,6 @@ use crate::{
     tt_value,
 };
 
-/// Calculates the margin threshold required for singular extensions.
-#[inline]
-fn singular_margin(depth: i8) -> Score {
-    2 * depth as Score
-}
-
 impl super::Searcher<'_> {
     /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
     pub(super) fn negamax<const ROOT: bool>(
@@ -81,31 +75,7 @@ impl super::Searcher<'_> {
             // search to give the engine a better change to evaluate this move.
             //
             // See: https://www.chessprogramming.org/Singular_Extensions
-            if depth >= 8
-                && ctx.excluded_move.is_null()
-                && value.depth >= depth - 3
-                && value.bound != Bound::Alpha
-                && !score::is_winning(value.score.abs())
-            {
-                let rdepth = depth - 3;
-                let rbeta = value.score - singular_margin(depth);
-                let score = self.negamax::<false>(
-                    rdepth,
-                    ply,
-                    rbeta - 1,
-                    rbeta,
-                    SearchContext {
-                        excluded_move: value.best_move,
-                    },
-                );
-
-                // Score fails low, that means the TT move is really good, and that the
-                // alternatives are much worse. We should extend this node to find the best move
-                // after this critical move.
-                if score < rbeta {
-                    is_singular = true;
-                }
-            }
+            is_singular = self.singular_extension(depth, ply, &ctx, value);
         };
 
         let mut moves = MoveList::new();

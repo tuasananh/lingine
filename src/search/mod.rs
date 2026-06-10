@@ -10,6 +10,7 @@ mod killer_moves;
 mod move_ordering;
 mod negamax;
 mod quiescence_search;
+mod selectivity;
 mod time_manager;
 mod transposition_table;
 mod uci_info;
