@@ -20,7 +20,7 @@ on:
       concurrency:
         description: "Number of parallel games (0 = auto)"
         required: false
-        default: "2"
+        default: "8"
         type: string
 
 jobs:
@@ -101,7 +101,7 @@ jobs:
           # First try a pre-built release asset
           URL="https://github.com/${{ github.repository }}/releases/download/${BASELINE_TAG}/lingine-linux-x86_64"
           HTTP=$(curl -sLo "$BIN_DEST" -w "%{http_code}" \
-                   -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+                    -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
 
           if [ "$HTTP" = "200" ]; then
             chmod +x "$BIN_DEST"
@@ -139,7 +139,7 @@ jobs:
 
             URL="https://github.com/${{ github.repository }}/releases/download/${LATEST_TAG}/lingine-linux-x86_64"
             HTTP=$(curl -sLo "historical/${BIN_NAME}" -w "%{http_code}" \
-                     -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+                      -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
 
             if [ "$HTTP" = "200" ]; then
               chmod +x "historical/${BIN_NAME}"
@@ -162,7 +162,7 @@ jobs:
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
           GAMES="${{ inputs.gauntlet_games || '50' }}"
-          CONC="${{ inputs.concurrency || '2' }}"
+          CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_historical_evals.py \
             --gauntlets-only \
@@ -175,7 +175,7 @@ jobs:
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
           GAMES="${{ inputs.match_games || '100' }}"
-          CONC="${{ inputs.concurrency || '2' }}"
+          CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_match.py \
             -a "historical/lingine-${LABEL}" --name-a "commit-${LABEL}" \
@@ -190,7 +190,7 @@ jobs:
           LATEST_TAG="${{ steps.latest_release.outputs.tag }}"
           SAFE_TAG="${LATEST_TAG//\//-}"
           GAMES="${{ inputs.match_games || '100' }}"
-          CONC="${{ inputs.concurrency || '2' }}"
+          CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_match.py \
             -a "historical/lingine-${LABEL}" --name-a "commit-${LABEL}" \
