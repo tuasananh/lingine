@@ -1,15 +1,15 @@
+use std::num::NonZeroU8;
+
 use strum::FromRepr;
 
 use crate::core::{Move, Score, score};
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, FromRepr, Default)]
+#[derive(PartialEq, Eq, Debug, FromRepr)]
 #[repr(u8)]
 pub enum Bound {
-    #[default]
-    Empty,
     /// Score is exact/precise.
-    Exact,
+    Exact = 1,
     /// Score represents an upper bound (score <= alpha).
     Alpha,
     /// Score represents a lower bound (score >= beta).
@@ -28,15 +28,16 @@ impl Bound {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Flags {
-    data: u8,
+    // We use a NonZeroU8, so that Option<Storage> will be exactly 16 bytes
+    // because of niche optimizations made by the Rust compiler.
+    data: NonZeroU8,
 }
 
 impl Flags {
     pub fn bound(&self) -> Bound {
-        match self.data & 0b11 {
-            0 => Bound::Empty,
+        match self.data.get() & 0b11 {
             1 => Bound::Exact,
             2 => Bound::Alpha,
             3 => Bound::Beta,
@@ -45,14 +46,14 @@ impl Flags {
     }
 
     pub fn age(&self) -> u8 {
-        self.data >> 2
+        self.data.get() >> 2
     }
 }
 
 /// Represents the hash key for Zobrist position hashing.
 pub type Key = u64;
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Debug)]
 /// Represents an entry inside the Transposition Table.
 pub struct Entry {
     /// The evaluation score (may be relative to mate).
@@ -69,10 +70,24 @@ pub struct Entry {
     pub depth: i8, // 1 byte
 }
 
-#[derive(Clone, Debug, Default)]
+impl Entry {
+    #[inline]
+    pub fn is_cutoff(&self, alpha: Score, beta: Score, depth: i8) -> bool {
+        if self.depth < depth {
+            return false;
+        }
+        match self.bound {
+            Bound::Exact => true,
+            Bound::Alpha => self.score <= alpha,
+            Bound::Beta => self.score >= beta,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct Storage {
     /// Zobrist board hash key.
-    pub key: Key,
+    pub key: Key, // 8 bytes
     /// The evaluation score (may be relative to mate).
     pub score: Score, // 4 bytes
     /// The best move found at this position. The upper bits of this Move encode
@@ -87,6 +102,16 @@ struct Storage {
     /// depth.
     pub depth: i8, // 1 byte
 }
+
+const _: () = assert!(
+    std::mem::size_of::<Storage>() == 16,
+    "Storage struct must be exactly 16 bytes for optimal memory usage and cache performance."
+);
+
+const _: () = assert!(
+    std::mem::size_of::<Option<Storage>>() == 16,
+    "Storage struct must be exactly 16 bytes for optimal memory usage and cache performance."
+);
 
 #[macro_export]
 macro_rules! tt_value {
@@ -104,7 +129,7 @@ macro_rules! tt_value {
 /// alpha-beta pruning.
 pub struct TranspositionTable {
     /// A vector of entries matching the table size.
-    table: Vec<Storage>,
+    table: Vec<Option<Storage>>,
     /// Size mask to perform O(1) fast bitwise modulo logic.
     size_mask: usize,
     /// The age of the table, incremented each search iteration.
@@ -164,7 +189,7 @@ impl TranspositionTable {
             power *= 2;
         }
 
-        self.table = vec![Storage::default(); power];
+        self.table = vec![None; power];
         self.size_mask = power - 1;
         self.age = 0;
     }
@@ -173,7 +198,7 @@ impl TranspositionTable {
     pub fn clear(&mut self) {
         self.age = 0;
         for entry in self.table.iter_mut() {
-            *entry = Storage::default();
+            *entry = None;
         }
     }
 
@@ -186,17 +211,16 @@ impl TranspositionTable {
             "Transposition Table is not initialized. Call resize() with a positive MB size."
         );
         let index = (key as usize) & self.size_mask;
-        let entry = &self.table[index];
-        if entry.key == key && entry.flags.bound() != Bound::Empty {
-            Some(Entry {
-                score: score::ply_dependent(entry.score, ply),
-                best_move: entry.best_move,
-                bound: entry.flags.bound(),
-                depth: entry.depth,
-            })
-        } else {
-            None
+        let entry = self.table[index].as_ref()?;
+        if entry.key != key {
+            return None; // Hash collision, treat as a miss
         }
+        Some(Entry {
+            score: score::ply_dependent(entry.score, ply),
+            best_move: entry.best_move,
+            bound: entry.flags.bound(),
+            depth: entry.depth,
+        })
     }
 
     /// Stores search details into the Transposition Table using a
@@ -207,29 +231,24 @@ impl TranspositionTable {
             return;
         }
         let index = (key as usize) & self.size_mask;
-        let Storage {
-            flags: existing_flags,
-            depth: existing_depth,
-            ..
-        } = self.table[index];
 
-        let is_empty = existing_flags.bound() == Bound::Empty;
-        let is_better =
-            value.depth >= existing_depth - self.relative_age(existing_flags.age()) as i8;
-
-        // Store if the slot is unused, a different board position collided,
-        // this search is deeper/better, or the existing entry is stale (old age).
-        if is_empty || is_better {
-            self.table[index] = Storage {
-                key,
-                score: score::ply_independent(value.score, ply),
-                best_move: value.best_move,
-                flags: Flags {
-                    data: (value.bound as u8) | (self.age << 2),
-                },
-                depth: value.depth,
-            };
+        if let Some(existing) = self.table[index].as_ref() {
+            let is_better =
+                value.depth >= existing.depth - self.relative_age(existing.flags.age()) as i8;
+            if !is_better {
+                return; // Reject the new entry if it's not better than the existing one
+            }
         }
+
+        self.table[index] = Some(Storage {
+            key,
+            score: score::ply_independent(value.score, ply),
+            best_move: value.best_move,
+            flags: Flags {
+                data: unsafe { NonZeroU8::new_unchecked(value.bound as u8) | (self.age << 2) },
+            },
+            depth: value.depth,
+        });
     }
 
     /// Calculates the table's fullness in per-mille (0–1000).
@@ -240,7 +259,7 @@ impl TranspositionTable {
         let sample_size = self.table.len().min(1000);
         let mut filled = 0;
         for i in 0..sample_size {
-            if self.table[i].flags.bound() != Bound::Empty {
+            if self.table[i].is_some() {
                 filled += 1;
             }
         }

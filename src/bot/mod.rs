@@ -46,7 +46,7 @@ impl Engine for Lingine {
     }
 
     fn debug(&self, is_on: bool) {
-        eprintln!("debug: debug mode: {is_on}");
+        eprintln!("info: debug mode: {is_on}");
     }
 
     fn isready(&self) {
@@ -71,16 +71,16 @@ impl Engine for Lingine {
     }
 
     fn ucinewgame(&mut self) {
-        eprintln!("debug: ucinewgame");
+        eprintln!("info: ucinewgame");
         self.position = Position::new();
         self.transposition_table.clear();
     }
 
     fn register(&self, params: RegisterParameters) {
         match params {
-            RegisterParameters::Later => eprintln!("debug: register later"),
+            RegisterParameters::Later => eprintln!("info: register later"),
             RegisterParameters::Identity { name, code } => {
-                eprintln!("debug: register name={name:?} code={code:?}");
+                eprintln!("info: register name={name:?} code={code:?}");
             }
         }
     }

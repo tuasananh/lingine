@@ -5,6 +5,17 @@ use crate::core::{Position, Score, Side, Square, score};
 use crate::core::PieceType;
 
 impl Position {
+    /// Get the current evaluation score from the position, with the perspective
+    /// of the side to move.
+    #[inline]
+    pub fn evaluate(&self) -> Score {
+        let score_from_red = self.tapered_score();
+        match self.side_to_move() {
+            Side::Red => score_from_red,
+            Side::Black => -score_from_red,
+        }
+    }
+
     /// Get the on-the-fly calculated tapered evaluation score
     #[inline]
     pub fn tapered_score(&self) -> Score {

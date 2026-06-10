@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::core::{Move, Piece, PieceType, Position};
+use crate::search::pv_search::PrincipalVariationTable;
 use crate::uci::RunningStatus;
 
 mod aspiration_search;
@@ -9,7 +10,9 @@ mod iterative_deepening;
 mod killer_moves;
 mod move_ordering;
 mod negamax;
+mod pv_search;
 mod quiescence_search;
+mod selectivity;
 mod time_manager;
 mod transposition_table;
 mod uci_info;
@@ -27,7 +30,6 @@ pub const MAX_DEPTH: usize = 64;
 #[derive(Copy, Clone, Debug, Default)]
 struct SearchContext {
     pub excluded_move: Move,
-    pub extensions: u8,
 }
 
 pub struct SharedContext<'a> {
@@ -49,6 +51,8 @@ pub struct Searcher<'a> {
     time_manager: TimeManager,
     /// Absolute time budget allowed for this search ply.
     killer_moves: KillerMoves,
+    /// The principal variation table, storing the best move found at each ply.
+    pv_table: PrincipalVariationTable,
     /// Tracks the maximum search depth reached, including quiescence.
     max_ply: u8,
     /// Shared context parameters passed down the recursive search stack
@@ -62,6 +66,7 @@ impl<'a> Searcher<'a> {
     ///
     /// Returns the best move found.
     pub fn start_search(pos: Position, time_manager: TimeManager, shared: SharedContext) -> Move {
+        eprintln!("info: starting search");
         // Decay history table to make sure old moves do not accumulate indefinitely and
         // overshadow newer moves.
         shared.history_moves.decay();
@@ -77,6 +82,7 @@ impl<'a> Searcher<'a> {
             max_ply: 0,
             shared,
             current_root_depth: 0,
+            pv_table: PrincipalVariationTable::new(),
         };
 
         is_running.set(true);
@@ -178,6 +184,7 @@ mod tests {
             nodes: 0,
             time_manager,
             killer_moves: killers,
+            pv_table: PrincipalVariationTable::default(),
             max_ply: 0,
             shared: SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
@@ -186,7 +193,7 @@ mod tests {
             },
             current_root_depth: 0,
         };
-        let score = ctx.negamax::<false>(
+        let score = ctx.negamax::<false, false>(
             1,
             6,
             -score::INFINITY,
@@ -242,6 +249,7 @@ mod tests {
         let mut history_moves = HistoryMoves::default();
         let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
         let mut ctx = Searcher {
+            pv_table: Default::default(),
             pos,
             nodes: 0,
             time_manager,
@@ -255,7 +263,7 @@ mod tests {
             current_root_depth: 0,
         };
         ctx.shared.keep_running.set(true);
-        let score = ctx.negamax::<false>(
+        let score = ctx.negamax::<false, false>(
             1,
             5,
             -score::INFINITY,

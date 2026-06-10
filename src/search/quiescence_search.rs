@@ -1,7 +1,6 @@
 use crate::{
-    core::{Move, MoveGenType, MoveList, Score, Side, generate_moves, score},
-    eval::evaluate,
-    search::{Bound, Entry},
+    core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
+    search::{Bound, Entry, MAX_PLY},
     tt_value,
 };
 
@@ -17,21 +16,16 @@ impl super::Searcher<'_> {
         mut alpha: Score,
         beta: Score,
     ) -> Score {
-        self.update_analytics(ply);
-
         if self.should_stop_search() {
             return score::ZERO;
         }
 
+        self.update_analytics(ply);
+
         // Base case: to avoid infinite recursion and stack overflow from perpetual
         // checks
-        if depth <= -12 {
-            let stand_pat = evaluate(&self.pos);
-            return if self.pos.side_to_move() == Side::Red {
-                stand_pat
-            } else {
-                -stand_pat
-            };
+        if depth <= -12 || ply >= MAX_PLY as u8 {
+            return self.pos.evaluate();
         }
 
         if let Some(rule_score) = self.pos.rule_judge(ply) {
@@ -45,12 +39,7 @@ impl super::Searcher<'_> {
 
         // Standing pat: static evaluation provides the lower bound for non-check nodes.
         if !in_check {
-            let stand_pat = evaluate(&self.pos);
-            best_score = if self.pos.side_to_move() == Side::Red {
-                stand_pat
-            } else {
-                -stand_pat
-            };
+            best_score = self.pos.evaluate();
 
             // If the static evaluation is already good enough to cause a beta cutoff, we
             // can prune this node without searching captures. This is the
@@ -72,28 +61,12 @@ impl super::Searcher<'_> {
             .transposition_table
             .probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
-            if value.depth >= depth {
-                match value.bound {
-                    Bound::Exact => return value.score,
-                    Bound::Alpha => {
-                        if value.score <= alpha {
-                            return value.score;
-                        }
-                    }
-                    Bound::Beta => {
-                        if value.score >= beta {
-                            return value.score;
-                        }
-                    }
-                    Bound::Empty => {
-                        unreachable!("Empty flag should not be returned by probe")
-                    }
-                }
-            } else {
-                // Even though the TT entry is not deep enough to be directly used, we can still
-                // use the best move for move ordering and singular extensions.
-                best_move = value.best_move;
+            if value.is_cutoff(alpha, beta, depth) {
+                return value.score;
             }
+            // Even though the TT entry is not deep enough to be directly used, we can still
+            // use the best move for move ordering and singular extensions.
+            best_move = value.best_move;
         };
 
         let mut moves = MoveList::new();

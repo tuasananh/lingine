@@ -1,32 +1,32 @@
 use crate::{
     core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
-    search::{Bound, Entry, SearchContext},
+    search::{Bound, Entry, MAX_PLY, SearchContext},
     tt_value,
 };
 
-/// Calculates the margin threshold required for singular extensions.
-#[inline]
-fn singular_margin(depth: i8) -> Score {
-    2 * depth as Score
-}
-
 impl super::Searcher<'_> {
     /// Performs Fail-Soft Alpha-Beta Negamax Search to a specific depth.
-    pub(super) fn negamax<const ROOT: bool>(
+    pub(super) fn negamax<const ROOT: bool, const PV: bool>(
         &mut self,
         depth: i8,
         ply: u8,
         mut alpha: Score,
         beta: Score,
-        mut ctx: SearchContext,
+        ctx: SearchContext,
     ) -> Score {
         if self.should_stop_search() {
             return score::ZERO;
         }
 
+        self.pv_table.clear_line(ply);
+
+        if ply >= MAX_PLY as u8 {
+            return self.pos.evaluate();
+        }
+
         // Game over / rule evaluations (60-move rule, insufficient material,
         // repetitions, perpetual checks)
-        if let Some(rule_score) = self.pos.rule_judge(ply) {
+        if !ROOT && let Some(rule_score) = self.pos.rule_judge(ply) {
             return rule_score;
         }
 
@@ -46,9 +46,8 @@ impl super::Searcher<'_> {
         // save the King.
         //
         // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) && ctx.extensions < 6 {
+        if self.pos.is_in_check(self.pos.side_to_move()) {
             depth += 1;
-            ctx.extensions += 1;
         }
 
         // Base case: fall back to quiescence search
@@ -65,62 +64,14 @@ impl super::Searcher<'_> {
             .transposition_table
             .probe(self.pos.zobrist_hash(), ply);
         if let Some(value) = &tt_value {
-            if value.depth >= depth {
-                match value.bound {
-                    Bound::Exact => return value.score,
-                    Bound::Alpha => {
-                        if value.score <= alpha {
-                            return value.score;
-                        }
-                    }
-                    Bound::Beta => {
-                        if value.score >= beta {
-                            return value.score;
-                        }
-                    }
-                    Bound::Empty => {
-                        unreachable!("Empty flag should not be returned by probe")
-                    }
-                }
-            } else {
-                // Even though the TT entry is not deep enough to be directly used, we can still
-                // use the best move for move ordering and singular extensions.
-                best_move = value.best_move;
+            if !PV && value.is_cutoff(alpha, beta, depth) {
+                return value.score;
             }
+            // Even though the TT entry is not deep enough to be directly used, we can still
+            // use the best move for move ordering and singular extensions.
+            best_move = value.best_move;
 
-            // Singular Extensions: We want to check if TT move is a critical move, and that
-            // removing it would cause us to be at a really bad position (score
-            // drops significantly below beta). If so, we want to extend the
-            // search to give the engine a better change to evaluate this move.
-            //
-            // See: https://www.chessprogramming.org/Singular_Extensions
-            if depth >= 8
-                && ctx.excluded_move.is_null()
-                && ctx.extensions < 6
-                && value.depth >= depth - 3
-                && value.bound != Bound::Alpha
-                && !score::is_winning(value.score.abs())
-            {
-                let rdepth = depth - 3;
-                let rbeta = value.score - singular_margin(depth);
-                let score = self.negamax::<false>(
-                    rdepth,
-                    ply,
-                    rbeta - 1,
-                    rbeta,
-                    SearchContext {
-                        extensions: ctx.extensions,
-                        excluded_move: value.best_move,
-                    },
-                );
-
-                // Score fails low, that means the TT move is really good, and that the
-                // alternatives are much worse. We should extend this node to find the best move
-                // after this critical move.
-                if score < rbeta {
-                    is_singular = true;
-                }
-            }
+            is_singular = self.singular_extension(depth, ply, &ctx, value);
         };
 
         let mut moves = MoveList::new();
@@ -140,41 +91,34 @@ impl super::Searcher<'_> {
         // we extend the search, as it is likely a critical position.
         //
         // See: https://www.chessprogramming.org/One_Reply_Extensions
-        if moves.len() == 1 && ctx.excluded_move.is_null() && ctx.extensions < 6 {
+        if moves.len() == 1 && ctx.excluded_move.is_null() {
             depth += 1;
-            ctx.extensions += 1;
         }
 
         // Sort moves: prioritize captures via MVV-LVA Heuristic, with TT move
         // prioritized first, killers, and history
         self.sort_moves(&mut moves, best_move, ply);
+        let mut moves_played = 0;
 
         for m in moves {
             if m == ctx.excluded_move {
                 continue;
             }
 
-            let mut ext = 0;
-
-            if let Some(value) = &tt_value
-                && m == value.best_move
-                && is_singular
-            {
-                ext = 1;
-            }
-
             self.pos.do_move(m);
-            let score = -self.negamax::<false>(
-                depth - 1 + ext as i8,
-                ply + 1,
-                -beta,
-                -alpha,
-                SearchContext {
-                    extensions: (ctx.extensions + ext),
-                    ..Default::default()
-                },
-            );
+            let score = if moves_played == 0 {
+                -self.negamax::<false, PV>(
+                    depth - 1 + is_singular as i8,
+                    ply + 1,
+                    -beta,
+                    -alpha,
+                    SearchContext::default(),
+                )
+            } else {
+                self.pv_search::<PV>(depth, ply, alpha, beta)
+            };
             self.pos.undo_move();
+            moves_played += 1;
 
             if !self.shared.keep_running.get() {
                 return score::ZERO;
@@ -183,10 +127,13 @@ impl super::Searcher<'_> {
             if score > best_score {
                 best_score = score;
                 best_move = m;
+
+                if score > alpha {
+                    alpha = score;
+                    self.pv_table.update_best_move(ply, best_move);
+                }
             }
-            if best_score > alpha {
-                alpha = best_score;
-            }
+
             if alpha >= beta {
                 // Update killers and history for quiet moves
                 if self.pos.is_empty(m.to()) {

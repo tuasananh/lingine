@@ -173,6 +173,7 @@ pub const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedSco
 pub fn evaluate(pos: &Position) -> Score {
     pos.tapered_score()
 }
+
 /// Returns a piece's base material value, dynamically adjusting Pawn values
 /// based on whether they have crossed the river.
 #[inline]
