@@ -3,8 +3,6 @@ name: Eval Gauntlet (Commit vs Historical)
 on:
   push:
     tags: ["v*"] # also runs when a release tag is pushed
-  pull_request:
-    branches: ["**"]
   workflow_dispatch:
     inputs:
       gauntlet_games:
