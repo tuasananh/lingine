@@ -43,7 +43,7 @@ impl Position {
 
         let last_state = self.history.last().expect("History stack is empty");
         let sixtymove_clock = last_state.sixtymove_clock;
-        let rule_repetition = last_state.rule_repetition;
+        let plies_since_irreversible = last_state.plies_since_irreversible;
         let old_zobrist = self.zobrist_hash;
 
         let mut mg_score = last_state.mg_score;
@@ -99,11 +99,6 @@ impl Position {
 
         let is_pawn_push = piece.piece_type() == PieceType::Pawn && to.rank() != from.rank();
         let is_irreversible = is_pawn_push || captured.is_some();
-        let new_rule_repetition = if is_irreversible {
-            0
-        } else {
-            rule_repetition + 1
-        };
 
         let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
 
@@ -113,7 +108,11 @@ impl Position {
             captured_piece: captured,
             old_zobrist,
             sixtymove_clock: new_rule60,
-            rule_repetition: new_rule_repetition,
+            plies_since_irreversible: if is_irreversible {
+                0
+            } else {
+                plies_since_irreversible + 1
+            },
             in_check,
             mg_score,
             eg_score,

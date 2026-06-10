@@ -279,7 +279,11 @@ impl super::Position {
 
         // 3. Repetition & Perpetual Check/Chase Loops
         let current_hash = self.zobrist_hash;
-        let rule_repetition = self.history.last().map(|s| s.rule_repetition).unwrap_or(0);
+        let rule_repetition = self
+            .history
+            .last()
+            .map(|s| s.plies_since_irreversible)
+            .unwrap_or(0);
         let rule_repetition_val = rule_repetition as usize;
         let max_back = rule_repetition_val.min(n - 1);
 

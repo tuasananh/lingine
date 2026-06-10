@@ -30,7 +30,7 @@ pub struct StateInfo {
     pub sixtymove_clock: u16,
     /// Counter of plies since last irreversible move (capture or pawn push
     /// forward).
-    pub rule_repetition: u16,
+    pub plies_since_irreversible: u16,
     /// Whether each color [Red, Black] was in check in this position state.
     pub in_check: [bool; Side::COUNT],
     /// Precalculated incremental middlegame score (from Red's perspective)
@@ -285,7 +285,7 @@ impl Position {
             captured_piece: None,
             old_zobrist: self.zobrist_hash,
             sixtymove_clock: rule60,
-            rule_repetition: 0,
+            plies_since_irreversible: 0,
             in_check,
             mg_score,
             eg_score,
