@@ -42,7 +42,7 @@ impl Position {
         let captured = self.board[to as usize];
 
         let last_state = self.history.last().expect("History stack is empty");
-        let rule60 = last_state.rule60;
+        let sixtymove_clock = last_state.sixtymove_clock;
         let rule_repetition = last_state.rule_repetition;
         let old_zobrist = self.zobrist_hash;
 
@@ -94,7 +94,7 @@ impl Position {
         let new_rule60 = if piece.piece_type() == PieceType::Pawn || captured.is_some() {
             0
         } else {
-            rule60 + 1
+            sixtymove_clock + 1
         };
 
         let is_pawn_push = piece.piece_type() == PieceType::Pawn && to.rank() != from.rank();
@@ -112,7 +112,7 @@ impl Position {
             last_move: m,
             captured_piece: captured,
             old_zobrist,
-            rule60: new_rule60,
+            sixtymove_clock: new_rule60,
             rule_repetition: new_rule_repetition,
             in_check,
             mg_score,

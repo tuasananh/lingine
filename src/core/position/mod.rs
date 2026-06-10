@@ -27,7 +27,7 @@ pub struct StateInfo {
     pub old_zobrist: u64,
     /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
     /// on captures/pawn moves).
-    pub rule60: u16,
+    pub sixtymove_clock: u16,
     /// Counter of plies since last irreversible move (capture or pawn push
     /// forward).
     pub rule_repetition: u16,
@@ -284,7 +284,7 @@ impl Position {
             last_move: Move::NULL,
             captured_piece: None,
             old_zobrist: self.zobrist_hash,
-            rule60,
+            sixtymove_clock: rule60,
             rule_repetition: 0,
             in_check,
             mg_score,
@@ -389,7 +389,7 @@ mod tests {
         }
 
         // rule60 counter should be exactly 120
-        assert_eq!(pos.history.last().unwrap().rule60, 120);
+        assert_eq!(pos.history.last().unwrap().sixtymove_clock, 120);
         assert_eq!(pos.rule_judge(0), Some(score::DRAW));
     }
 

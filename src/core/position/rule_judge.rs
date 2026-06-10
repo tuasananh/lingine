@@ -242,7 +242,7 @@ impl super::Position {
         }
 
         // 1. 60-Move Rule (120 Plies since last pawn advance or capture)
-        let rule60 = self.history.last().map(|s| s.rule60).unwrap_or(0);
+        let rule60 = self.history.last().map(|s| s.sixtymove_clock).unwrap_or(0);
         const RULE60_PLIES_THRESHOLD: u16 = 120;
         if rule60 >= RULE60_PLIES_THRESHOLD {
             return Some(score::DRAW);
