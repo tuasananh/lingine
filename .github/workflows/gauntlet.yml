@@ -1,60 +1,335 @@
-name: ELO Gauntlet Verification
+name: Eval Gauntlet (Commit vs Historical)
 
 on:
+  push:
+    tags: ["v*"] # also runs when a release tag is pushed
+  pull_request:
+    branches: ["**"]
   workflow_dispatch:
     inputs:
-      games:
-        description: "Number of games to play against each opponent"
-        required: true
-        default: "4"
+      gauntlet_games:
+        description: "Number of gauntlet games per opponent ELO tier"
+        required: false
+        default: "50"
         type: string
-      cores:
-        description: "Number of CPU cores/threads to use (0 for auto)"
-        required: true
+      match_games:
+        description: "Number of games for each 1v1 match"
+        required: false
+        default: "100"
+        type: string
+      concurrency:
+        description: "Number of parallel games (0 = auto)"
+        required: false
         default: "2"
         type: string
 
 jobs:
-  run-gauntlet:
-    name: Run Gauntlet ELO Test
+  gauntlet:
+    name: Run Historical Eval Gauntlet
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+    permissions:
+      contents: read
+      pull-requests: write
 
+    outputs:
+      report_path: ${{ steps.summary.outputs.report_path }}
+      sha: ${{ steps.commit.outputs.sha }}
+
+    steps:
+      # ── 1. Checkout ───────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # ── 2. Rust toolchain + cache ─────────────────────────────────────────
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo artifacts
+      - name: Cache cargo artefacts
         uses: Swatinem/rust-cache@v2
 
+      # ── 3. Python ─────────────────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - name: Install python dependencies (if any)
-        run: |
-          python -m pip install --upgrade pip
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
-      - name: Download chess tournament tools
+      # ── 3.5. System Dependencies ──────────────────────────────────────────
+      - name: Install system dependencies
         run: |
-          chmod +x ./scripts/setup_tools.sh
-          ./scripts/setup_tools.sh
+          sudo apt-get update
+          sudo apt-get install -y libqt5core5a
 
-      - name: Build Engine (Release Mode)
+      # ── 4. Tournament tools ───────────────────────────────────────────────
+      - name: Download tournament tools
+        run: python ./scripts/setup_tools.py
+
+      # ── 5. Build current commit ───────────────────────────────────────────
+      - name: Build commit binary (release)
         run: cargo build --release
 
-      - name: Run ELO Gauntlet
+      - name: Capture commit label
+        id: commit
         run: |
-          python ./scripts/run_gauntlet.py -g ${{ inputs.games }} -c ${{ inputs.cores }} -o ci-gauntlet.pgn
+          SHA=$(git rev-parse --short HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          REF="${GITHUB_REF_NAME:-$SHA}"
+          SAFE_REF="${REF//\//-}"
+          echo "label=commit-${SAFE_REF}-${SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Gauntlet PGN and Log
+      - name: Register commit binary in historical/
+        run: |
+          mkdir -p historical
+          LABEL="${{ steps.commit.outputs.label }}"
+          cp ./target/release/lingine "historical/lingine-${LABEL}"
+          chmod +x "historical/lingine-${LABEL}"
+          echo "Registered: historical/lingine-${LABEL}"
+
+      # ── 6. Build v1.0.0-base in an isolated worktree ─────────────────────
+      # We use a git worktree so the baseline compiles in its own directory
+      # and never touches the current working tree's source files.
+      - name: Build v1.0.0-base binary
+        run: |
+          BASELINE_TAG="v1.0.0"
+          BIN_DEST="historical/lingine-1.0.0-base"
+
+          # First try a pre-built release asset
+          URL="https://github.com/${{ github.repository }}/releases/download/${BASELINE_TAG}/lingine-linux-x86_64"
+          HTTP=$(curl -sLo "$BIN_DEST" -w "%{http_code}" \
+                   -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+
+          if [ "$HTTP" = "200" ]; then
+            chmod +x "$BIN_DEST"
+            echo "Downloaded pre-built ${BASELINE_TAG} binary."
+          else
+            echo "No pre-built binary (HTTP ${HTTP}). Compiling ${BASELINE_TAG} in isolated worktree…"
+            git worktree add /tmp/baseline-build "tags/${BASELINE_TAG}"
+            cd /tmp/baseline-build
+            cargo build --release
+            cd -
+            cp /tmp/baseline-build/target/release/lingine "$BIN_DEST"
+            chmod +x "$BIN_DEST"
+            git worktree remove --force /tmp/baseline-build
+            echo "Built ${BASELINE_TAG} binary."
+          fi
+
+      # ── 7. Fetch latest published release binary ──────────────────────────
+      - name: Fetch latest release binary
+        id: latest_release
+        run: |
+          LATEST_TAG=$(curl -sL \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tag_name',''))")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No published release found; skipping latest-release baseline."
+            echo "tag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Latest published release: ${LATEST_TAG}"
+            echo "tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+
+            SAFE_TAG="${LATEST_TAG//\//-}"
+            BIN_NAME="lingine-${SAFE_TAG}-latest"
+
+            URL="https://github.com/${{ github.repository }}/releases/download/${LATEST_TAG}/lingine-linux-x86_64"
+            HTTP=$(curl -sLo "historical/${BIN_NAME}" -w "%{http_code}" \
+                     -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+
+            if [ "$HTTP" = "200" ]; then
+              chmod +x "historical/${BIN_NAME}"
+              echo "Downloaded pre-built ${LATEST_TAG} binary."
+            else
+              echo "No pre-built binary (HTTP ${HTTP}). Compiling ${LATEST_TAG} in isolated worktree…"
+              git worktree add /tmp/latest-build "tags/${LATEST_TAG}"
+              cd /tmp/latest-build
+              cargo build --release
+              cd -
+              cp /tmp/latest-build/target/release/lingine "historical/${BIN_NAME}"
+              chmod +x "historical/${BIN_NAME}"
+              git worktree remove --force /tmp/latest-build
+              echo "Built ${LATEST_TAG} binary."
+            fi
+          fi
+
+      # ── 8. Run gauntlet for commit version only ───────────────────────────
+      - name: Run gauntlet evaluation
+        run: |
+          LABEL="${{ steps.commit.outputs.label }}"
+          GAMES="${{ inputs.gauntlet_games || '50' }}"
+          CONC="${{ inputs.concurrency || '2' }}"
+
+          python ./scripts/run_historical_evals.py \
+            --gauntlets-only \
+            --version "$LABEL" \
+            --gauntlet-games "$GAMES" \
+            --concurrency "$CONC"
+
+      # ── 9. 1v1 matches ────────────────────────────────────────────────────
+      - name: Match — commit vs v1.0.0-base
+        run: |
+          LABEL="${{ steps.commit.outputs.label }}"
+          GAMES="${{ inputs.match_games || '100' }}"
+          CONC="${{ inputs.concurrency || '2' }}"
+
+          python ./scripts/run_match.py \
+            -a "historical/lingine-${LABEL}" --name-a "commit-${LABEL}" \
+            -b historical/lingine-1.0.0-base  --name-b "v1.0.0-base" \
+            -g "$GAMES" -c "$CONC" -s \
+            -o "matches/ci/commit-vs-base"
+
+      - name: Match — commit vs latest release
+        if: steps.latest_release.outputs.tag != ''
+        run: |
+          LABEL="${{ steps.commit.outputs.label }}"
+          LATEST_TAG="${{ steps.latest_release.outputs.tag }}"
+          SAFE_TAG="${LATEST_TAG//\//-}"
+          GAMES="${{ inputs.match_games || '100' }}"
+          CONC="${{ inputs.concurrency || '2' }}"
+
+          python ./scripts/run_match.py \
+            -a "historical/lingine-${LABEL}" --name-a "commit-${LABEL}" \
+            -b "historical/lingine-${SAFE_TAG}-latest" --name-b "$LATEST_TAG" \
+            -g "$GAMES" -c "$CONC" -s \
+            -o "matches/ci/commit-vs-latest"
+
+      # ── 10. Compile full report ───────────────────────────────────────────
+      - name: Compile version report
+        run: |
+          LABEL="${{ steps.commit.outputs.label }}"
+          python ./scripts/compile_version_report.py --version "$LABEL"
+
+      # ── 11. Assemble CI summary markdown ──────────────────────────────────
+      - name: Assemble CI summary markdown
+        id: summary
         if: always()
-        uses: actions/upload-artifact@v7
+        run: |
+          LABEL="${{ steps.commit.outputs.label }}"
+          REPORT="matches/historical/reports/${LABEL}_comprehensive_report.md"
+          OUT="ci_eval_report.md"
+          LATEST="${{ steps.latest_release.outputs.tag }}"
+
+          {
+            echo "## 🎯 Lingine Eval Gauntlet — \`${{ steps.commit.outputs.sha }}\`"
+            echo ""
+
+            if [ -f "$REPORT" ]; then
+              cat "$REPORT"
+            else
+              echo "_Comprehensive report not generated (job may have failed earlier)._"
+            fi
+
+            echo ""
+            echo "### ⚔️ vs v1.0.0-base"
+            if [ -f matches/ci/commit-vs-base/summary.md ]; then
+              cat matches/ci/commit-vs-base/summary.md
+            else
+              echo "_Match not run or failed._"
+            fi
+
+            if [ -n "$LATEST" ]; then
+              echo ""
+              echo "### ⚔️ vs ${LATEST} (latest release)"
+              if [ -f "matches/ci/commit-vs-latest/summary.md" ]; then
+                cat matches/ci/commit-vs-latest/summary.md
+              else
+                echo "_Match not run or failed._"
+              fi
+            fi
+          } > "$OUT"
+
+          echo "report_path=$OUT" >> "$GITHUB_OUTPUT"
+
+      # ── 12. GitHub Job Summary ────────────────────────────────────────────
+      - name: Write to GitHub Job Summary
+        if: always() && steps.summary.outputs.report_path != ''
+        run: cat "${{ steps.summary.outputs.report_path }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── 13. PR comment ────────────────────────────────────────────────────
+      - name: Post report as PR comment
+        if: github.event_name == 'pull_request' && steps.summary.outputs.report_path != ''
+        uses: marocchino/sticky-pull-request-comment@v2
         with:
-          name: gauntlet-results
+          header: gauntlet-eval
+          path: ${{ steps.summary.outputs.report_path }}
+
+      # ── 14. Upload artefacts ──────────────────────────────────────────────
+      - name: Upload eval artefacts
+        if: always() && steps.summary.outputs.report_path != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: gauntlet-eval-${{ steps.commit.outputs.sha }}
           path: |
-            ci-gauntlet.pgn
-            lingine_err.log
+            ci_eval_report.md
+            matches/ci/
+            matches/historical/reports/
+            matches/historical/gauntlets/
+
+  # ── Post eval report into the draft release ────────────────────────────────
+  post-to-release:
+    name: Append Eval Report to Draft Release
+    needs: gauntlet
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download eval report artefact
+        uses: actions/download-artifact@v5
+        with:
+          name: gauntlet-eval-${{ needs.gauntlet.outputs.sha }}
+          path: eval-results
+
+      # Poll until the draft release created by release.yml exists
+      - name: Wait for draft release to be created
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "Waiting for draft release for tag: ${TAG}"
+          for i in $(seq 1 20); do
+            RELEASE_ID=$(gh api \
+              "repos/${{ github.repository }}/releases" \
+              --jq ".[] | select(.tag_name == \"${TAG}\" and .draft == true) | .id" \
+              2>/dev/null || true)
+            if [ -n "$RELEASE_ID" ]; then
+              echo "Draft release found (id: ${RELEASE_ID})."
+              echo "release_id=${RELEASE_ID}" >> "$GITHUB_ENV"
+              break
+            fi
+            echo "  attempt ${i}/20 — not yet available, retrying in 30s…"
+            sleep 30
+          done
+          if [ -z "$RELEASE_ID" ]; then
+            echo "::warning::Draft release not found after 10 minutes. Skipping body update."
+          fi
+
+      - name: Append eval report to draft release body
+        if: env.release_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPORT_FILE="eval-results/ci_eval_report.md"
+
+          CURRENT_BODY=$(gh api \
+            "repos/${{ github.repository }}/releases/${release_id}" \
+            --jq '.body // ""')
+
+          # Append with a separator (printf avoids bare --- tripping the YAML parser)
+          SEPARATOR="$(printf '\n\n%s\n\n' '---')"
+          printf '%s%s%s' "$CURRENT_BODY" "$SEPARATOR" "$(cat "$REPORT_FILE")" \
+            > /tmp/new_body.md
+
+          gh api \
+            --method PATCH \
+            "repos/${{ github.repository }}/releases/${release_id}" \
+            --field body=@/tmp/new_body.md
+
+          echo "Eval report appended to draft release ${GITHUB_REF_NAME}."
