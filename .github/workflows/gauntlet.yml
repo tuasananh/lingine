@@ -10,12 +10,12 @@ on:
       gauntlet_games:
         description: "Number of gauntlet games per opponent ELO tier"
         required: false
-        default: "50"
+        default: "500"
         type: string
       match_games:
         description: "Number of games for each 1v1 match"
         required: false
-        default: "100"
+        default: "1000"
         type: string
       concurrency:
         description: "Number of parallel games (0 = auto)"
@@ -161,7 +161,7 @@ jobs:
       - name: Run gauntlet evaluation
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
-          GAMES="${{ inputs.gauntlet_games || '50' }}"
+          GAMES="${{ inputs.gauntlet_games || '500' }}"
           CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_historical_evals.py \
@@ -174,7 +174,7 @@ jobs:
       - name: Match — commit vs v1.0.0-base
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
-          GAMES="${{ inputs.match_games || '100' }}"
+          GAMES="${{ inputs.match_games || '1000' }}"
           CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_match.py \
@@ -189,7 +189,7 @@ jobs:
           LABEL="${{ steps.commit.outputs.label }}"
           LATEST_TAG="${{ steps.latest_release.outputs.tag }}"
           SAFE_TAG="${LATEST_TAG//\//-}"
-          GAMES="${{ inputs.match_games || '100' }}"
+          GAMES="${{ inputs.match_games || '1000' }}"
           CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_match.py \
