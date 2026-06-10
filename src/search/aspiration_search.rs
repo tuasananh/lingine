@@ -20,7 +20,7 @@ impl super::Searcher<'_> {
         let mut beta = (score + delta).min(score::INFINITY);
 
         loop {
-            let score = self.negamax::<true>(depth, 0, alpha, beta, SearchContext::default());
+            let score = self.negamax::<true, true>(depth, 0, alpha, beta, SearchContext::default());
 
             if !self.shared.keep_running.get() {
                 return score::ZERO;

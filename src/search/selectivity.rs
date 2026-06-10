@@ -34,7 +34,7 @@ impl super::Searcher<'_> {
         {
             let rdepth = depth - SINGULAR_EXTENSION_DEPTH_REDUCTION;
             let rbeta = value.score - Self::singular_margin(depth);
-            let score = self.negamax::<false>(
+            let score = self.negamax::<false, false>(
                 rdepth,
                 ply,
                 rbeta - 1,

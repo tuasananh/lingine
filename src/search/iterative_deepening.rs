@@ -24,9 +24,9 @@ impl super::Searcher<'_> {
             let score = if depth >= ASPIRATION_WINDOW_THRESHOLD {
                 self.aspiration_search(last_best_score, depth)
             } else {
-                self.negamax::<true>(
+                self.negamax::<true, true>(
                     depth,
-                    1,
+                    0,
                     -score::INFINITY,
                     score::INFINITY,
                     SearchContext::default(),
@@ -38,14 +38,15 @@ impl super::Searcher<'_> {
             }
 
             last_best_score = score;
-            last_best_move = self
-                .shared
-                .transposition_table
-                .probe(self.pos.zobrist_hash(), 0)
-                .map(|entry| entry.best_move)
-                .unwrap_or(Move::NULL);
+            last_best_move = *self.pv_table.get_line(0).first().unwrap_or_else(|| {
+                eprintln!(
+                    "Warning: No best move found for depth {}. This should not happen.",
+                    depth
+                );
+                &Move::NULL
+            });
 
-            self.send_uci_info(depth, last_best_score, last_best_move);
+            self.send_uci_info(depth, last_best_score);
 
             // Check if we still have enough time for another iteration to avoid timing out
             // in the middle of a ply. Also known as a Soft-Bound Time Limit.
