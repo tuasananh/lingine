@@ -110,6 +110,27 @@ def main():
         base_name_a.append(clean_names[i])
         base_name_b.append(base_name)
 
+    active_base_a, active_base_b, active_base_name_a, active_base_name_b = (
+        [],
+        [],
+        [],
+        [],
+    )
+
+    # Keep track of pairs run in base matches to deduplicate them from neighbor matches
+    base_match_pairs = set()
+
+    if run_base:
+        for i in range(len(base_a)):
+            if not args.version or args.version in (base_name_a[i], base_name_b[i]):
+                active_base_a.append(base_a[i])
+                active_base_b.append(base_b[i])
+                active_base_name_a.append(base_name_a[i])
+                active_base_name_b.append(base_name_b[i])
+
+                # Add sorted pair to track unique match-ups
+                base_match_pairs.add(tuple(sorted([base_name_a[i], base_name_b[i]])))
+
     (
         active_neighbor_a,
         active_neighbor_b,
@@ -122,24 +143,13 @@ def main():
                 neighbor_name_a[i],
                 neighbor_name_b[i],
             ):
-                active_neighbor_a.append(neighbor_a[i])
-                active_neighbor_b.append(neighbor_b[i])
-                active_neighbor_name_a.append(neighbor_name_a[i])
-                active_neighbor_name_b.append(neighbor_name_b[i])
-
-    active_base_a, active_base_b, active_base_name_a, active_base_name_b = (
-        [],
-        [],
-        [],
-        [],
-    )
-    if run_base:
-        for i in range(len(base_a)):
-            if not args.version or args.version in (base_name_a[i], base_name_b[i]):
-                active_base_a.append(base_a[i])
-                active_base_b.append(base_b[i])
-                active_base_name_a.append(base_name_a[i])
-                active_base_name_b.append(base_name_b[i])
+                # Deduplication logic
+                pair = tuple(sorted([neighbor_name_a[i], neighbor_name_b[i]]))
+                if pair not in base_match_pairs:
+                    active_neighbor_a.append(neighbor_a[i])
+                    active_neighbor_b.append(neighbor_b[i])
+                    active_neighbor_name_a.append(neighbor_name_a[i])
+                    active_neighbor_name_b.append(neighbor_name_b[i])
 
     active_gauntlet_engines, active_gauntlet_names = [], []
     if run_gauntlet:
@@ -255,19 +265,8 @@ def main():
 
     start_time = time.time()
 
-    if active_neighbor_a:
-        utils.print_header("SECTION 1: NEIGHBOR MATCHES")
-        for i in range(len(active_neighbor_a)):
-            run_match_task(
-                active_neighbor_a[i],
-                active_neighbor_name_a[i],
-                active_neighbor_b[i],
-                active_neighbor_name_b[i],
-                f"matches/historical/neighbor_matches/{active_neighbor_name_a[i]}-vs-{active_neighbor_name_b[i]}",
-            )
-
     if active_base_a:
-        utils.print_header("SECTION 2: BASE MATCHES VS 1.0.0-BASE")
+        utils.print_header("SECTION 1: BASE MATCHES VS 1.0.0-BASE")
         for i in range(len(active_base_a)):
             run_match_task(
                 active_base_a[i],
@@ -275,6 +274,17 @@ def main():
                 active_base_b[i],
                 active_base_name_b[i],
                 f"matches/historical/base_matches/{active_base_name_a[i]}-vs-{active_base_name_b[i]}",
+            )
+
+    if active_neighbor_a:
+        utils.print_header("SECTION 2: NEIGHBOR MATCHES")
+        for i in range(len(active_neighbor_a)):
+            run_match_task(
+                active_neighbor_a[i],
+                active_neighbor_name_a[i],
+                active_neighbor_b[i],
+                active_neighbor_name_b[i],
+                f"matches/historical/neighbor_matches/{active_neighbor_name_a[i]}-vs-{active_neighbor_name_b[i]}",
             )
 
     if active_gauntlet_engines:

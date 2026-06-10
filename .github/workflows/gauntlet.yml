@@ -3,24 +3,22 @@ name: Eval Gauntlet (Commit vs Historical)
 on:
   push:
     tags: ["v*"] # also runs when a release tag is pushed
-  pull_request:
-    branches: ["**"]
   workflow_dispatch:
     inputs:
       gauntlet_games:
         description: "Number of gauntlet games per opponent ELO tier"
         required: false
-        default: "50"
+        default: "500"
         type: string
       match_games:
         description: "Number of games for each 1v1 match"
         required: false
-        default: "100"
+        default: "1000"
         type: string
       concurrency:
         description: "Number of parallel games (0 = auto)"
         required: false
-        default: "2"
+        default: "8"
         type: string
 
 jobs:
@@ -91,8 +89,6 @@ jobs:
           echo "Registered: historical/lingine-${LABEL}"
 
       # ── 6. Build v1.0.0-base in an isolated worktree ─────────────────────
-      # We use a git worktree so the baseline compiles in its own directory
-      # and never touches the current working tree's source files.
       - name: Build v1.0.0-base binary
         run: |
           BASELINE_TAG="v1.0.0"
@@ -101,7 +97,7 @@ jobs:
           # First try a pre-built release asset
           URL="https://github.com/${{ github.repository }}/releases/download/${BASELINE_TAG}/lingine-linux-x86_64"
           HTTP=$(curl -sLo "$BIN_DEST" -w "%{http_code}" \
-                   -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+                    -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
 
           if [ "$HTTP" = "200" ]; then
             chmod +x "$BIN_DEST"
@@ -139,7 +135,7 @@ jobs:
 
             URL="https://github.com/${{ github.repository }}/releases/download/${LATEST_TAG}/lingine-linux-x86_64"
             HTTP=$(curl -sLo "historical/${BIN_NAME}" -w "%{http_code}" \
-                     -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
+                      -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "$URL")
 
             if [ "$HTTP" = "200" ]; then
               chmod +x "historical/${BIN_NAME}"
@@ -157,54 +153,23 @@ jobs:
             fi
           fi
 
-      # ── 8. Run gauntlet for commit version only ───────────────────────────
-      - name: Run gauntlet evaluation
+      # ── 8. Run unified historical evaluation ──────────────────────────────
+      # Calling the unified script will natively loop through gauntlet + both neighbor and base matches
+      # as well as compile the final report.
+      - name: Run historical evaluation (gauntlet + matches)
         run: |
           LABEL="${{ steps.commit.outputs.label }}"
-          GAMES="${{ inputs.gauntlet_games || '50' }}"
-          CONC="${{ inputs.concurrency || '2' }}"
+          G_GAMES="${{ inputs.gauntlet_games || '500' }}"
+          M_GAMES="${{ inputs.match_games || '1000' }}"
+          CONC="${{ inputs.concurrency || '8' }}"
 
           python ./scripts/run_historical_evals.py \
-            --gauntlets-only \
             --version "$LABEL" \
-            --gauntlet-games "$GAMES" \
+            --gauntlet-games "$G_GAMES" \
+            --match-games "$M_GAMES" \
             --concurrency "$CONC"
 
-      # ── 9. 1v1 matches ────────────────────────────────────────────────────
-      - name: Match — commit vs v1.0.0-base
-        run: |
-          LABEL="${{ steps.commit.outputs.label }}"
-          GAMES="${{ inputs.match_games || '100' }}"
-          CONC="${{ inputs.concurrency || '2' }}"
-
-          python ./scripts/run_match.py \
-            -a "historical/lingine-${LABEL}" --name-a "commit-${LABEL}" \
-            -b historical/lingine-1.0.0-base  --name-b "v1.0.0-base" \
-            -g "$GAMES" -c "$CONC" -s \
-            -o "matches/ci/commit-vs-base"
-
-      - name: Match — commit vs latest release
-        if: steps.latest_release.outputs.tag != ''
-        run: |
-          LABEL="${{ steps.commit.outputs.label }}"
-          LATEST_TAG="${{ steps.latest_release.outputs.tag }}"
-          SAFE_TAG="${LATEST_TAG//\//-}"
-          GAMES="${{ inputs.match_games || '100' }}"
-          CONC="${{ inputs.concurrency || '2' }}"
-
-          python ./scripts/run_match.py \
-            -a "historical/lingine-${LABEL}" --name-a "commit-${LABEL}" \
-            -b "historical/lingine-${SAFE_TAG}-latest" --name-b "$LATEST_TAG" \
-            -g "$GAMES" -c "$CONC" -s \
-            -o "matches/ci/commit-vs-latest"
-
-      # ── 10. Compile full report ───────────────────────────────────────────
-      - name: Compile version report
-        run: |
-          LABEL="${{ steps.commit.outputs.label }}"
-          python ./scripts/compile_version_report.py --version "$LABEL"
-
-      # ── 11. Assemble CI summary markdown ──────────────────────────────────
+      # ── 9. Assemble CI summary markdown ──────────────────────────────────
       - name: Assemble CI summary markdown
         id: summary
         if: always()
@@ -226,17 +191,20 @@ jobs:
 
             echo ""
             echo "### ⚔️ vs v1.0.0-base"
-            if [ -f matches/ci/commit-vs-base/summary.md ]; then
-              cat matches/ci/commit-vs-base/summary.md
+            BASE_SUM="matches/historical/base_matches/${LABEL}-vs-1.0.0-base/summary.md"
+            if [ -f "$BASE_SUM" ]; then
+              cat "$BASE_SUM"
             else
               echo "_Match not run or failed._"
             fi
 
             if [ -n "$LATEST" ]; then
+              SAFE_TAG="${LATEST//\//-}"
               echo ""
               echo "### ⚔️ vs ${LATEST} (latest release)"
-              if [ -f "matches/ci/commit-vs-latest/summary.md" ]; then
-                cat matches/ci/commit-vs-latest/summary.md
+              LATEST_SUM="matches/historical/neighbor_matches/${LABEL}-vs-${SAFE_TAG}-latest/summary.md"
+              if [ -f "$LATEST_SUM" ]; then
+                cat "$LATEST_SUM"
               else
                 echo "_Match not run or failed._"
               fi
@@ -245,12 +213,12 @@ jobs:
 
           echo "report_path=$OUT" >> "$GITHUB_OUTPUT"
 
-      # ── 12. GitHub Job Summary ────────────────────────────────────────────
+      # ── 10. GitHub Job Summary ────────────────────────────────────────────
       - name: Write to GitHub Job Summary
         if: always() && steps.summary.outputs.report_path != ''
         run: cat "${{ steps.summary.outputs.report_path }}" >> "$GITHUB_STEP_SUMMARY"
 
-      # ── 13. PR comment ────────────────────────────────────────────────────
+      # ── 11. PR comment ────────────────────────────────────────────────────
       - name: Post report as PR comment
         if: github.event_name == 'pull_request' && steps.summary.outputs.report_path != ''
         uses: marocchino/sticky-pull-request-comment@v2
@@ -258,7 +226,7 @@ jobs:
           header: gauntlet-eval
           path: ${{ steps.summary.outputs.report_path }}
 
-      # ── 14. Upload artefacts ──────────────────────────────────────────────
+      # ── 12. Upload artefacts ──────────────────────────────────────────────
       - name: Upload eval artefacts
         if: always() && steps.summary.outputs.report_path != ''
         uses: actions/upload-artifact@v5
@@ -266,9 +234,7 @@ jobs:
           name: gauntlet-eval-${{ steps.commit.outputs.sha }}
           path: |
             ci_eval_report.md
-            matches/ci/
-            matches/historical/reports/
-            matches/historical/gauntlets/
+            matches/historical/
 
   # ── Post eval report into the draft release ────────────────────────────────
   post-to-release:
@@ -287,7 +253,6 @@ jobs:
           name: gauntlet-eval-${{ needs.gauntlet.outputs.sha }}
           path: eval-results
 
-      # Poll until the draft release created by release.yml exists
       - name: Wait for draft release to be created
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -322,7 +287,6 @@ jobs:
             "repos/${{ github.repository }}/releases/${release_id}" \
             --jq '.body // ""')
 
-          # Append with a separator (printf avoids bare --- tripping the YAML parser)
           SEPARATOR="$(printf '\n\n%s\n\n' '---')"
           printf '%s%s%s' "$CURRENT_BODY" "$SEPARATOR" "$(cat "$REPORT_FILE")" \
             > /tmp/new_body.md
