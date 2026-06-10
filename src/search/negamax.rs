@@ -26,7 +26,7 @@ impl super::Searcher<'_> {
 
         // Game over / rule evaluations (60-move rule, insufficient material,
         // repetitions, perpetual checks)
-        if let Some(rule_score) = self.pos.rule_judge(ply) {
+        if !ROOT && let Some(rule_score) = self.pos.rule_judge(ply) {
             return rule_score;
         }
 
