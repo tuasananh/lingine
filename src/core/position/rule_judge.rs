@@ -1,8 +1,8 @@
 use strum::EnumCount;
 
 use crate::core::{
-    Bitboard, Move, Piece, PieceType, Score, Side, Square, cannon_captures, knight_attacks,
-    pawn_attacks, rook_attacks, score,
+    Bitboard, Move, MoveGenType, MoveList, Piece, PieceType, Score, Side, Square, cannon_captures,
+    generate_moves, knight_attacks, pawn_attacks, rook_attacks, score,
 };
 
 impl super::Position {
@@ -86,7 +86,7 @@ impl super::Position {
 
                     // Rule B: Attacks against potentially unprotected pieces
                     let mut true_chase = true;
-                    let saved_side = self.side_to_move;
+                    let saved_ply = self.game_ply;
 
                     // Play move:
                     self.board[from as usize] = None;
@@ -102,7 +102,7 @@ impl super::Position {
                     self.bitboard_by_type[target_ptype as usize].clear_bit(to);
 
                     // We temporarily toggle side_to_move to opponent
-                    self.side_to_move = opponent;
+                    self.game_ply ^= 1;
 
                     // Now see if any of the opponent's pieces can legally recapture at `to`
                     let recaptured_occupied = self.bitboard_by_color[Side::Red as usize]
@@ -128,16 +128,16 @@ impl super::Position {
                     self.bitboard_by_type[ptype as usize].clear_bit(to);
                     self.bitboard_by_type[target_ptype as usize].set_bit(to);
 
-                    self.side_to_move = saved_side;
+                    self.game_ply = saved_ply;
 
                     if true_chase {
                         // Exclude mutual/symmetric attacks except pins
                         if ptype == target_ptype {
                             // If same type (e.g. Rook attacking Rook):
                             // Check if the opponent's piece cannot legally capture back.
-                            self.side_to_move = opponent;
+                            self.game_ply ^= 1;
                             let can_opp_capture_back = self.legal(Move::new(to, from));
-                            self.side_to_move = saved_side;
+                            self.game_ply = saved_ply;
 
                             if !can_opp_capture_back {
                                 chase |= 1 << id_board[to as usize];
@@ -178,43 +178,42 @@ impl super::Position {
             }
         }
 
-        let us = self.side_to_move;
+        let us = self.side_to_move();
         let opponent = us.opposite();
 
         // Rollback until we reached st - d
         let mut chase = [0xFFFFu16, 0xFFFFu16];
 
-        // // Save the moves in the loop so we can undo them one by one
-        // let mut moves_in_loop = Vec::with_capacity(d);
-        // for i in 0..d {
-        //     moves_in_loop.push(self.history[n - 1 - i].last_move);
-        // }
-
         for _ in 0..d {
-            let state = self.history.last().unwrap();
-
-            // Under Xiangqi rules, if the current side to move is in check, it overrides
-            // chase or is a draw.
-            let side_to_move_idx = self.side_to_move as usize;
-            if state.in_check[side_to_move_idx] {
+            let side_to_move_idx = self.side_to_move() as usize;
+            if self.state.in_check[side_to_move_idx] {
                 return score::DRAW; // Draw
             }
 
-            let opposing_chase_mask = chase[self.side_to_move.opposite() as usize];
+            let opposing_chase_mask = chase[self.side_to_move().opposite() as usize];
             if opposing_chase_mask == 0 {
-                let our_chase_mask = chase[self.side_to_move as usize];
+                let our_chase_mask = chase[self.side_to_move() as usize];
                 if our_chase_mask == 0 {
                     break;
                 }
 
                 // Just undo move without computing chase diff
-                self.undo_move();
+                let m = self
+                    .state
+                    .last_move
+                    .expect("Rollback state must have a last move");
+                self.undo_move(m);
             } else {
-                let after = self.chased(self.side_to_move.opposite(), &id_board);
-                self.undo_move();
-                let before = self.chased(self.side_to_move, &id_board);
+                let mover = self.side_to_move();
+                let after = self.chased(mover.opposite(), &id_board);
+                let m = self
+                    .state
+                    .last_move
+                    .expect("Rollback state must have a last move");
+                self.undo_move(m);
+                let before = self.chased(self.side_to_move(), &id_board);
 
-                chase[self.side_to_move as usize] &= after & !before;
+                chase[self.side_to_move() as usize] &= after & !before;
             }
         }
 
@@ -235,14 +234,11 @@ impl super::Position {
     /// Evaluates if the game has ended due to 60-move rule, insufficient
     /// material, or loops (normal draws, perpetual checking, or perpetual
     /// chasing).
-    pub fn rule_judge(&self, ply: u8) -> Option<Score> {
-        let n = self.history.len();
-        if n == 0 {
-            return None;
-        }
-
+    ///
+    /// This function is based on Pikafish's implementation
+    pub fn rule_judge(&mut self, ply: u8) -> Option<Score> {
         // 1. 60-Move Rule (120 Plies since last pawn advance or capture)
-        let rule60 = self.history.last().map(|s| s.sixtymove_clock).unwrap_or(0);
+        let rule60 = self.state.sixtymove_clock;
         const RULE60_PLIES_THRESHOLD: u16 = 120;
         if rule60 >= RULE60_PLIES_THRESHOLD {
             return Some(score::DRAW);
@@ -251,72 +247,116 @@ impl super::Position {
         // 2. Insufficient Material Draw
         // If all Pawns are gone, check if remaining major pieces are capable of
         // checkmating
-        if self.piece_count(Piece::RedPawn) == 0 && self.piece_count(Piece::BlackPawn) == 0 {
-            let white_majors = self.piece_count(Piece::RedRook) as u32
-                + self.piece_count(Piece::RedCannon) as u32
-                + self.piece_count(Piece::RedKnight) as u32;
-            let black_majors = self.piece_count(Piece::BlackRook) as u32
-                + self.piece_count(Piece::BlackCannon) as u32
-                + self.piece_count(Piece::BlackKnight) as u32;
+        if self.piece_count(Piece::RedPawn) + self.piece_count(Piece::BlackPawn) == 0 {
+            let red_cannon = self.piece_count(Piece::RedCannon);
+            let red_majors =
+                self.piece_count(Piece::RedRook) + red_cannon + self.piece_count(Piece::RedKnight);
+            let black_cannon = self.piece_count(Piece::BlackCannon);
+            let black_majors = self.piece_count(Piece::BlackRook)
+                + black_cannon
+                + self.piece_count(Piece::BlackKnight);
 
-            if white_majors == 0 && black_majors == 0 {
+            let cannons = red_cannon + black_cannon;
+            let majors = red_majors + black_majors;
+
+            if majors == 0 {
                 // No Rooks, Cannons, or Knights remain on either side -> direct draw
                 return Some(score::DRAW);
             }
 
-            // Exactly one Cannon left on the entire board, and no Advisors left
-            let total_cannons =
-                self.piece_count(Piece::RedCannon) + self.piece_count(Piece::BlackCannon);
-            let total_advisors =
-                self.piece_count(Piece::RedAdvisor) + self.piece_count(Piece::BlackAdvisor);
-            if white_majors + black_majors == total_cannons as u32
-                && total_cannons == 1
-                && total_advisors == 0
+            let mut is_mate_draw = false;
+
+            if cannons == 1 && majors == 1 {
+                // One cannon left on the board, and no other major pieces -> direct draw
+                let (our_advisor, our_bishop, their_advisor) = if red_cannon == 1 {
+                    (Piece::RedAdvisor, Piece::RedBishop, Piece::BlackAdvisor)
+                } else {
+                    (Piece::BlackAdvisor, Piece::BlackBishop, Piece::RedAdvisor)
+                };
+
+                if self.piece_count(our_advisor) == 0 {
+                    let their_advisors = self.piece_count(their_advisor);
+                    if their_advisors == 0 {
+                        return Some(score::DRAW);
+                    }
+                    if their_advisors == 1 {
+                        if self.piece_count(our_bishop) == 0 {
+                            return Some(score::DRAW);
+                        } else {
+                            is_mate_draw = true;
+                        }
+                    } else if self.piece_count(our_bishop) == 0 {
+                        is_mate_draw = true;
+                    }
+                }
+            } else if cannons == 2
+                && majors == 2
+                && self.piece_count(Piece::RedAdvisor) + self.piece_count(Piece::BlackAdvisor) == 0
             {
+                if self.piece_count(Piece::RedBishop) + self.piece_count(Piece::BlackBishop) == 0 {
+                    return Some(score::DRAW);
+                } else {
+                    is_mate_draw = true;
+                }
+            }
+
+            if is_mate_draw {
+                let mut moves = MoveList::new();
+                generate_moves(self, MoveGenType::Legal, &mut moves);
+                if moves.is_empty() {
+                    return Some(score::mated_in(ply));
+                }
+                let mut new_moves = MoveList::new();
+                for m in moves {
+                    self.do_move(m);
+                    new_moves.clear();
+                    generate_moves(self, MoveGenType::Legal, &mut new_moves);
+                    if new_moves.is_empty() {
+                        // The position is winning, so we let the main search continue
+                        self.undo_move(m);
+                        return None;
+                    }
+                    self.undo_move(m);
+                }
                 return Some(score::DRAW);
             }
         }
 
         // 3. Repetition & Perpetual Check/Chase Loops
-        let current_hash = self.zobrist_hash;
-        let rule_repetition = self
-            .history
-            .last()
-            .map(|s| s.plies_since_irreversible)
-            .unwrap_or(0);
+        let current_hash = self.state.zobrist;
+        let rule_repetition = self.state.sixtymove_clock;
         let rule_repetition_val = rule_repetition as usize;
-        let max_back = rule_repetition_val.min(n - 1);
+        let n = self.history.len();
+        let max_back = rule_repetition_val.min(n);
 
         // Repetitions must occur on the same side's turn, so we scan back in steps of 2
         // plies.
         let mut i = 4;
         while i <= max_back {
-            if self.history[n - i].old_zobrist == current_hash {
+            if self.history[n - i].zobrist == current_hash {
                 // Repetition loop detected!
                 let mut us_perpetual_check = true;
                 let mut them_perpetual_check = true;
 
-                let us = self.side_to_move;
+                let us = self.side_to_move();
                 let opponent = us.opposite();
-
-                let initial_game_ply = self.game_ply - (n as u16 - 1);
 
                 // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
                 for j in (n - i)..n {
-                    let state = &self.history[j];
-                    let player_who_moved = if (initial_game_ply + (j as u16) - 1).is_multiple_of(2)
-                    {
-                        Side::Red
+                    let player_who_moved =
+                        Side::from_repr((self.game_ply - (n - j) as u16) as u8 & 1).unwrap();
+                    let state_after = if j + 1 < n {
+                        &self.history[j + 1]
                     } else {
-                        Side::Black
+                        &self.state
                     };
 
                     if player_who_moved == us {
-                        if !state.in_check[opponent as usize] {
+                        if !state_after.in_check[opponent as usize] {
                             us_perpetual_check = false;
                         }
                     } else {
-                        if !state.in_check[us as usize] {
+                        if !state_after.in_check[us as usize] {
                             them_perpetual_check = false;
                         }
                     }
@@ -326,7 +366,7 @@ impl super::Position {
                     if us_perpetual_check && them_perpetual_check {
                         return Some(score::DRAW); // Both check perpetually -> draw
                     } else if us_perpetual_check {
-                        return Some(-score::mate_in(ply)); // We check perpetually -> we lose
+                        return Some(score::mated_in(ply)); // We check perpetually -> we lose
                     } else {
                         return Some(score::mate_in(ply)); // Opponent checks perpetually -> they lose
                     }

@@ -11,12 +11,14 @@ impl super::Searcher<'_> {
     ///
     /// See: https://www.chessprogramming.org/Move_Ordering
     #[inline]
-    pub(super) fn sort_moves(&self, moves: &mut [Move], tt_move: Move, ply: u8) {
+    pub(super) fn sort_moves(&self, moves: &mut [Move], tt_move: Option<Move>, ply: u8) {
         moves.sort_unstable_by_key(|&m| -> Reverse<MoveScore> {
             // Returns a heuristic move-ordering score. Captures are scored highly based
             // on MVV-LVA. Quiet moves get score 0. The transposition table best move is
             // prioritized at the very top.
-            let move_score = if m == tt_move {
+            let move_score = if let Some(tt_move) = tt_move
+                && m == tt_move
+            {
                 2_000_000_000 // Prioritize TT best move above all else
             } else {
                 if let Some(to_piece) = self.pos.piece_at(m.to()) {

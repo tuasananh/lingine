@@ -28,8 +28,7 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let mut pos = Position::new();
-    pos.set(&args.fen)?;
+    let pos = Position::from_fen(&args.fen)?;
 
     let mut transposition_table = TranspositionTable::new(args.hash);
     let stop = Arc::new(RunningStatus::default());
@@ -69,7 +68,12 @@ fn main() -> anyhow::Result<()> {
     println!("========================================");
     println!("   SEARCH RESULTS                       ");
     println!("========================================");
-    println!("Best Move: {}", best_move.to_uci_string());
+    println!(
+        "Best Move: {}",
+        best_move
+            .map(|x| x.to_uci_string())
+            .unwrap_or("none".to_string())
+    );
     // println!("Score:     {} cp", score);
     // println!("Nodes:     {}", nodes);
     println!("Time:      {:.3} s", duration.as_secs_f64());

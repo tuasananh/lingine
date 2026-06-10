@@ -1,5 +1,7 @@
 use strum::{EnumCount, FromRepr};
 
+use crate::core::Score;
+
 /// Represents the two players in a Xiangqi game: Red (Red) or Black.
 #[derive(FromRepr, EnumCount, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
@@ -15,6 +17,14 @@ impl Side {
         match self {
             Side::Red => Side::Black,
             Side::Black => Side::Red,
+        }
+    }
+
+    #[inline]
+    pub const fn sign(&self) -> Score {
+        match self {
+            Side::Red => 1,
+            Side::Black => -1,
         }
     }
 }

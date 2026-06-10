@@ -29,7 +29,7 @@ pub const MAX_DEPTH: usize = 64;
 /// branch.
 #[derive(Copy, Clone, Debug, Default)]
 struct SearchContext {
-    pub excluded_move: Move,
+    pub excluded_move: Option<Move>,
 }
 
 pub struct SharedContext<'a> {
@@ -65,7 +65,11 @@ impl<'a> Searcher<'a> {
     /// Starts the iterative deepening search loop
     ///
     /// Returns the best move found.
-    pub fn start_search(pos: Position, time_manager: TimeManager, shared: SharedContext) -> Move {
+    pub fn start_search(
+        pos: Position,
+        time_manager: TimeManager,
+        shared: SharedContext,
+    ) -> Option<Move> {
         eprintln!("info: starting search");
         // Decay history table to make sure old moves do not accumulate indefinitely and
         // overshadow newer moves.
@@ -140,17 +144,16 @@ const fn get_piece_value_rank(p: Piece) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{Move, Side, Square};
     use crate::core::{Position, score};
+    use crate::core::{Move, Side, Square};
     use crate::uci::GoParameters;
     use std::sync::Arc;
 
     #[test]
     fn test_repetition_draw_repetition() {
-        let mut pos = Position::new();
         // Setup a simple position with files D and E blocked by pawns to avoid
         // King-facing checks
-        pos.set("4k4/9/9/9/3PP4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let mut pos = Position::from_fen("4k4/9/9/9/3PP4/9/9/9/9/4K4 w - - 0 1").unwrap();
         // Setup moves to repeat: King moves back and forth
         let w_move1 = Move::new(Square::E0, Square::D0);
         let w_move2 = Move::new(Square::D0, Square::E0);
@@ -176,7 +179,7 @@ mod tests {
 
         // Call negamax with depth=1, we should get 0 (draw)
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = KillerMoves::default();
+        let killers = KillerMoves::new();
         let mut history_moves = HistoryMoves::default();
         let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
         let mut ctx = Searcher {
@@ -184,7 +187,7 @@ mod tests {
             nodes: 0,
             time_manager,
             killer_moves: killers,
-            pv_table: PrincipalVariationTable::default(),
+            pv_table: PrincipalVariationTable::new(),
             max_ply: 0,
             shared: SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
@@ -193,6 +196,7 @@ mod tests {
             },
             current_root_depth: 0,
         };
+        ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false, false>(
             1,
             6,
@@ -205,9 +209,8 @@ mod tests {
 
     #[test]
     fn test_repetition_perpetual_check_repetition() {
-        let mut pos = Position::new();
         // Red King at E0, Red Rook at D1, Black King at D9
-        pos.set("3k5/9/9/9/9/9/9/9/3R5/4K4 w - - 0 1").unwrap();
+        let mut pos = Position::from_fen("3k5/9/9/9/9/9/9/9/3R5/4K4 w - - 0 1").unwrap();
 
         // Red Rook checks: D1 to D8 (giving check)
         let r_check1 = Move::new(Square::D1, Square::D8);
@@ -245,11 +248,11 @@ mod tests {
         // Black should win because Red is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = KillerMoves::default();
+        let killers = KillerMoves::new();
         let mut history_moves = HistoryMoves::default();
         let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
         let mut ctx = Searcher {
-            pv_table: Default::default(),
+            pv_table: PrincipalVariationTable::new(),
             pos,
             nodes: 0,
             time_manager,

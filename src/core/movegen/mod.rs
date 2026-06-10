@@ -168,9 +168,8 @@ mod tests {
 
     #[test]
     fn test_king_moves() {
-        let mut pos = Position::new();
         // Setup King in the middle of palace (E0)
-        pos.set("4k4/4a4/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
         let count = count_moves(&pos, MoveGenType::Legal);
         // E0 has 4 directions: D0, F0, E1 (E-1 is offboard, so 3 legal moves)
         assert_eq!(count, 3);
@@ -191,7 +190,7 @@ mod tests {
         ));
 
         // Block with a friendly piece at E1
-        pos.set("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
         // Advisor is on E1. Advisor moves: FD0, FF0.
         // Let's generate moves for E0
         let mut moves = MoveList::new();
@@ -208,9 +207,8 @@ mod tests {
 
     #[test]
     fn test_advisor_moves() {
-        let mut pos = Position::new();
         // Setup Advisor at center of Palace (E1)
-        pos.set("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
@@ -226,7 +224,7 @@ mod tests {
         assert!(adv_moves.contains(&Move::new(Square::E1, Square::F2)));
 
         // Corner Advisor (D0)
-        pos.set("4k4/4a4/9/9/9/9/9/9/9/3AK4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/9/3AK4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
@@ -241,9 +239,8 @@ mod tests {
 
     #[test]
     fn test_bishop_moves() {
-        let mut pos = Position::new();
         // Bishop (Elephant) at C0
-        pos.set("4k4/4a4/9/9/9/9/9/9/9/2B1K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/9/2B1K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
@@ -257,7 +254,7 @@ mod tests {
         assert!(bish_moves.contains(&Move::new(Square::C0, Square::E2)));
 
         // Block with a piece on the Elephant eye (D1)
-        pos.set("4k4/4a4/9/9/9/9/9/9/3p5/2B1K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/3p5/2B1K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
@@ -272,9 +269,8 @@ mod tests {
 
     #[test]
     fn test_knight_moves() {
-        let mut pos = Position::new();
         // Knight at E2
-        pos.set("4k4/4a4/9/9/9/9/9/4H4/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/4H4/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
@@ -286,7 +282,7 @@ mod tests {
         assert_eq!(kn_moves.len(), 8);
 
         // Block with a piece on the Horse Leg (E3)
-        pos.set("4k4/4a4/9/9/9/9/4p4/4H4/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/4p4/4H4/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
@@ -302,9 +298,8 @@ mod tests {
 
     #[test]
     fn test_pawn_moves() {
-        let mut pos = Position::new();
         // Unpromoted Pawn (C3)
-        pos.set("4k4/4a4/9/9/9/9/2P6/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/2P6/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
@@ -317,7 +312,7 @@ mod tests {
         assert!(pawn_moves.contains(&Move::new(Square::C3, Square::C4)));
 
         // Promoted Pawn (C6 - crossed river)
-        pos.set("4k4/4a4/9/2P6/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/2P6/9/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
@@ -334,9 +329,8 @@ mod tests {
 
     #[test]
     fn test_rook_moves() {
-        let mut pos = Position::new();
         // Rook at E5
-        pos.set("3k5/9/9/9/4R4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("3k5/9/9/9/4R4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -349,8 +343,7 @@ mod tests {
         assert_eq!(r_moves.len(), 16);
 
         // Friendly blocker at E6, opponent at E3
-        pos.set("4k4/4a4/9/4A4/4R4/9/4p4/9/9/4K4 w - - 0 1")
-            .unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/4A4/4R4/9/4p4/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -371,9 +364,8 @@ mod tests {
 
     #[test]
     fn test_cannon_moves() {
-        let mut pos = Position::new();
         // Cannon at E5, empty board.
-        pos.set("3k5/9/9/9/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("3k5/9/9/9/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
@@ -385,7 +377,7 @@ mod tests {
         assert_eq!(c_moves.len(), 16);
 
         // Friendly screen at E6, opponent behind at E8
-        pos.set("3k5/4r4/9/4A4/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("3k5/4r4/9/4A4/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
@@ -405,9 +397,8 @@ mod tests {
 
     #[test]
     fn test_facing_kings() {
-        let mut pos = Position::new();
         // Kings facing each other on file E with only 1 friendly Rook in between (E3)
-        pos.set("4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -423,7 +414,7 @@ mod tests {
         }
     }
 
-    fn assert_positions_equal(a: &Position, b: &Position) {
+    fn assert_positions_equal(a: &mut Position, b: &mut Position) {
         use crate::core::types::{Piece, PieceType, Side};
         use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
@@ -470,17 +461,16 @@ mod tests {
         ];
 
         for fen in fens {
-            let mut pos = Position::new();
-            pos.set(fen).unwrap();
+            let mut pos = Position::from_fen(fen).unwrap();
 
             for gen_type in gen_types {
-                let pos_before = pos.clone();
+                let mut pos_before = pos.clone();
 
                 let mut moves = MoveList::new();
                 generate_moves(&pos, gen_type, &mut moves);
 
                 // Ensure calling generate_moves did not modify/corrupt the position in any way
-                assert_positions_equal(&pos, &pos_before);
+                assert_positions_equal(&mut pos, &mut pos_before);
             }
         }
     }

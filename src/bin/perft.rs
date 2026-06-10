@@ -222,8 +222,7 @@ impl Perft {
     /// the console.
     pub fn perft(fen: &str, depth: u32) -> Result<PerftExpected> {
         let mut helper = Perft::default();
-        let mut pos = Position::new();
-        pos.set(fen)?;
+        let mut pos = Position::from_fen(fen)?;
         helper.perft_helper::<true>(&mut pos, depth);
 
         println!("Perft results for depth {depth}:\n{helper:?}");
@@ -293,7 +292,7 @@ impl Perft {
                     sub_nodes += cnt;
                 }
 
-                pos.undo_move();
+                pos.undo_move(m);
             }
 
             if ROOT {

@@ -27,11 +27,15 @@ impl super::Searcher<'_> {
         //
         // See: https://www.chessprogramming.org/Singular_Extensions
         if depth >= SINGULAR_EXTENSION_DEPTH_THRESHOLD
-            && ctx.excluded_move.is_null()
+            && ctx.excluded_move.is_none()
             && value.depth >= depth - SINGULAR_EXTENSION_DEPTH_REDUCTION
             && value.bound != Bound::Alpha
             && !score::is_winning(value.score.abs())
         {
+            assert!(
+                value.best_move.is_some(),
+                "Not alpha flag means there is a best move, hopefully"
+            );
             let rdepth = depth - SINGULAR_EXTENSION_DEPTH_REDUCTION;
             let rbeta = value.score - Self::singular_margin(depth);
             let score = self.negamax::<false, false>(

@@ -212,10 +212,11 @@ mod tests {
 
     #[test]
     fn test_initial_material_evaluation_tapered() {
-        let mut pos = Position::new();
         // Set standard starting FEN
-        pos.set("rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w - - 0 1")
-            .unwrap();
+        let pos = Position::from_fen(
+            "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w - - 0 1",
+        )
+        .unwrap();
         // Since board is symmetric, evaluation must be exactly 0
         assert_eq!(evaluate(&pos), score::DRAW);
     }
@@ -229,8 +230,7 @@ mod tests {
         ];
 
         for (idx, fen) in positions.iter().enumerate() {
-            let mut pos = Position::new();
-            pos.set(fen).unwrap();
+            let mut pos = Position::from_fen(fen).unwrap();
 
             // Generate all pseudo-legal moves
             let mut moves = MoveList::new();
@@ -276,7 +276,7 @@ mod tests {
                     );
 
                     // Undo the move
-                    pos.undo_move();
+                    pos.undo_move(m);
 
                     // Assert scores rolled back perfectly
                     assert_eq!(

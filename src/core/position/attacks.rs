@@ -8,7 +8,7 @@ impl Position {
     /// not left in check).
     #[inline]
     pub fn legal(&self, m: Move) -> bool {
-        let us = self.side_to_move;
+        let us = self.side_to_move();
         let from = m.from();
         let to = m.to();
         let moved_piece =
@@ -33,7 +33,7 @@ impl Position {
     /// calculates checkers pointing to the General.
     #[inline]
     pub fn gives_check(&self, m: Move) -> bool {
-        let us = self.side_to_move;
+        let us = self.side_to_move();
         let them = us.opposite();
         let from = m.from();
         let to = m.to();

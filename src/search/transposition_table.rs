@@ -61,7 +61,7 @@ pub struct Entry {
     /// The best move found at this position. The upper bits of this Move encode
     /// the TranspositionTableFlag, which denotes the entry's bound type (and
     /// validity; a flag of Empty indicates an invalid/empty entry).
-    pub best_move: Move, // 2 bytes
+    pub best_move: Option<Move>, // 2 bytes
     /// The type of bound this entry's score represents.
     pub bound: Bound, // 1 byte
     /// The search depth this score was evaluated to.
@@ -93,7 +93,7 @@ struct Storage {
     /// The best move found at this position. The upper bits of this Move encode
     /// the TranspositionTableFlag, which denotes the entry's bound type (and
     /// validity; a flag of Empty indicates an invalid/empty entry).
-    pub best_move: Move, // 2 bytes
+    pub best_move: Option<Move>, // 2 bytes
     /// The type of bound and age this entry represents. The lower 2 bits encode
     /// the bound type.
     pub flags: Flags, // 1 byte
@@ -276,7 +276,7 @@ mod tests {
         let mut tt = TranspositionTable::new(1); // 1 MB
         assert!(tt.size_mask > 0);
 
-        tt.store(42, 0, tt_value!(100, Move::NULL, Bound::Exact, 5));
+        tt.store(42, 0, tt_value!(100, None, Bound::Exact, 5));
         let result = tt.probe(42, 0).unwrap();
         assert_eq!(result.depth, 5);
         assert_eq!(result.score, 100);
@@ -291,16 +291,16 @@ mod tests {
         let mut tt = TranspositionTable::new(1);
 
         // 1. Store initial entry
-        tt.store(100, 0, tt_value!(80, Move::NULL, Bound::Exact, 4));
+        tt.store(100, 0, tt_value!(80, None, Bound::Exact, 4));
         assert_eq!(tt.probe(100, 0).unwrap().score, 80);
 
         // 2. Reject shallower entry
-        tt.store(100, 0, tt_value!(90, Move::NULL, Bound::Exact, 2));
+        tt.store(100, 0, tt_value!(90, None, Bound::Exact, 2));
         assert_eq!(tt.probe(100, 0).unwrap().depth, 4); // Kept depth 4
         assert_eq!(tt.probe(100, 0).unwrap().score, 80);
 
         // 3. Overwrite with deeper entry
-        tt.store(100, 0, tt_value!(120, Move::NULL, Bound::Exact, 6));
+        tt.store(100, 0, tt_value!(120, None, Bound::Exact, 6));
         assert_eq!(tt.probe(100, 0).unwrap().depth, 6);
         assert_eq!(tt.probe(100, 0).unwrap().score, 120);
     }
@@ -311,7 +311,7 @@ mod tests {
         let ply = 5;
 
         let mut tt = TranspositionTable::new(1);
-        tt.store(100, ply, tt_value!(mate_score, Move::NULL, Bound::Exact, 6));
+        tt.store(100, ply, tt_value!(mate_score, None, Bound::Exact, 6));
         let result = tt.probe(100, ply).unwrap();
         // The stored mate score should be correctly adjusted for the ply when probed.
         assert_eq!(result.score, mate_score);
@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(tt.hashfull(), 0);
 
         // Store one entry
-        tt.store(42, 0, tt_value!(100, Move::NULL, Bound::Exact, 5));
+        tt.store(42, 0, tt_value!(100, None, Bound::Exact, 5));
 
         let h = tt.hashfull();
         assert!(h > 0);
