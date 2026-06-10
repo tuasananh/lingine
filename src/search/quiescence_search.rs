@@ -16,11 +16,11 @@ impl super::Searcher<'_> {
         mut alpha: Score,
         beta: Score,
     ) -> Score {
-        self.update_analytics(ply);
-
         if self.should_stop_search() {
             return score::ZERO;
         }
+
+        self.update_analytics(ply);
 
         // Base case: to avoid infinite recursion and stack overflow from perpetual
         // checks

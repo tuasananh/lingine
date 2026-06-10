@@ -8,6 +8,8 @@ use crate::{
 impl super::Searcher<'_> {
     /// Sorts the moves based on their heuristic scores, prioritizing the
     /// transposition table best move, killers, and history.
+    ///
+    /// See: https://www.chessprogramming.org/Move_Ordering
     #[inline]
     pub(super) fn sort_moves(&self, moves: &mut [Move], tt_move: Move, ply: u8) {
         moves.sort_unstable_by_key(|&m| -> Reverse<MoveScore> {

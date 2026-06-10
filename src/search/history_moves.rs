@@ -4,6 +4,10 @@ use crate::core::{Move, Side, Square};
 
 const DECAY_RATE: i32 = 8;
 
+/// Provides an implementation of the history heuristic used as a dynamic move
+/// ordering technique for quiet moves that caused a beta cutoff.
+///
+/// See [History Heuristic](https://www.chessprogramming.org/History_Heuristic)
 pub struct HistoryMoves {
     table: [[[i32; Square::COUNT]; Square::COUNT]; Side::COUNT],
 }
