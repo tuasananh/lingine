@@ -88,7 +88,7 @@ jobs:
       - name: Fetch v1.0.0-base binary
         id: baseline
         run: |
-          BASELINE_TAG="v1.3.0"
+          BASELINE_TAG="v1.0.0"
           mkdir -p historical
 
           echo "Fetching pre-built binary for ${BASELINE_TAG} …"
