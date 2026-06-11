@@ -138,7 +138,7 @@ impl super::Searcher<'_> {
 
             if alpha >= beta {
                 // Update killers and history for quiet moves
-                if self.pos.is_empty(m.to()) {
+                if self.pos.is_quiet(m) {
                     self.killer_moves.update(m, ply);
                     self.shared
                         .history_moves

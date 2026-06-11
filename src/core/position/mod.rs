@@ -143,6 +143,18 @@ impl Position {
         self.board[square as usize].is_none()
     }
 
+    /// Checks whether or not [`mv`] is a capture move.
+    #[inline]
+    pub fn is_capture(&self, mv: Move) -> bool {
+        !self.is_empty(mv.to())
+    }
+
+    /// Checks whether or not [`mv`] is a quiet move (no capture).
+    #[inline]
+    pub fn is_quiet(&self, mv: Move) -> bool {
+        self.is_empty(mv.to())
+    }
+
     /// Get the square where the king of side [`color`] is currently at
     #[inline]
     pub fn king_square(&self, color: Side) -> Square {

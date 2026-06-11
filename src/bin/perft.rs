@@ -256,7 +256,7 @@ impl Perft {
                 self.nodes += 1;
                 sub_nodes += 1;
 
-                if !pos.is_empty(m.to()) {
+                if pos.is_capture(m) {
                     self.captures += 1;
                 }
                 if pos.gives_check(m) {
@@ -273,7 +273,7 @@ impl Perft {
 
                     if !next_moves.is_empty() {
                         for nm in next_moves {
-                            if !pos.is_empty(nm.to()) {
+                            if pos.is_capture(nm) {
                                 self.captures += 1;
                             }
 

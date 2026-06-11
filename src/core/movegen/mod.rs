@@ -141,8 +141,8 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
         }
         match gen_type {
             MoveGenType::Legal | MoveGenType::Evasions => true,
-            MoveGenType::Captures => !pos.is_empty(m.to()),
-            MoveGenType::Quiets => pos.is_empty(m.to()),
+            MoveGenType::Captures => pos.is_capture(*m),
+            MoveGenType::Quiets => pos.is_quiet(*m),
             MoveGenType::PseudoLegal => unreachable!(),
         }
     });
