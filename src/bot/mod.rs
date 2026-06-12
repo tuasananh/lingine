@@ -87,7 +87,7 @@ impl Engine for Lingine {
 
     fn position(&mut self, position: PositionParameters) -> Result<()> {
         // Parse starting FEN
-        self.position.set(&position.fen)?;
+        self.position = Position::from_fen(&position.fen)?;
 
         // Apply moves iteratively
         for uci_mv in position.moves {
@@ -148,7 +148,9 @@ impl Engine for Lingine {
         // Returns the best move found in UCI format. Pondering is not implemented in
         // this version, so we return `None` for the ponder move.
         Ok(BestMove {
-            mv: best_move.to_uci_string(),
+            mv: best_move
+                .map(|x| x.to_uci_string())
+                .unwrap_or("none".to_string()),
             ponder: None,
         })
     }

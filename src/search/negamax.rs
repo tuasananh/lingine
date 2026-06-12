@@ -1,5 +1,5 @@
 use crate::{
-    core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
+    core::{MoveGenType, MoveList, Score, generate_moves, score},
     search::{Bound, Entry, MAX_PLY, SearchContext},
     tt_value,
 };
@@ -33,7 +33,7 @@ impl super::Searcher<'_> {
         let alpha_orig = alpha;
 
         let mut best_score = -score::INFINITY;
-        let mut best_move = Move::NULL;
+        let mut best_move = None;
 
         let mut depth = depth;
 
@@ -91,7 +91,7 @@ impl super::Searcher<'_> {
         // we extend the search, as it is likely a critical position.
         //
         // See: https://www.chessprogramming.org/One_Reply_Extensions
-        if moves.len() == 1 && ctx.excluded_move.is_null() {
+        if moves.len() == 1 && ctx.excluded_move.is_none() {
             depth += 1;
         }
 
@@ -101,9 +101,13 @@ impl super::Searcher<'_> {
         let mut moves_played = 0;
 
         for m in moves {
-            if m == ctx.excluded_move {
+            if let Some(excluded) = ctx.excluded_move
+                && m == excluded
+            {
                 continue;
             }
+
+            let reductions = self.calculate_reductions::<PV>(m, moves_played, depth, ply);
 
             self.pos.do_move(m);
             let score = if moves_played == 0 {
@@ -115,9 +119,9 @@ impl super::Searcher<'_> {
                     SearchContext::default(),
                 )
             } else {
-                self.pv_search::<PV>(depth, ply, alpha, beta)
+                self.pv_search::<PV>(depth, ply, alpha, beta, reductions)
             };
-            self.pos.undo_move();
+            self.pos.undo_move(m);
             moves_played += 1;
 
             if !self.shared.keep_running.get() {
@@ -126,17 +130,17 @@ impl super::Searcher<'_> {
 
             if score > best_score {
                 best_score = score;
-                best_move = m;
+                best_move = Some(m);
 
                 if score > alpha {
                     alpha = score;
-                    self.pv_table.update_best_move(ply, best_move);
+                    self.pv_table.update_best_move(ply, m);
                 }
             }
 
             if alpha >= beta {
                 // Update killers and history for quiet moves
-                if self.pos.is_empty(m.to()) {
+                if self.pos.is_quiet(m) {
                     self.killer_moves.update(m, ply);
                     self.shared
                         .history_moves

@@ -117,7 +117,7 @@ impl Bitboard {
 
     /// Constructs a bitboard with all bits active along the specified vertical
     /// column (`File`).
-    pub const fn file(f: File) -> Self {
+    pub const fn from_file(f: File) -> Self {
         let mut bits = 0u128;
         let mut r = 0u8;
         let f = f as u8;
@@ -133,7 +133,7 @@ impl Bitboard {
 
     /// Constructs a bitboard with all bits active along the specified
     /// horizontal row (`Rank`).
-    pub const fn rank(r: Rank) -> Self {
+    pub const fn from_rank(r: Rank) -> Self {
         let mut bits = 0u128;
         let mut f = 0u8;
         let r = r as u8;
@@ -149,20 +149,40 @@ impl Bitboard {
 
     /// Returns a precomputed bitboard covering one half of the board (5 ranks)
     /// for a given player:
-    pub const fn side(color: Side) -> Self {
-        match color {
-            Side::Red => Self::rank(Rank::R0)
-                .const_or(Self::rank(Rank::R1))
-                .const_or(Self::rank(Rank::R2))
-                .const_or(Self::rank(Rank::R3))
-                .const_or(Self::rank(Rank::R4)),
-            Side::Black => Self::rank(Rank::R5)
-                .const_or(Self::rank(Rank::R6))
-                .const_or(Self::rank(Rank::R7))
-                .const_or(Self::rank(Rank::R8))
-                .const_or(Self::rank(Rank::R9)),
+    pub const fn side(side: Side) -> Self {
+        match side {
+            Side::Red => Self::from_rank(Rank::R0)
+                .const_or(Self::from_rank(Rank::R1))
+                .const_or(Self::from_rank(Rank::R2))
+                .const_or(Self::from_rank(Rank::R3))
+                .const_or(Self::from_rank(Rank::R4)),
+            Side::Black => Self::from_rank(Rank::R5)
+                .const_or(Self::from_rank(Rank::R6))
+                .const_or(Self::from_rank(Rank::R7))
+                .const_or(Self::from_rank(Rank::R8))
+                .const_or(Self::from_rank(Rank::R9)),
         }
     }
+
+    /// Returns a precomputed bitboard covering the palace of the given player
+    pub const fn palace(side: Side) -> Self {
+        let ranks = match side {
+            Side::Red => Self::from_rank(Rank::R0)
+                .const_or(Self::from_rank(Rank::R1))
+                .const_or(Self::from_rank(Rank::R2)),
+            Side::Black => Self::from_rank(Rank::R7)
+                .const_or(Self::from_rank(Rank::R8))
+                .const_or(Self::from_rank(Rank::R9)),
+        };
+
+        ranks.const_and(
+            Self::from_file(File::FD)
+                .const_or(Self::from_file(File::FE))
+                .const_or(Self::from_file(File::FF)),
+        )
+    }
+
+    pub const PALACE: Self = Self::palace(Side::Red).const_or(Self::palace(Side::Black));
 }
 
 impl From<Square> for Bitboard {
@@ -175,14 +195,14 @@ impl From<Square> for Bitboard {
 impl From<File> for Bitboard {
     #[inline]
     fn from(file: File) -> Self {
-        Self::file(file)
+        Self::from_file(file)
     }
 }
 
 impl From<Rank> for Bitboard {
     #[inline]
     fn from(rank: Rank) -> Self {
-        Self::rank(rank)
+        Self::from_rank(rank)
     }
 }
 
@@ -224,16 +244,16 @@ mod tests {
 
     #[test]
     fn test_print_rank_bitboard() {
-        println!("{}", Bitboard::rank(Rank::R0));
-        println!("{}", Bitboard::rank(Rank::R1));
-        println!("{}", Bitboard::rank(Rank::R2));
+        println!("{}", Bitboard::from_rank(Rank::R0));
+        println!("{}", Bitboard::from_rank(Rank::R1));
+        println!("{}", Bitboard::from_rank(Rank::R2));
     }
 
     #[test]
     fn test_print_file_bitboard() {
-        println!("{}", Bitboard::file(File::FA));
-        println!("{}", Bitboard::file(File::FB));
-        println!("{}", Bitboard::file(File::FC));
+        println!("{}", Bitboard::from_file(File::FA));
+        println!("{}", Bitboard::from_file(File::FB));
+        println!("{}", Bitboard::from_file(File::FC));
     }
 
     #[test]

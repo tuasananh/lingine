@@ -7,28 +7,27 @@ const MOVE_COUNT_PER_PLY: usize = 2;
 ///
 /// See [Killer Heuristic](https://www.chessprogramming.org/Killer_Heuristic)
 pub struct KillerMoves {
-    table: [[Move; MOVE_COUNT_PER_PLY]; MAX_PLY],
+    table: [[Option<Move>; MOVE_COUNT_PER_PLY]; MAX_PLY],
 }
 
 impl KillerMoves {
     pub fn new() -> Self {
         Self {
-            table: [[Move::NULL; MOVE_COUNT_PER_PLY]; MAX_PLY],
+            table: [[None; MOVE_COUNT_PER_PLY]; MAX_PLY],
         }
     }
 
     pub fn update(&mut self, mv: Move, ply: u8) {
         let ply_index = ply as usize;
 
-        // We only store different moves
-        if mv != self.table[ply_index][0] {
+        if self.table[ply_index][0] != Some(mv) {
             self.table[ply_index][1] = self.table[ply_index][0];
-            self.table[ply_index][0] = mv;
+            self.table[ply_index][0] = Some(mv);
         }
     }
 
     pub fn contains(&self, mv: Move, ply: u8) -> bool {
-        self.table[ply as usize].contains(&mv)
+        self.table[ply as usize].contains(&Some(mv))
     }
 }
 

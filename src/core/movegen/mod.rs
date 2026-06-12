@@ -1,13 +1,10 @@
 use arrayvec::ArrayVec;
 
-mod attacks;
+mod queries;
 mod tables;
-pub use attacks::*;
+pub use queries::*;
 
-use crate::core::{
-    Move, PieceType, Position, Side, Square,
-    movegen::tables::{FILE_TABLE, RANK_TABLE},
-};
+use crate::core::{Move, PieceType, Position, Side};
 
 /// The maximum number of pseudo-legal moves in any given Xiangqi position
 /// (typically <= 120).
@@ -28,19 +25,18 @@ pub enum MoveGenType {
 }
 
 /// Generates all pseudo-legal moves in a single pass.
-fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_RED { Side::Red } else { Side::Black };
+fn generate_pseudo_legal(side: Side, pos: &Position, moves: &mut MoveList) {
+    let us = side;
     let them = us.opposite();
     let us_pieces = pos.bitboard_by_color(us);
     let them_pieces = pos.bitboard_by_color(them);
     let occupied = pos.bitboard_occupied();
 
-    // Macro to eliminate the repetitive nested loops for leaper pieces
-    macro_rules! gen_leapers {
-        ($pieces:expr, |$from:ident| $targets:expr) => {
-            let mut pieces = $pieces;
+    macro_rules! gen_piece_moves {
+        ($type:expr, |$from:ident| $targets:expr) => {
+            let mut pieces = pos.bitboard_by_type($type) & us_pieces;
             while let Some($from) = pieces.pop_lsb() {
-                let mut targets = ($targets) & !us_pieces;
+                let mut targets = $targets;
                 while let Some(to_sq) = targets.pop_lsb() {
                     moves.push(Move::new($from, to_sq));
                 }
@@ -56,80 +52,35 @@ fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveLis
     }
 
     // 2. Leapers
-    gen_leapers!(
-        pos.bitboard_by_type(PieceType::Advisor) & us_pieces,
-        |from| advisor_attacks(from)
-    );
-    gen_leapers!(
-        pos.bitboard_by_type(PieceType::Bishop) & us_pieces,
-        |from| bishop_attacks(from, occupied)
-    );
-    gen_leapers!(
-        pos.bitboard_by_type(PieceType::Knight) & us_pieces,
-        |from| knight_attacks(from, occupied)
-    );
-    gen_leapers!(pos.bitboard_by_type(PieceType::Pawn) & us_pieces, |from| {
-        pawn_attacks(from, us)
+    gen_piece_moves!(PieceType::Advisor, |from| {
+        advisor_attacks(from) & !us_pieces
     });
-
-    // Macro to eliminate repetitive slider bit extraction
-    macro_rules! gen_sliders {
-        ($from:expr, $mask:expr, |$idx:ident| $to_sq_expr:expr) => {
-            let mut m = $mask;
-            while m != 0 {
-                let $idx = m.trailing_zeros() as usize;
-                m &= m - 1;
-                moves.push(Move::new(
-                    $from,
-                    Square::from_repr(($to_sq_expr) as u8).unwrap(),
-                ));
-            }
-        };
-    }
-
-    // 3. Rooks
-    let mut rooks = pos.bitboard_by_type(PieceType::Rook) & us_pieces;
-    while let Some(from) = rooks.pop_lsb() {
-        let (f, r) = (from as usize % 9, from as usize / 9);
-
-        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
-        let us_rank = ((us_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
-        gen_sliders!(from, RANK_TABLE[f].rook[rank_occ] & !us_rank, |f_to| r * 9
-            + f_to);
-
-        let file_occ = gather_file_bits(occupied.raw(), f);
-        let us_file = gather_file_bits(us_pieces.raw(), f) as u16;
-        gen_sliders!(from, FILE_TABLE[r].rook[file_occ] & !us_file, |r_to| r_to
-            * 9
-            + f);
-    }
-
-    // 4. Cannons
-    let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
-    while let Some(from) = cannons.pop_lsb() {
-        let (f, r) = (from as usize % 9, from as usize / 9);
-
-        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
-        let them_rank = ((them_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
-        let r_quiet = RANK_TABLE[f].rook[rank_occ] & !(rank_occ as u16);
-        let r_cap = RANK_TABLE[f].cannon[rank_occ] & them_rank;
-        gen_sliders!(from, r_quiet | r_cap, |f_to| r * 9 + f_to);
-
-        let file_occ = gather_file_bits(occupied.raw(), f);
-        let them_file = gather_file_bits(them_pieces.raw(), f) as u16;
-        let f_quiet = FILE_TABLE[r].rook[file_occ] & !(file_occ as u16);
-        let f_cap = FILE_TABLE[r].cannon[file_occ] & them_file;
-        gen_sliders!(from, f_quiet | f_cap, |r_to| r_to * 9 + f);
-    }
+    gen_piece_moves!(PieceType::Bishop, |from| {
+        bishop_attacks(from, occupied) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Knight, |from| {
+        knight_attacks(from, occupied) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Pawn, |from| {
+        pawn_attacks(from, us) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Rook, |from| {
+        rook_attacks(from, occupied) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Cannon, |from| {
+        // Cannon moves consist of:
+        // - Quiet slides: Moves along empty squares, identical to Rook attacks but
+        //   restricted to unoccupied squares (& !occupied).
+        // - Leap captures: Captures along the rank/file that jump over exactly one
+        //   piece (the screen) and land on an opponent piece (& them_pieces).
+        (rook_attacks(from, occupied) & !occupied) | (cannon_captures(from, occupied) & them_pieces)
+    });
 }
 
 /// Generates moves of the specified type for the current position and appends
 /// them to the provided `moves` list.
 pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveList) {
-    match pos.side_to_move() {
-        Side::Red => generate_pseudo_legal::<true>(pos, moves),
-        Side::Black => generate_pseudo_legal::<false>(pos, moves),
-    };
+    generate_pseudo_legal(pos.side_to_move(), pos, moves);
 
     if gen_type == MoveGenType::PseudoLegal {
         return;
@@ -141,8 +92,8 @@ pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveLis
         }
         match gen_type {
             MoveGenType::Legal | MoveGenType::Evasions => true,
-            MoveGenType::Captures => !pos.is_empty(m.to()),
-            MoveGenType::Quiets => pos.is_empty(m.to()),
+            MoveGenType::Captures => pos.is_capture(*m),
+            MoveGenType::Quiets => pos.is_quiet(*m),
             MoveGenType::PseudoLegal => unreachable!(),
         }
     });
@@ -168,9 +119,8 @@ mod tests {
 
     #[test]
     fn test_king_moves() {
-        let mut pos = Position::new();
         // Setup King in the middle of palace (E0)
-        pos.set("4k4/4a4/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
         let count = count_moves(&pos, MoveGenType::Legal);
         // E0 has 4 directions: D0, F0, E1 (E-1 is offboard, so 3 legal moves)
         assert_eq!(count, 3);
@@ -191,7 +141,7 @@ mod tests {
         ));
 
         // Block with a friendly piece at E1
-        pos.set("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
         // Advisor is on E1. Advisor moves: FD0, FF0.
         // Let's generate moves for E0
         let mut moves = MoveList::new();
@@ -208,9 +158,8 @@ mod tests {
 
     #[test]
     fn test_advisor_moves() {
-        let mut pos = Position::new();
         // Setup Advisor at center of Palace (E1)
-        pos.set("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/4A4/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
@@ -226,7 +175,7 @@ mod tests {
         assert!(adv_moves.contains(&Move::new(Square::E1, Square::F2)));
 
         // Corner Advisor (D0)
-        pos.set("4k4/4a4/9/9/9/9/9/9/9/3AK4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/9/3AK4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let adv_moves: Vec<Move> = moves
@@ -241,9 +190,8 @@ mod tests {
 
     #[test]
     fn test_bishop_moves() {
-        let mut pos = Position::new();
         // Bishop (Elephant) at C0
-        pos.set("4k4/4a4/9/9/9/9/9/9/9/2B1K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/9/2B1K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
@@ -257,7 +205,7 @@ mod tests {
         assert!(bish_moves.contains(&Move::new(Square::C0, Square::E2)));
 
         // Block with a piece on the Elephant eye (D1)
-        pos.set("4k4/4a4/9/9/9/9/9/9/3p5/2B1K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/9/3p5/2B1K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let bish_moves: Vec<Move> = moves
@@ -272,9 +220,8 @@ mod tests {
 
     #[test]
     fn test_knight_moves() {
-        let mut pos = Position::new();
         // Knight at E2
-        pos.set("4k4/4a4/9/9/9/9/9/4H4/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/9/4H4/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
@@ -286,7 +233,7 @@ mod tests {
         assert_eq!(kn_moves.len(), 8);
 
         // Block with a piece on the Horse Leg (E3)
-        pos.set("4k4/4a4/9/9/9/9/4p4/4H4/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/4p4/4H4/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let kn_moves: Vec<Move> = moves
@@ -302,9 +249,8 @@ mod tests {
 
     #[test]
     fn test_pawn_moves() {
-        let mut pos = Position::new();
         // Unpromoted Pawn (C3)
-        pos.set("4k4/4a4/9/9/9/9/2P6/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/9/9/9/2P6/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
@@ -317,7 +263,7 @@ mod tests {
         assert!(pawn_moves.contains(&Move::new(Square::C3, Square::C4)));
 
         // Promoted Pawn (C6 - crossed river)
-        pos.set("4k4/4a4/9/2P6/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/2P6/9/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let pawn_moves: Vec<Move> = moves
@@ -334,9 +280,8 @@ mod tests {
 
     #[test]
     fn test_rook_moves() {
-        let mut pos = Position::new();
         // Rook at E5
-        pos.set("3k5/9/9/9/4R4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("3k5/9/9/9/4R4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -349,8 +294,7 @@ mod tests {
         assert_eq!(r_moves.len(), 16);
 
         // Friendly blocker at E6, opponent at E3
-        pos.set("4k4/4a4/9/4A4/4R4/9/4p4/9/9/4K4 w - - 0 1")
-            .unwrap();
+        let pos = Position::from_fen("4k4/4a4/9/4A4/4R4/9/4p4/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -371,9 +315,8 @@ mod tests {
 
     #[test]
     fn test_cannon_moves() {
-        let mut pos = Position::new();
         // Cannon at E5, empty board.
-        pos.set("3k5/9/9/9/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("3k5/9/9/9/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
@@ -385,7 +328,7 @@ mod tests {
         assert_eq!(c_moves.len(), 16);
 
         // Friendly screen at E6, opponent behind at E8
-        pos.set("3k5/4r4/9/4A4/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("3k5/4r4/9/4A4/4C4/9/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let c_moves: Vec<Move> = moves
@@ -405,9 +348,8 @@ mod tests {
 
     #[test]
     fn test_facing_kings() {
-        let mut pos = Position::new();
         // Kings facing each other on file E with only 1 friendly Rook in between (E3)
-        pos.set("4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/9/9/9/9/4R4/9/9/9/4K4 w - - 0 1").unwrap();
         let mut moves = MoveList::new();
         generate_moves(&pos, MoveGenType::Legal, &mut moves);
         let r_moves: Vec<Move> = moves
@@ -423,7 +365,7 @@ mod tests {
         }
     }
 
-    fn assert_positions_equal(a: &Position, b: &Position) {
+    fn assert_positions_equal(a: &mut Position, b: &mut Position) {
         use crate::core::types::{Piece, PieceType, Side};
         use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
@@ -470,17 +412,16 @@ mod tests {
         ];
 
         for fen in fens {
-            let mut pos = Position::new();
-            pos.set(fen).unwrap();
+            let mut pos = Position::from_fen(fen).unwrap();
 
             for gen_type in gen_types {
-                let pos_before = pos.clone();
+                let mut pos_before = pos.clone();
 
                 let mut moves = MoveList::new();
                 generate_moves(&pos, gen_type, &mut moves);
 
                 // Ensure calling generate_moves did not modify/corrupt the position in any way
-                assert_positions_equal(&pos, &pos_before);
+                assert_positions_equal(&mut pos, &mut pos_before);
             }
         }
     }

@@ -19,26 +19,34 @@ mod zobrist_table;
 /// allowing incremental undo_move restorations.
 #[derive(Clone, Copy, Debug)]
 pub struct StateInfo {
-    /// The exact move executed to reach this state.
-    pub last_move: Move,
+    /// The last move played to reach this state.
+    pub last_move: Option<Move>,
     /// The piece captured during this move, or `None` if it was quiet.
     pub captured_piece: Option<Piece>,
     /// The prior Zobrist position hash value before the move occurred.
-    pub old_zobrist: u64,
+    pub zobrist: u64,
     /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
     /// on captures/pawn moves).
-    pub rule60: u16,
-    /// Counter of plies since last irreversible move (capture or pawn push
-    /// forward).
-    pub rule_repetition: u16,
-    /// Whether each color [Red, Black] was in check in this position state.
-    pub in_check: [bool; Side::COUNT],
+    pub sixtymove_clock: u16,
+    /// Whether the side to move was in check in this position state.
+    pub in_check: bool,
     /// Precalculated incremental middlegame score (from Red's perspective)
     pub mg_score: Score,
     /// Precalculated incremental endgame score (from Red's perspective)
     pub eg_score: Score,
     /// Precalculated incremental game phase
     pub phase: i32,
+    /// Checker pieces checking the King of the side to move.
+    pub checkers: Bitboard,
+    /// Pinned pieces (blockers) for both sides' kings.
+    pub blockers_for_king: [Bitboard; Side::COUNT],
+    /// The slider pieces pinning other pieces for both sides' kings.
+    pub pinners: [Bitboard; Side::COUNT],
+    /// Check squares for each piece type of the side to move (against the
+    /// opponent king).
+    pub check_squares: [Bitboard; PieceType::COUNT],
+    /// Whether we need a full check validation.
+    pub need_full_check: bool,
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn
@@ -54,15 +62,13 @@ pub struct Position {
     bitboard_by_color: [Bitboard; Side::COUNT],
     /// Active count of each piece category on the board.
     piece_count: [u8; Piece::COUNT],
+    /// Current state of position
+    state: StateInfo,
     /// Stack tracking previous move parameter histories for undoing moves.
     history: Vec<StateInfo>,
     /// Total moves played in the game so far (Red = 0, Black = 1, Red's
     /// next = 2, etc.).
     game_ply: u16,
-    /// The player active to play next.
-    side_to_move: Side,
-    /// Current transposition hash of the board position.
-    zobrist_hash: u64,
     /// Palace coordinates of both players' Generals (Kings) for faster check
     /// detection.
     king_squares: [Square; Side::COUNT],
@@ -86,19 +92,7 @@ impl Position {
 
     /// Initializes the position to the standard starting position by default.
     pub fn new() -> Self {
-        let mut pos = Self {
-            board: [None; Square::COUNT],
-            bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
-            bitboard_by_color: [Bitboard::new(); Side::COUNT],
-            piece_count: [0; Piece::COUNT],
-            history: Vec::new(),
-            game_ply: 0,
-            side_to_move: Side::Red,
-            zobrist_hash: 0,
-            king_squares: [Square::E0, Square::E9],
-        };
-        pos.set(Self::START_FEN).unwrap();
-        pos
+        Self::from_fen(Self::START_FEN).expect("Failed to initialize starting position")
     }
 
     /// Get a position that is the start position
@@ -109,13 +103,13 @@ impl Position {
     /// Get the Zobrish Hash of the current position
     #[inline]
     pub fn zobrist_hash(&self) -> u64 {
-        self.zobrist_hash
+        self.state.zobrist
     }
 
     /// Get the current side to make a move
     #[inline]
     pub fn side_to_move(&self) -> Side {
-        self.side_to_move
+        Side::from_repr(self.game_ply as u8 & 1).unwrap()
     }
 
     /// Get the piece currently at [`square`]
@@ -160,6 +154,18 @@ impl Position {
         self.board[square as usize].is_none()
     }
 
+    /// Checks whether or not [`mv`] is a capture move.
+    #[inline]
+    pub fn is_capture(&self, mv: Move) -> bool {
+        !self.is_empty(mv.to())
+    }
+
+    /// Checks whether or not [`mv`] is a quiet move (no capture).
+    #[inline]
+    pub fn is_quiet(&self, mv: Move) -> bool {
+        self.is_empty(mv.to())
+    }
+
     /// Get the square where the king of side [`color`] is currently at
     #[inline]
     pub fn king_square(&self, color: Side) -> Square {
@@ -169,29 +175,46 @@ impl Position {
     /// Checks if the given player's King is currently in check.
     #[inline]
     pub fn is_in_check(&self, color: Side) -> bool {
-        self.is_square_attacked(self.king_square(color), color.opposite())
+        if color == self.side_to_move() {
+            self.state.in_check
+        } else {
+            self.is_square_attacked(self.king_square(color), color.opposite())
+        }
     }
 
-    /// Finds the last piece that was captured, or None if last move is not a
-    /// capture move
+    /// Returns the piece captured by the last move, or `None` if the last
+    /// move was quiet or no moves have been played.
     #[inline]
     pub fn last_captured_piece(&self) -> Option<Piece> {
-        self.history
-            .last()
-            .map(|s| s.captured_piece)
-            .unwrap_or(None)
+        self.history.last().and_then(|s| s.captured_piece)
     }
 
     /// Parses and initializes the position state from a standard FEN string.
-    pub fn set(&mut self, fen: &str) -> Result<(), PositionSetError> {
-        self.board = [None; Square::COUNT];
-        self.bitboard_by_type = [Bitboard::new(); PieceType::COUNT];
-        self.bitboard_by_color = [Bitboard::new(); Side::COUNT];
-        self.piece_count = [0; Piece::COUNT];
-        self.king_squares = [Square::E0, Square::E9];
-        self.history.clear();
-        self.game_ply = 0;
-        self.zobrist_hash = 0;
+    pub fn from_fen(fen: &str) -> Result<Self, PositionSetError> {
+        let mut pos = Position {
+            board: [None; Square::COUNT],
+            bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
+            bitboard_by_color: [Bitboard::new(); Side::COUNT],
+            piece_count: [0; Piece::COUNT],
+            state: StateInfo {
+                last_move: None,
+                captured_piece: None,
+                zobrist: 0,
+                sixtymove_clock: 0,
+                in_check: false,
+                mg_score: 0,
+                eg_score: 0,
+                phase: 0,
+                checkers: Bitboard::new(),
+                blockers_for_king: [Bitboard::new(); Side::COUNT],
+                pinners: [Bitboard::new(); Side::COUNT],
+                check_squares: [Bitboard::new(); PieceType::COUNT],
+                need_full_check: false,
+            },
+            history: Vec::new(),
+            game_ply: 0,
+            king_squares: [Square::E0, Square::E9],
+        };
 
         let tokens: Vec<&str> = fen.split_whitespace().collect();
         if tokens.is_empty() {
@@ -226,7 +249,7 @@ impl Position {
                     let file = File::from_repr(file_idx).unwrap();
                     let square = Square::from_file_rank(file, rank);
                     if let Some(piece) = Self::piece_from_char(c) {
-                        self.put_piece(square, Some(piece));
+                        pos.put_piece(square, Some(piece));
                     } else {
                         return Err(PositionSetError {
                             msg: format!("Unknown piece character: {}", c),
@@ -243,8 +266,8 @@ impl Position {
         }
 
         // 2. Parse side to move ('w' or 'b')
-        if tokens.len() > 1 {
-            self.side_to_move = match tokens[1] {
+        let side_to_move = if tokens.len() > 1 {
+            match tokens[1] {
                 "w" => Side::Red,
                 "b" => Side::Black,
                 _ => {
@@ -252,12 +275,13 @@ impl Position {
                         msg: format!("Invalid side to move: {}", tokens[1]),
                     });
                 }
-            };
-            if self.side_to_move == Side::Black {
-                self.zobrist_hash ^= ZOBRIST.side;
             }
         } else {
-            self.side_to_move = Side::Red;
+            Side::Red
+        };
+
+        if side_to_move == Side::Black {
+            pos.state.zobrist ^= ZOBRIST.side;
         }
 
         let mut rule60 = 0;
@@ -273,26 +297,14 @@ impl Position {
         {
             fullmove = fm;
         }
-        self.game_ply = (fullmove.saturating_sub(1) * 2) + (self.side_to_move as u16);
+        pos.game_ply = (fullmove.saturating_sub(1) * 2) + (side_to_move as u16);
 
-        let in_check = [self.is_in_check(Side::Red), self.is_in_check(Side::Black)];
+        pos.state.sixtymove_clock = rule60;
+        (pos.state.mg_score, pos.state.eg_score) = pos.compute_tapered_evaluation_scores();
+        pos.state.phase = pos.calculate_board_phase();
+        pos.set_check_info();
 
-        let (mg_score, eg_score) = self.compute_tapered_evaluation_scores();
-        let phase = self.calculate_board_phase();
-
-        self.history.push(StateInfo {
-            last_move: Move::NULL,
-            captured_piece: None,
-            old_zobrist: self.zobrist_hash,
-            rule60,
-            rule_repetition: 0,
-            in_check,
-            mg_score,
-            eg_score,
-            phase,
-        });
-
-        Ok(())
+        Ok(pos)
     }
 
     /// Prints a human-readable ASCII representation of the board state.
@@ -327,7 +339,7 @@ impl Position {
         }
         println!("  +---------------------------+");
         println!("    a  b  c  d  e  f  g  h  i");
-        println!("Side to move: {:?}", self.side_to_move);
+        println!("Side to move: {:?}", self.side_to_move());
     }
 }
 
@@ -341,10 +353,9 @@ mod tests {
 
     #[test]
     fn test_knight_leg_pin() {
-        let mut pos = Position::new();
         // Red King at E0, Red Advisor at F1, Black Knight at F2 (aligned to jump
         // onto E0)
-        pos.set("4k4/9/9/9/9/9/9/5h3/5A3/4K4 w - - 0 1").unwrap();
+        let pos = Position::from_fen("4k4/9/9/9/9/9/9/5h3/5A3/4K4 w - - 0 1").unwrap();
         // Since F1 blocks the Knight's jump, the Advisor is fully pinned and cannot
         // move away
         assert!(!pos.legal(Move::new(Square::F1, Square::E2)));
@@ -355,25 +366,22 @@ mod tests {
 
     #[test]
     fn test_rule_judge_insufficient_material() {
-        let mut pos = Position::new();
         // 1. Bare Kings
-        pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let mut pos = Position::from_fen("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
         assert_eq!(pos.rule_judge(0), Some(score::DRAW));
 
         // 2. Kings + Bishops & Advisors (no attacking pieces)
-        pos.set("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1")
-            .unwrap();
+        let mut pos = Position::from_fen("2b1kab2/9/9/9/9/9/9/9/9/2B1KAB2 w - - 0 1").unwrap();
         assert_eq!(pos.rule_judge(0), Some(score::DRAW));
 
         // 3. Kings + 1 Cannon, no Advisors/Bishops
-        pos.set("4k4/9/9/9/9/9/9/9/3C5/4K4 w - - 0 1").unwrap();
+        let mut pos = Position::from_fen("4k4/9/9/9/9/9/9/9/3C5/4K4 w - - 0 1").unwrap();
         assert_eq!(pos.rule_judge(0), Some(score::DRAW));
     }
 
     #[test]
     fn test_rule_judge_60_move_rule() {
-        let mut pos = Position::new();
-        pos.set("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
+        let mut pos = Position::from_fen("4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1").unwrap();
 
         // Play 120 plies of quiet King moves back and forth (60 full moves)
         let w_move1 = Move::new(Square::E0, Square::D0);
@@ -389,7 +397,7 @@ mod tests {
         }
 
         // rule60 counter should be exactly 120
-        assert_eq!(pos.history.last().unwrap().rule60, 120);
+        assert_eq!(pos.state.sixtymove_clock, 120);
         assert_eq!(pos.rule_judge(0), Some(score::DRAW));
     }
 
@@ -397,5 +405,206 @@ mod tests {
     fn test_print_board() {
         let pos = Position::new();
         pos.print_board();
+    }
+
+    #[test]
+    fn test_debug_gives_check() {
+        let fen = "CRH1k1e2/3ca4/4ea3/9/2hr5/9/9/4E4/4A4/4KA3 w - - 0 1";
+        let mut pos = Position::from_fen(fen).unwrap();
+
+        fn debug_helper(pos: &mut Position, depth: u32, history: &mut Vec<Move>) {
+            if depth == 0 {
+                return;
+            }
+            let mut moves = crate::core::MoveList::new();
+            crate::core::generate_moves(pos, crate::core::MoveGenType::Legal, &mut moves);
+
+            for &m in &moves {
+                let actual = pos.gives_check(m);
+                pos.do_move(m);
+                let expected = pos.is_in_check(pos.side_to_move());
+                if actual != expected {
+                    let us = pos.side_to_move();
+                    let them = us.opposite();
+                    let ksq = pos.king_square(them);
+                    println!("DEBUG INFO FOR MISMATCH:");
+                    println!("Move: {}", m);
+                    println!("Side to move: {:?}", us);
+                    println!("King square of opponent: {:?}", ksq);
+                    println!("Occupied bitboard:\n{}", pos.bitboard_occupied());
+                    println!(
+                        "Rook check squares:\n{}",
+                        pos.state.check_squares[PieceType::Rook as usize]
+                    );
+                    println!(
+                        "Cannon check squares:\n{}",
+                        pos.state.check_squares[PieceType::Cannon as usize]
+                    );
+                    pos.undo_move(m);
+                    pos.print_board();
+                    let history_strs: Vec<String> =
+                        history.iter().map(|mv| format!("{}", mv)).collect();
+                    panic!(
+                        "Mismatch for move {} with history {:?}:\nactual (gives_check): {}\nexpected (is_in_check): {}",
+                        m, history_strs, actual, expected
+                    );
+                }
+                history.push(m);
+                debug_helper(pos, depth - 1, history);
+                history.pop();
+                pos.undo_move(m);
+            }
+        }
+
+        let mut history = Vec::new();
+        debug_helper(&mut pos, 3, &mut history);
+    }
+
+    #[test]
+    fn verify_gives_check_and_legal_on_all_positions() {
+        let txt = include_str!("../../bin/perft_positions.txt");
+        let mut fens = Vec::new();
+        for segment in txt.split("---") {
+            let segment = segment.trim();
+            if segment.is_empty() {
+                continue;
+            }
+            for line in segment.lines() {
+                let line = line.trim();
+                if line.starts_with("fen:") {
+                    let fen = line.strip_prefix("fen:").unwrap().trim();
+                    fens.push(fen);
+                }
+            }
+        }
+
+        for (idx, fen) in fens.iter().enumerate() {
+            let mut pos = Position::from_fen(fen).unwrap();
+            let mut history = Vec::new();
+            verify_helper(&mut pos, 4, &mut history, fen, idx + 1);
+        }
+    }
+
+    fn verify_helper(
+        pos: &mut Position,
+        depth: u32,
+        history: &mut Vec<Move>,
+        initial_fen: &str,
+        pos_idx: usize,
+    ) {
+        if depth == 0 {
+            return;
+        }
+        let mut moves = crate::core::MoveList::new();
+        crate::core::generate_moves(pos, crate::core::MoveGenType::PseudoLegal, &mut moves);
+
+        for &m in &moves {
+            let actual_legal = pos.legal(m);
+
+            let us = pos.side_to_move();
+            let mut temp_pos = pos.clone();
+            temp_pos.do_move(m);
+            let expected_legal = !temp_pos.is_in_check(us);
+
+            if actual_legal != expected_legal {
+                println!("LEGALITY MISMATCH!");
+                println!("Initial FEN of Position {}: {}", pos_idx, initial_fen);
+                println!("Move: {}", m);
+                println!("History: {:?}", history);
+                println!(
+                    "actual_legal: {}, expected_legal: {}",
+                    actual_legal, expected_legal
+                );
+                pos.print_board();
+                panic!("Legality mismatch");
+            }
+
+            if actual_legal {
+                let actual_check = pos.gives_check(m);
+                let expected_check = temp_pos.is_in_check(temp_pos.side_to_move());
+
+                if actual_check != expected_check {
+                    println!("GIVES_CHECK MISMATCH!");
+                    println!("Initial FEN of Position {}: {}", pos_idx, initial_fen);
+                    println!("Move: {}", m);
+                    println!("History: {:?}", history);
+                    println!(
+                        "actual_check: {}, expected_check: {}",
+                        actual_check, expected_check
+                    );
+                    pos.print_board();
+                    panic!("Gives check mismatch");
+                }
+
+                history.push(m);
+                verify_helper(&mut temp_pos, depth - 1, history, initial_fen, pos_idx);
+                history.pop();
+            }
+        }
+    }
+
+    #[test]
+    fn test_regression_cannon_gives_check() {
+        // Reproduces gives_check mismatch on Cannon move (a9a8 checking King on e8
+        // through d8 blocker)
+        let fen = "CRH1k1e2/3ca4/4ea3/9/2hr5/9/9/4E4/4A4/4KA3 w - - 0 1";
+        let mut pos = Position::from_fen(fen).unwrap();
+
+        // Red plays c9e8 (Red Knight H captures Black Advisor on e8)
+        let m1 = Move::new(Square::C9, Square::E8);
+        assert!(pos.legal(m1));
+        pos.do_move(m1);
+
+        // Black plays e9e8 (Black King captures Red Knight on e8)
+        let m2 = Move::new(Square::E9, Square::E8);
+        assert!(pos.legal(m2));
+        pos.do_move(m2);
+
+        // Red plays a9a8 (Red Cannon a9 to a8, checking Black King e8 via Black Cannon
+        // d8)
+        let m3 = Move::new(Square::A9, Square::A8);
+        assert!(pos.legal(m3));
+        assert!(pos.gives_check(m3), "Cannon move a9a8 should give check");
+    }
+
+    #[test]
+    fn test_regression_knight_leg_pin_legality() {
+        // Reproduces Knight leg blocker pin: Red Cannon at e2 blocks the leg of Black
+        // Knight f2 jumping to d1. Moving Red Cannon e2 to a2 (or any
+        // non-blocking square) is illegal because it exposes the Red King d1 to check.
+        let fen = "4ka3/4a4/9/9/4H4/p8/9/4C3c/7h1/2EK5 w - - 0 1";
+        let mut pos = Position::from_fen(fen).unwrap();
+
+        // Setup the specific position by playing quiet/legal moves
+        // Red moves Red King from d0 to d1 (d0d1)
+        let m1 = Move::new(Square::D0, Square::D1);
+        pos.do_move(m1);
+
+        // Black moves Black Knight from h1 to f2 (h1f2)
+        let m2 = Move::new(Square::H1, Square::F2);
+        pos.do_move(m2);
+
+        // Red tries to move Red Cannon from e2 to a2 (e2a2)
+        let m3 = Move::new(Square::E2, Square::A2);
+        assert!(
+            !pos.legal(m3),
+            "e2a2 should be illegal because it unblocks Black Knight leg check"
+        );
+    }
+
+    #[test]
+    fn test_regression_cannon_pin_capture_legality() {
+        // Reproduces Cannon pin capture: Red Cannon at e2 pins Black Pawn at e5 and Red
+        // Pawn at e4. Black Pawn e5 captures Red Pawn e4. This is illegal
+        // because it leaves only 1 blocker (e4), exposing the Black King e9 to
+        // check by the Red Cannon e2.
+        let fen = "rheakaehr/9/1c5c1/p1p3p1p/4p4/4P4/P1P3P1P/4C2C1/9/RHEAKAEHR b - - 0 1";
+        let pos = Position::from_fen(fen).unwrap();
+
+        let m = Move::new(Square::E5, Square::E4);
+        assert!(
+            !pos.legal(m),
+            "e5e4 should be illegal because it leaves only 1 blocker under Cannon pin"
+        );
     }
 }

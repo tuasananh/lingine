@@ -13,9 +13,9 @@ impl super::Searcher<'_> {
     /// depth's score.
     ///
     /// See: https://www.chessprogramming.org/Iterative_Deepening
-    pub(super) fn iterative_deepening(mut self) -> Move {
+    pub(super) fn iterative_deepening(mut self) -> Option<Move> {
         let mut last_best_score = -score::INFINITY;
-        let mut last_best_move = Move::NULL;
+        let mut last_best_move = None;
 
         const ASPIRATION_WINDOW_THRESHOLD: i8 = 6;
         let max_depth = self.time_manager.max_depth();
@@ -40,13 +40,7 @@ impl super::Searcher<'_> {
             }
 
             last_best_score = score;
-            last_best_move = *self.pv_table.get_line(0).first().unwrap_or_else(|| {
-                eprintln!(
-                    "Warning: No best move found for depth {}. This should not happen.",
-                    depth
-                );
-                &Move::NULL
-            });
+            last_best_move = self.pv_table.get_line(0).first().copied();
 
             self.send_uci_info(depth, last_best_score);
 

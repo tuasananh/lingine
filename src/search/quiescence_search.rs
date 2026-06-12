@@ -1,5 +1,5 @@
 use crate::{
-    core::{Move, MoveGenType, MoveList, Score, generate_moves, score},
+    core::{MoveGenType, MoveList, Score, generate_moves, score},
     search::{Bound, Entry, MAX_PLY},
     tt_value,
 };
@@ -54,7 +54,7 @@ impl super::Searcher<'_> {
             }
         }
 
-        let mut best_move = Move::NULL;
+        let mut best_move = None;
 
         let tt_value = self
             .shared
@@ -93,16 +93,19 @@ impl super::Searcher<'_> {
         for m in moves {
             self.pos.do_move(m);
             let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
-            self.pos.undo_move();
+            self.pos.undo_move(m);
+
             if !self.shared.keep_running.get() {
                 return score::ZERO;
             }
+
             if score > best_score {
                 best_score = score;
-                best_move = m;
-            }
-            if best_score > alpha {
-                alpha = best_score;
+                best_move = Some(m);
+
+                if score > alpha {
+                    alpha = score;
+                }
             }
             if alpha >= beta {
                 // beta cutoff
@@ -110,20 +113,12 @@ impl super::Searcher<'_> {
             }
         }
 
-        if self.shared.keep_running.get() {
-            let flag = if best_score >= beta {
-                Bound::Beta
-            } else if best_score <= alpha_orig {
-                Bound::Alpha
-            } else {
-                Bound::Exact
-            };
-            self.shared.transposition_table.store(
-                self.pos.zobrist_hash(),
-                ply,
-                tt_value!(best_score, best_move, flag, depth),
-            );
-        }
+        let flag = Bound::with_score(best_score, alpha_orig, beta);
+        self.shared.transposition_table.store(
+            self.pos.zobrist_hash(),
+            ply,
+            tt_value!(best_score, best_move, flag, depth),
+        );
 
         best_score
     }

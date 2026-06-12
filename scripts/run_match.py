@@ -161,7 +161,7 @@ def main():
         cli_args += ["-debug"]
 
     if args.sprt:
-        cli_args.extend(["-sprt", args.sprt])
+        cli_args.extend(["-sprt"] + args.sprt.split())
 
     print("\n[3/3] Launching match tournament using sylvan-cli...")
     try:
