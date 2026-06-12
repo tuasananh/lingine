@@ -1,9 +1,8 @@
 use strum::EnumCount;
 
 use crate::core::{Position, Score, Side, Square};
-
 use crate::core::PieceType;
-use crate::eval::get_tapered_score;
+use crate::eval::{PackedScore, get_tapered_score};
 
 impl Position {
     /// Get the current evaluation score from the position, with the perspective
@@ -20,32 +19,29 @@ impl Position {
     /// Get the on-the-fly calculated tapered evaluation score
     #[inline]
     pub fn tapered_score(&self) -> Score {
-        get_tapered_score(self.state.mg_score, self.state.eg_score, self.state.phase)
+        get_tapered_score(self.state.score.mg, self.state.score.eg, self.state.phase)
     }
 
     /// Computes the complete tapered middlegame and endgame evaluation scores
     /// from scratch.
-    pub fn compute_tapered_evaluation_scores(&self) -> (Score, Score) {
-        let mut mg_score = 0;
-        let mut eg_score = 0;
+    pub fn compute_tapered_evaluation_scores(&self) -> PackedScore {
+        let mut score = PackedScore::ZERO;
         for sq_idx in 0..Square::COUNT {
-            let sq = Square::from_repr(sq_idx as u8).unwrap();
             if let Some(piece) = self.board[sq_idx] {
+                let sq = Square::from_repr(sq_idx as u8).unwrap();
                 let color = piece.color();
                 let val = crate::eval::piece_material_value_tapered(piece, sq);
                 let pst =
                     crate::eval::piece_square_table_value_tapered(piece.piece_type(), color, sq);
                 let piece_total = val + pst;
                 if color == Side::Red {
-                    mg_score += piece_total.mg;
-                    eg_score += piece_total.eg;
+                    score += piece_total;
                 } else {
-                    mg_score -= piece_total.mg;
-                    eg_score -= piece_total.eg;
+                    score -= piece_total;
                 }
             }
         }
-        (mg_score, eg_score)
+        score
     }
 
     /// Calculates the current phase from the active board pieces.
@@ -63,13 +59,13 @@ impl Position {
     /// Get the on-the-fly calculated incremental middlegame score.
     #[inline]
     pub fn mg_score(&self) -> Score {
-        self.state.mg_score
+        self.state.score.mg
     }
 
     /// Get the on-the-fly calculated incremental endgame score.
     #[inline]
     pub fn eg_score(&self) -> Score {
-        self.state.eg_score
+        self.state.score.eg
     }
 
     /// Get the on-the-fly calculated incremental game phase.

@@ -54,23 +54,27 @@ impl Position {
             self.board[from as usize].expect("Cannot do_move with no piece at the source square");
         let captured = self.board[to as usize];
 
-        let from_val = piece_material_value_tapered(piece, from);
-        let to_val = piece_material_value_tapered(piece, to);
-        let from_pst = piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
-        let to_pst = piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
+        let from_score = piece_material_value_tapered(piece, from)
+            + piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
+        let to_score = piece_material_value_tapered(piece, to)
+            + piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
+        let diff = to_score - from_score;
 
-        let sgn = piece.color().sign();
-
-        self.state.mg_score += sgn * (-from_val.mg - from_pst.mg + to_val.mg + to_pst.mg);
-        self.state.eg_score += sgn * (-from_val.eg - from_pst.eg + to_val.eg + to_pst.eg);
+        if piece.color() == Side::Red {
+            self.state.score += diff;
+        } else {
+            self.state.score -= diff;
+        }
 
         if let Some(cap) = captured {
-            let cap_val = piece_material_value_tapered(cap, to);
-            let cap_pst = piece_square_table_value_tapered(cap.piece_type(), cap.color(), to);
-            let sgn = cap.color().sign();
+            let cap_score = piece_material_value_tapered(cap, to)
+                + piece_square_table_value_tapered(cap.piece_type(), cap.color(), to);
 
-            self.state.mg_score -= sgn * (cap_val.mg + cap_pst.mg);
-            self.state.eg_score -= sgn * (cap_val.eg + cap_pst.eg);
+            if cap.color() == Side::Red {
+                self.state.score -= cap_score;
+            } else {
+                self.state.score += cap_score;
+            }
 
             self.state.phase -= piece_phase_weight(cap.piece_type());
         }
