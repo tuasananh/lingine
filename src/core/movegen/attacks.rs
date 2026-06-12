@@ -78,11 +78,14 @@ fn sliding_attacks<const ROOK: bool>(square: Square, occupied: Bitboard) -> Bitb
     let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
     let file_occ = gather_file_bits(occupied.raw(), f);
     let (rank_mask, file_mask) = if ROOK {
-        (RANK_TABLE[f].rook[rank_occ], FILE_TABLE[r].rook[file_occ])
+        (
+            RANK_TABLE[f].rook_slides[rank_occ],
+            FILE_TABLE[r].rook_slides[file_occ],
+        )
     } else {
         (
-            RANK_TABLE[f].cannon[rank_occ],
-            FILE_TABLE[r].cannon[file_occ],
+            RANK_TABLE[f].cannon_captures[rank_occ],
+            FILE_TABLE[r].cannon_captures[file_occ],
         )
     };
     let rank_bb = unsafe { Bitboard::from_raw((rank_mask as u128) << (r * 9)) };
