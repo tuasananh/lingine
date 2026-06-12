@@ -296,8 +296,8 @@ impl super::Position {
                 && self.piece_count(Piece::RedAdvisor) + self.piece_count(Piece::BlackAdvisor) == 0
             {
                 // Two cannons on the board, exactly one for each side (i.e. neither side has
-                // a second cannon or another major piece like a rook or knight), and no advisors
-                // left on the board. This matches Pikafish's draw evaluation.
+                // a second cannon or another major piece like a rook or knight), and no
+                // advisors left on the board.
                 if self.piece_count(Piece::RedBishop) + self.piece_count(Piece::BlackBishop) == 0 {
                     return Some(score::DRAW);
                 } else {

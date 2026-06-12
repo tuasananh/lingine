@@ -75,7 +75,8 @@ impl Position {
 
         // Update rule60 halfmove clock. In Xiangqi, unlike chess, pawn moves
         // (especially sideways pawn moves after crossing the river) are reversible
-        // and do not reset the 60-move rule counter. Thus, the clock only resets on captures.
+        // and do not reset the 60-move rule counter. Thus, the clock only resets on
+        // captures.
         self.state.sixtymove_clock = if captured.is_some() {
             0
         } else {
