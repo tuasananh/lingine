@@ -331,7 +331,7 @@ impl super::Position {
         let rule_repetition = self.state.sixtymove_clock;
         let rule_repetition_val = rule_repetition as usize;
         let n = self.history.len();
-        let max_back = rule_repetition_val.min(n);
+        let max_back = rule_repetition_val.min(n).min(self.state.plies_since_null as usize);
 
         // Repetitions must occur on the same side's turn, so we scan back in steps of 2
         // plies.

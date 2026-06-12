@@ -30,6 +30,7 @@ pub const MAX_DEPTH: usize = 64;
 #[derive(Copy, Clone, Debug, Default)]
 struct SearchContext {
     pub excluded_move: Option<Move>,
+    pub is_null_move_search: bool,
 }
 
 pub struct SharedContext<'a> {
@@ -61,6 +62,8 @@ pub struct Searcher<'a> {
     shared: SharedContext<'a>,
     /// The depth that the search finished at the moment.
     current_root_depth: i8,
+    /// Minimum ply for Null Move Pruning to prevent recursive pruning during verification searches
+    nmp_min_ply: u8,
 }
 
 impl<'a> Searcher<'a> {
@@ -89,6 +92,7 @@ impl<'a> Searcher<'a> {
             shared,
             current_root_depth: 0,
             pv_table: PrincipalVariationTable::new(),
+            nmp_min_ply: 0,
         };
 
         is_running.set(true);
@@ -198,6 +202,7 @@ mod tests {
                 history_moves: &mut history_moves,
             },
             current_root_depth: 0,
+            nmp_min_ply: 0,
         };
         ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false, false>(
@@ -267,6 +272,7 @@ mod tests {
                 history_moves: &mut history_moves,
             },
             current_root_depth: 0,
+            nmp_min_ply: 0,
         };
         ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false, false>(
@@ -277,5 +283,40 @@ mod tests {
             SearchContext::default(),
         );
         assert_eq!(score, score::mate_in(5));
+    }
+
+    #[test]
+    fn test_null_move_pruning() {
+        let pos = Position::new(); // starting position
+        let mut transposition_table = TranspositionTable::new(16);
+        let killers = KillerMoves::new();
+        let mut history_moves = HistoryMoves::default();
+        let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
+        let mut ctx = Searcher {
+            pv_table: PrincipalVariationTable::new(),
+            pos: pos.clone(),
+            nodes: 0,
+            time_manager,
+            killer_moves: killers,
+            max_ply: 0,
+            shared: SharedContext {
+                keep_running: Arc::new(RunningStatus::default()),
+                transposition_table: &mut transposition_table,
+                history_moves: &mut history_moves,
+            },
+            current_root_depth: 0,
+            nmp_min_ply: 0,
+        };
+        ctx.shared.keep_running.set(true);
+        let score = ctx.negamax::<false, false>(
+            5,
+            0,
+            -score::INFINITY,
+            score::INFINITY,
+            SearchContext::default(),
+        );
+        // Depth 5 search should find a score and execute nodes
+        assert!(ctx.nodes > 0);
+        assert!(score > -score::INFINITY && score < score::INFINITY);
     }
 }
