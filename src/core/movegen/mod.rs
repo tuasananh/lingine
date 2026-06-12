@@ -26,19 +26,18 @@ pub enum MoveGenType {
 }
 
 /// Generates all pseudo-legal moves in a single pass.
-fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveList) {
-    let us = if IS_RED { Side::Red } else { Side::Black };
+fn generate_pseudo_legal(side: Side, pos: &Position, moves: &mut MoveList) {
+    let us = side;
     let them = us.opposite();
     let us_pieces = pos.bitboard_by_color(us);
     let them_pieces = pos.bitboard_by_color(them);
     let occupied = pos.bitboard_occupied();
 
-    // Macro to eliminate the repetitive nested loops for leaper pieces
-    macro_rules! gen_leapers {
-        ($pieces:expr, |$from:ident| $targets:expr) => {
-            let mut pieces = $pieces;
+    macro_rules! gen_piece_moves {
+        ($type:expr, |$from:ident| $targets:expr) => {
+            let mut pieces = pos.bitboard_by_type($type) & us_pieces;
             while let Some($from) = pieces.pop_lsb() {
-                let mut targets = ($targets) & !us_pieces;
+                let mut targets = $targets;
                 while let Some(to_sq) = targets.pop_lsb() {
                     moves.push(Move::new($from, to_sq));
                 }
@@ -54,54 +53,35 @@ fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveLis
     }
 
     // 2. Leapers
-    gen_leapers!(
-        pos.bitboard_by_type(PieceType::Advisor) & us_pieces,
-        |from| advisor_attacks(from)
-    );
-    gen_leapers!(
-        pos.bitboard_by_type(PieceType::Bishop) & us_pieces,
-        |from| bishop_attacks(from, occupied)
-    );
-    gen_leapers!(
-        pos.bitboard_by_type(PieceType::Knight) & us_pieces,
-        |from| knight_attacks(from, occupied)
-    );
-    gen_leapers!(pos.bitboard_by_type(PieceType::Pawn) & us_pieces, |from| {
-        pawn_attacks(from, us)
+    gen_piece_moves!(PieceType::Advisor, |from| {
+        advisor_attacks(from) & !us_pieces
     });
-
-    // 3. Rooks
-    let mut rooks = pos.bitboard_by_type(PieceType::Rook) & us_pieces;
-    while let Some(from) = rooks.pop_lsb() {
-        let mut targets = rook_attacks(from, occupied) & !us_pieces;
-        while let Some(to_sq) = targets.pop_lsb() {
-            moves.push(Move::new(from, to_sq));
-        }
-    }
-
-    // 4. Cannons
-    let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
-    while let Some(from) = cannons.pop_lsb() {
+    gen_piece_moves!(PieceType::Bishop, |from| {
+        bishop_attacks(from, occupied) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Knight, |from| {
+        knight_attacks(from, occupied) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Pawn, |from| {
+        pawn_attacks(from, us) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Rook, |from| {
+        rook_attacks(from, occupied) & !us_pieces
+    });
+    gen_piece_moves!(PieceType::Cannon, |from| {
         // Cannon moves consist of:
         // - Quiet slides: Moves along empty squares, identical to Rook attacks but
         //   restricted to unoccupied squares (& !occupied).
         // - Leap captures: Captures along the rank/file that jump over exactly one
         //   piece (the screen) and land on an opponent piece (& them_pieces).
-        let mut targets = (rook_attacks(from, occupied) & !occupied)
-            | (cannon_captures(from, occupied) & them_pieces);
-        while let Some(to_sq) = targets.pop_lsb() {
-            moves.push(Move::new(from, to_sq));
-        }
-    }
+        (rook_attacks(from, occupied) & !occupied) | (cannon_captures(from, occupied) & them_pieces)
+    });
 }
 
 /// Generates moves of the specified type for the current position and appends
 /// them to the provided `moves` list.
 pub fn generate_moves(pos: &Position, gen_type: MoveGenType, moves: &mut MoveList) {
-    match pos.side_to_move() {
-        Side::Red => generate_pseudo_legal::<true>(pos, moves),
-        Side::Black => generate_pseudo_legal::<false>(pos, moves),
-    };
+    generate_pseudo_legal(pos.side_to_move(), pos, moves);
 
     if gen_type == MoveGenType::PseudoLegal {
         return;
