@@ -248,7 +248,7 @@ jobs:
 
     steps:
       - name: Download eval report artefact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: gauntlet-eval-${{ needs.gauntlet.outputs.sha }}
           path: eval-results
