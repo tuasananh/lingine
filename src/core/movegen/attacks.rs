@@ -110,14 +110,14 @@ pub fn cannon_captures(sq: Square, occ: Bitboard) -> Bitboard {
 /// Returns the full cannon attacks ray: all squares behind exactly one screen,
 /// up to and including the second piece.
 #[inline]
-pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+pub fn cannon_attack_ray(square: Square, occupied: Bitboard) -> Bitboard {
     let idx = square as usize;
     let f = idx % 9;
     let r = idx / 9;
     let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
     let file_occ = gather_file_bits(occupied.raw(), f);
-    let rank_mask = RANK_TABLE[f].cannon_attacks[rank_occ];
-    let file_mask = FILE_TABLE[r].cannon_attacks[file_occ];
+    let rank_mask = RANK_TABLE[f].cannon_attack_ray[rank_occ];
+    let file_mask = FILE_TABLE[r].cannon_attack_ray[file_occ];
     let rank_bb = unsafe { Bitboard::from_raw((rank_mask as u128) << (r * 9)) };
     rank_bb | FILE_ATTACKS_BY_MASK[f][file_mask as usize]
 }
@@ -176,8 +176,8 @@ mod tests {
     }
 
     #[test]
-    fn test_cannon_attacks() {
-        // Cannon quiet attacks are 0 on an empty board (cannon_attacks only computes
+    fn test_cannon_attack_ray() {
+        // Cannon quiet attacks are 0 on an empty board (cannon_captures only computes
         // leap captures)
         let empty = Bitboard::new();
         let att_cannon_a0 = cannon_captures(Square::A0, empty);
@@ -186,14 +186,21 @@ mod tests {
         // Cannon at A0, blocker (screen) at A2, and enemy at A5
         let occupied = unsafe { Bitboard::from_raw((1u128 << (2 * 9)) | (1u128 << (5 * 9))) };
         let att_cannon_blocked = cannon_captures(Square::A0, occupied);
-        // Upwards file leap capture target behind screen A2: A5.
+        assert_eq!(att_cannon_blocked.raw(), 1u128 << (5 * 9));
+
+        // Test the full cannon attack ray (behind exactly one screen)
+        let ray = cannon_attack_ray(Square::A0, occupied);
+        let mut expected_ray = 0u128;
+        expected_ray |= 1u128 << (3 * 9); // A3
+        expected_ray |= 1u128 << (4 * 9); // A4
+        expected_ray |= 1u128 << (5 * 9); // A5 (up to and including the target)
+        assert_eq!(ray.raw(), expected_ray);
 
         // General can move orthogonally inside Palace: D0, F0, E1
         let mut expected = 0u128;
         expected |= 1u128 << 3; // D0
         expected |= 1u128 << 5; // F0
         expected |= 1u128 << (9 + 4); // E1
-        assert_eq!(att_cannon_blocked.raw(), 1u128 << (5 * 9));
         assert_eq!(KING_ATTACKS[Square::E0 as usize].raw(), expected);
 
         // Advisor from center of Palace (E1)

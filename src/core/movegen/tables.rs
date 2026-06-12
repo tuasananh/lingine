@@ -16,7 +16,7 @@ pub struct RankEntry {
     /// it.
     pub cannon: [u16; 512],
     /// Full cannon attack paths including quiet/screened squares.
-    pub cannon_attacks: [u16; 512],
+    pub cannon_attack_ray: [u16; 512],
 }
 
 /// Vertical file attack masks for Rooks and Cannons, indexed by 10-bit
@@ -26,7 +26,7 @@ pub struct FileEntry {
     pub rook: [u16; 1024],
     pub cannon: [u16; 1024],
     /// Full cannon attack paths including quiet/screened squares.
-    pub cannon_attacks: [u16; 1024],
+    pub cannon_attack_ray: [u16; 1024],
 }
 
 // ============================================================================
@@ -217,7 +217,7 @@ const fn cannon_ray(pos: i32, len: i32, occ: u32) -> u32 {
 
 /// Builds a 1-D cannon attack mask: all squares behind exactly one screen,
 /// up to and including the second piece.
-const fn cannon_attacks_ray(pos: i32, len: i32, occ: u32) -> u32 {
+const fn cannon_attack_ray(pos: i32, len: i32, occ: u32) -> u32 {
     let mut mask = 0u32;
 
     let mut i = pos - 1;
@@ -257,7 +257,7 @@ const fn init_rank_table() -> [RankEntry; 9] {
     let mut table = [RankEntry {
         rook: [0; 512],
         cannon: [0; 512],
-        cannon_attacks: [0; 512],
+        cannon_attack_ray: [0; 512],
     }; 9];
     let mut f = 0i32;
     while f < 9 {
@@ -265,7 +265,7 @@ const fn init_rank_table() -> [RankEntry; 9] {
         while occ < 512 {
             table[f as usize].rook[occ as usize] = rook_ray(f, 9, occ) as u16;
             table[f as usize].cannon[occ as usize] = cannon_ray(f, 9, occ) as u16;
-            table[f as usize].cannon_attacks[occ as usize] = cannon_attacks_ray(f, 9, occ) as u16;
+            table[f as usize].cannon_attack_ray[occ as usize] = cannon_attack_ray(f, 9, occ) as u16;
             occ += 1;
         }
         f += 1;
@@ -277,7 +277,7 @@ const fn init_file_table() -> [FileEntry; 10] {
     let mut table = [FileEntry {
         rook: [0; 1024],
         cannon: [0; 1024],
-        cannon_attacks: [0; 1024],
+        cannon_attack_ray: [0; 1024],
     }; 10];
     let mut r = 0i32;
     while r < 10 {
@@ -285,7 +285,7 @@ const fn init_file_table() -> [FileEntry; 10] {
         while occ < 1024 {
             table[r as usize].rook[occ as usize] = rook_ray(r, 10, occ) as u16;
             table[r as usize].cannon[occ as usize] = cannon_ray(r, 10, occ) as u16;
-            table[r as usize].cannon_attacks[occ as usize] = cannon_attacks_ray(r, 10, occ) as u16;
+            table[r as usize].cannon_attack_ray[occ as usize] = cannon_attack_ray(r, 10, occ) as u16;
             occ += 1;
         }
         r += 1;

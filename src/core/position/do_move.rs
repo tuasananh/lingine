@@ -2,7 +2,7 @@ use strum::EnumCount;
 
 use crate::{
     core::{
-        BETWEEN_BB, Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_attacks,
+        BETWEEN_BB, Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_attack_ray,
         knight_attacks_to, pawn_attacks_to, position::ZOBRIST, rook_attacks,
     },
     eval::{piece_material_value_tapered, piece_phase_weight, piece_square_table_value_tapered},
@@ -177,7 +177,7 @@ impl Position {
 
         self.state.check_squares[PieceType::Pawn as usize] = pawn_attacks_to(ksq, us);
         self.state.check_squares[PieceType::Knight as usize] = knight_attacks_to(ksq, occupied);
-        self.state.check_squares[PieceType::Cannon as usize] = cannon_attacks(ksq, occupied);
+        self.state.check_squares[PieceType::Cannon as usize] = cannon_attack_ray(ksq, occupied);
         self.state.check_squares[PieceType::Rook as usize] = rook_attacks(ksq, occupied);
 
         self.state.check_squares[PieceType::King as usize] = Bitboard::new();

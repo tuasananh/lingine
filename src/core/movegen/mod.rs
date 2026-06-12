@@ -5,10 +5,7 @@ mod tables;
 pub use attacks::*;
 pub use tables::{BETWEEN_BB, RAY_PASS_BB};
 
-use crate::core::{
-    Move, PieceType, Position, Side, Square,
-    movegen::tables::{FILE_TABLE, RANK_TABLE},
-};
+use crate::core::{Move, PieceType, Position, Side};
 
 /// The maximum number of pseudo-legal moves in any given Xiangqi position
 /// (typically <= 120).
@@ -73,54 +70,26 @@ fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveLis
         pawn_attacks(from, us)
     });
 
-    // Macro to eliminate repetitive slider bit extraction
-    macro_rules! gen_sliders {
-        ($from:expr, $mask:expr, |$idx:ident| $to_sq_expr:expr) => {
-            let mut m = $mask;
-            while m != 0 {
-                let $idx = m.trailing_zeros() as usize;
-                m &= m - 1;
-                moves.push(Move::new(
-                    $from,
-                    Square::from_repr(($to_sq_expr) as u8).unwrap(),
-                ));
-            }
-        };
-    }
-
     // 3. Rooks
     let mut rooks = pos.bitboard_by_type(PieceType::Rook) & us_pieces;
     while let Some(from) = rooks.pop_lsb() {
-        let (f, r) = (from as usize % 9, from as usize / 9);
-
-        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
-        let us_rank = ((us_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
-        gen_sliders!(from, RANK_TABLE[f].rook[rank_occ] & !us_rank, |f_to| r * 9
-            + f_to);
-
-        let file_occ = gather_file_bits(occupied.raw(), f);
-        let us_file = gather_file_bits(us_pieces.raw(), f) as u16;
-        gen_sliders!(from, FILE_TABLE[r].rook[file_occ] & !us_file, |r_to| r_to
-            * 9
-            + f);
+        let mut targets = rook_attacks(from, occupied) & !us_pieces;
+        while let Some(to_sq) = targets.pop_lsb() {
+            moves.push(Move::new(from, to_sq));
+        }
     }
 
     // 4. Cannons
     let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
     while let Some(from) = cannons.pop_lsb() {
-        let (f, r) = (from as usize % 9, from as usize / 9);
-
-        let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
-        let them_rank = ((them_pieces.raw() >> (r * 9)) & 0x1FF) as u16;
-        let r_quiet = RANK_TABLE[f].rook[rank_occ] & !(rank_occ as u16);
-        let r_cap = RANK_TABLE[f].cannon[rank_occ] & them_rank;
-        gen_sliders!(from, r_quiet | r_cap, |f_to| r * 9 + f_to);
-
-        let file_occ = gather_file_bits(occupied.raw(), f);
-        let them_file = gather_file_bits(them_pieces.raw(), f) as u16;
-        let f_quiet = FILE_TABLE[r].rook[file_occ] & !(file_occ as u16);
-        let f_cap = FILE_TABLE[r].cannon[file_occ] & them_file;
-        gen_sliders!(from, f_quiet | f_cap, |r_to| r_to * 9 + f);
+        // Cannon moves consist of:
+        // - Quiet slides: Moves along empty squares, identical to Rook attacks but restricted to unoccupied squares (& !occupied).
+        // - Leap captures: Captures along the rank/file that jump over exactly one piece (the screen) and land on an opponent piece (& them_pieces).
+        let mut targets = (rook_attacks(from, occupied) & !occupied)
+            | (cannon_captures(from, occupied) & them_pieces);
+        while let Some(to_sq) = targets.pop_lsb() {
+            moves.push(Move::new(from, to_sq));
+        }
     }
 }
 
