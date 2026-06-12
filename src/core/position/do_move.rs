@@ -145,7 +145,7 @@ impl Position {
                     occupancy
                 };
             let count = b.count_ones();
-            if !b.is_empty() && ((!is_cannon && count == 1) || (is_cannon && count == 2)) {
+            if (!is_cannon && count == 1) || (is_cannon && count == 2) {
                 self.state.blockers_for_king[us as usize] |= b;
                 if !(b & self.bitboard_by_color(us)).is_empty() {
                     self.state.pinners[them as usize].set_bit(sniper_sq);
