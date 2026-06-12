@@ -1,10 +1,10 @@
-use strum::EnumCount;
-use crate::core::{Bitboard, File, Rank, Square};
-use super::types::{FileEntry, LeaperType, Magic, RankEntry};
 use super::helpers::{
     bishop_attacks, cannon_attack_ray, cannon_ray, knight_attacks, knight_to_attacks,
     palace_step_attacks, pawn_attacks_from, rook_ray, sparse_rand,
 };
+use super::types::{FileEntry, LeaperType, Magic, RankEntry};
+use crate::core::{Bitboard, File, Rank, Square};
+use strum::EnumCount;
 
 const RANK_STRIDE: i8 = File::COUNT as i8;
 

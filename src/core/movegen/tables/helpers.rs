@@ -1,5 +1,5 @@
-use strum::EnumCount;
 use crate::core::{File, Rank, Square};
+use strum::EnumCount;
 
 const RANK_STRIDE: i8 = File::COUNT as i8;
 
@@ -60,7 +60,8 @@ pub(crate) const fn pawn_attacks_from(f: i8, r: i8, forward_dr: i8, promoted: bo
 }
 
 /// Rook ray: slides outward from `pos` in both directions, stopping *at* the
-/// first occupied square (which can be captured, so it is included in the mask).
+/// first occupied square (which can be captured, so it is included in the
+/// mask).
 pub(crate) const fn rook_ray(pos: i8, len: i8, occ: u32) -> u32 {
     let mut mask = 0u32;
     // Slide left (toward square 0).
@@ -277,8 +278,8 @@ pub(crate) const fn bishop_attacks(from_sq: Square, occ: u128) -> u128 {
 ///
 /// For each of the 8 possible knight origins `(sq + ORIGINS[i])`:
 ///   - The leg toward `sq` is the one-step portion of the L-shape. Its
-///     direction is determined by whether `odr`/`odf` is large (|2|) or
-///     small (|1|).
+///     direction is determined by whether `odr`/`odf` is large (|2|) or small
+///     (|1|).
 ///   - If that leg square is empty, the origin is a valid attacker.
 pub(crate) const fn knight_to_attacks(sq: Square, occ: u128) -> u128 {
     let r = sq.rank() as i8;
