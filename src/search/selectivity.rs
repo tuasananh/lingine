@@ -76,8 +76,8 @@ impl super::Searcher<'_> {
             && depth >= LMR_DEPTH_THRESHOLD
             && self.pos.is_quiet(mv)
             && !self.pos.is_in_check(self.pos.side_to_move())
-            && !self.pos.gives_check(mv)
             && !self.killer_moves.contains(mv, ply)
+            && !self.pos.gives_check(mv)
         {
             let mut reductions = (LMR_BASE
                 + f32::from(moves_played).ln() * f32::from(depth).ln() / LMR_DIVISOR)
