@@ -44,14 +44,27 @@ impl super::Searcher<'_> {
         ply: u8,
         alpha: i32,
         beta: i32,
+        reductions: i8,
     ) -> i32 {
         let mut score = -self.negamax::<false, false>(
-            depth - 1,
+            depth - 1 - reductions,
             ply + 1,
             -alpha - 1,
             -alpha,
             Default::default(),
         );
+
+        // If the search fails and there was depth reduction, we re-search
+        // with the full depth to get a better picture of the position.
+        if alpha < score && reductions > 0 {
+            score = -self.negamax::<false, false>(
+                depth - 1,
+                ply + 1,
+                -alpha - 1,
+                -alpha,
+                Default::default(),
+            );
+        }
 
         // If the search fails, we need to re-search with the full window to get the
         // correct score and PV.

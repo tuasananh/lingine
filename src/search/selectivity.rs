@@ -1,5 +1,5 @@
 use crate::{
-    core::{Score, score},
+    core::{Move, Score, score},
     search::{Bound, Entry, SearchContext},
 };
 
@@ -54,6 +54,44 @@ impl super::Searcher<'_> {
             score < rbeta
         } else {
             false
+        }
+    }
+
+    #[inline]
+    pub(super) fn calculate_reductions<const PV: bool>(
+        &self,
+        mv: Move,
+        moves_played: u8,
+        depth: i8,
+        ply: u8,
+    ) -> i8 {
+        // The idea is that for later moves, they will probably be less promising,
+        // thus we reduce the depth that we search for this move.
+        const LMR_MOVES_PLAYED_THRESHOLD: u8 = 2;
+        const LMR_DEPTH_THRESHOLD: i8 = 3;
+        const LMR_BASE: f32 = 0.75;
+        const LMR_DIVISOR: f32 = 2.3;
+        const LMR_HISTORY_DIVISOR: i32 = 20000;
+        if moves_played >= LMR_MOVES_PLAYED_THRESHOLD
+            && depth >= LMR_DEPTH_THRESHOLD
+            && self.pos.is_quiet(mv)
+            && !self.pos.is_in_check(self.pos.side_to_move())
+            && !self.pos.gives_check(mv)
+            && !self.killer_moves.contains(mv, ply)
+        {
+            let mut reductions = (LMR_BASE
+                + f32::from(moves_played).ln() * f32::from(depth).ln() / LMR_DIVISOR)
+                as i8;
+            // We reduce reductions for promising quiet moves from history
+            reductions -= (self.shared.history_moves.get(self.pos.side_to_move(), mv)
+                / LMR_HISTORY_DIVISOR) as i8;
+
+            // We reduce PV nodes less
+            reductions -= i8::from(PV);
+
+            reductions.clamp(0, depth - 1)
+        } else {
+            0
         }
     }
 }

@@ -92,6 +92,7 @@ impl<'a> Searcher<'a> {
         is_running.set(true);
         let answer = search.iterative_deepening();
         is_running.set(false);
+
         answer
     }
 
@@ -144,8 +145,8 @@ const fn get_piece_value_rank(p: Piece) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{Position, score};
     use crate::core::{Move, Side, Square};
+    use crate::core::{Position, score};
     use crate::uci::GoParameters;
     use std::sync::Arc;
 

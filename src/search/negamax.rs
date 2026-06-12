@@ -107,6 +107,8 @@ impl super::Searcher<'_> {
                 continue;
             }
 
+            let reductions = self.calculate_reductions::<PV>(m, moves_played, depth, ply);
+
             self.pos.do_move(m);
             let score = if moves_played == 0 {
                 -self.negamax::<false, PV>(
@@ -117,7 +119,7 @@ impl super::Searcher<'_> {
                     SearchContext::default(),
                 )
             } else {
-                self.pv_search::<PV>(depth, ply, alpha, beta)
+                self.pv_search::<PV>(depth, ply, alpha, beta, reductions)
             };
             self.pos.undo_move(m);
             moves_played += 1;
