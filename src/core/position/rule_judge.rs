@@ -185,8 +185,7 @@ impl super::Position {
         let mut chase = [0xFFFFu16, 0xFFFFu16];
 
         for _ in 0..d {
-            let side_to_move_idx = self.side_to_move() as usize;
-            if self.state.in_check[side_to_move_idx] {
+            if self.state.in_check {
                 return score::DRAW; // Draw
             }
 
@@ -344,7 +343,6 @@ impl super::Position {
                 let mut them_perpetual_check = true;
 
                 let us = self.side_to_move();
-                let opponent = us.opposite();
 
                 // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
                 for j in (n - i)..n {
@@ -357,11 +355,11 @@ impl super::Position {
                     };
 
                     if player_who_moved == us {
-                        if !state_after.in_check[opponent as usize] {
+                        if !state_after.in_check {
                             us_perpetual_check = false;
                         }
                     } else {
-                        if !state_after.in_check[us as usize] {
+                        if !state_after.in_check {
                             them_perpetual_check = false;
                         }
                     }

@@ -28,8 +28,8 @@ pub struct StateInfo {
     /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
     /// on captures/pawn moves).
     pub sixtymove_clock: u16,
-    /// Whether each color [Red, Black] was in check in this position state.
-    pub in_check: [bool; Side::COUNT],
+    /// Whether the side to move was in check in this position state.
+    pub in_check: bool,
     /// Precalculated incremental middlegame score (from Red's perspective)
     pub mg_score: Score,
     /// Precalculated incremental endgame score (from Red's perspective)
@@ -175,7 +175,7 @@ impl Position {
     #[inline]
     pub fn is_in_check(&self, color: Side) -> bool {
         if color == self.side_to_move() {
-            self.state.in_check[color as usize]
+            self.state.in_check
         } else {
             self.is_square_attacked(self.king_square(color), color.opposite())
         }
@@ -203,7 +203,7 @@ impl Position {
                 captured_piece: None,
                 zobrist: 0,
                 sixtymove_clock: 0,
-                in_check: [false; Side::COUNT],
+                in_check: false,
                 mg_score: 0,
                 eg_score: 0,
                 phase: 0,

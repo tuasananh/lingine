@@ -168,8 +168,7 @@ impl Position {
         // checkers
         self.state.checkers = self.checkers_to(self.king_square(us), occupied, them);
 
-        self.state.in_check[us as usize] = !self.state.checkers.is_empty();
-        self.state.in_check[them as usize] = false;
+        self.state.in_check = !self.state.checkers.is_empty();
 
         self.state.need_full_check = !self.state.checkers.is_empty()
             || !(rook_attacks(self.king_square(us), Bitboard::new())
