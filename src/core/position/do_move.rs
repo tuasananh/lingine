@@ -2,8 +2,8 @@ use strum::EnumCount;
 
 use crate::{
     core::{
-        BETWEEN_BB, Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_attack_ray,
-        knight_attacks_to, pawn_attacks_to, position::ZOBRIST, rook_attacks,
+        Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_attack_ray,
+        knight_attacks_to, pawn_attacks_to, position::ZOBRIST, rook_attacks, squares_between,
     },
     eval::{piece_material_value_tapered, piece_phase_weight, piece_square_table_value_tapered},
 };
@@ -138,7 +138,7 @@ impl Position {
         while let Some(sniper_sq) = snipers.pop_lsb() {
             let is_cannon =
                 self.board[sniper_sq as usize].unwrap().piece_type() == PieceType::Cannon;
-            let b = BETWEEN_BB[ksq as usize][sniper_sq as usize]
+            let b = squares_between(ksq, sniper_sq)
                 & if is_cannon {
                     occupied ^ Bitboard::from(sniper_sq)
                 } else {
@@ -191,7 +191,7 @@ impl Position {
         if !hollow_cannons.is_empty() {
             let mut hollow_cannon_discover = Bitboard::new();
             while let Some(cannon_sq) = hollow_cannons.pop_lsb() {
-                hollow_cannon_discover |= BETWEEN_BB[cannon_sq as usize][ksq as usize];
+                hollow_cannon_discover |= squares_between(cannon_sq, ksq);
             }
             for pt in 0..PieceType::COUNT {
                 if pt != PieceType::King as usize {

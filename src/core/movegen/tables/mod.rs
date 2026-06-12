@@ -36,5 +36,5 @@ pub static BISHOP_MAGICS: [Magic<16>; Square::COUNT] =
 pub static KNIGHT_TO_MAGICS: [Magic<16>; Square::COUNT] =
     build_magics::<16, 4>(LeaperType::KnightTo, BISHOP_DIRS.0, BISHOP_DIRS.1);
 
-pub static BETWEEN_BB: [[Bitboard; Square::COUNT]; Square::COUNT] = init_between_bb();
-pub static RAY_PASS_BB: [[Bitboard; Square::COUNT]; Square::COUNT] = init_ray_pass_bb();
+pub static SQUARES_BETWEEN: [[Bitboard; Square::COUNT]; Square::COUNT] = init_squares_between();
+pub static SQUARES_BEYOND: [[Bitboard; Square::COUNT]; Square::COUNT] = init_squares_beyond();

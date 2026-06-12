@@ -3,12 +3,13 @@ use crate::core::{
     bitboard::Bitboard,
     movegen::tables::{
         ADVISOR_ATTACKS, BISHOP_MAGICS, FILE_ATTACKS_BY_MASK, FILE_TABLE, KING_ATTACKS,
-        KNIGHT_MAGICS, KNIGHT_TO_MAGICS, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
+        KNIGHT_MAGICS, KNIGHT_TO_MAGICS, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE, SQUARES_BETWEEN,
+        SQUARES_BEYOND,
     },
     types::Square,
 };
 
-/// Packs the 10 file bits (every 9th bit starting at `f`) into a contiguous
+/// Packers the 10 file bits (every 9th bit starting at `f`) into a contiguous
 /// 10-bit integer. Splits across two u64 halves to stay within 64-bit
 /// multiply range, using a magic multiplier to compress 5 spaced bits each.
 #[inline]
@@ -123,6 +124,21 @@ pub fn cannon_attack_ray(square: Square, occupied: Bitboard) -> Bitboard {
     let file_mask = FILE_TABLE[r].cannon_attack_ray[file_occ];
     let rank_bb = unsafe { Bitboard::from_raw((rank_mask as u128) << (r * 9)) };
     rank_bb | FILE_ATTACKS_BY_MASK[f][file_mask as usize]
+}
+
+/// Returns a bitboard containing the squares strictly between `from` and `to`
+/// on the same rank or file, plus `to` itself. For a knight move, includes
+/// `to` plus the leg square.
+#[inline]
+pub fn squares_between(from: Square, to: Square) -> Bitboard {
+    SQUARES_BETWEEN[from as usize][to as usize]
+}
+
+/// Returns a bitboard containing the squares from `to` extending away from
+/// `from` to the edge of the board, along the same rank or file.
+#[inline]
+pub fn squares_beyond(from: Square, to: Square) -> Bitboard {
+    SQUARES_BEYOND[from as usize][to as usize]
 }
 
 #[cfg(test)]

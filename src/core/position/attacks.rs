@@ -1,6 +1,6 @@
 use crate::core::{
     Bitboard, Move, PieceType, Position, Side, Square, cannon_captures, knight_attacks_to,
-    movegen::RAY_PASS_BB, pawn_attacks_to, rook_attacks,
+    movegen::squares_beyond, pawn_attacks_to, rook_attacks,
 };
 
 impl Position {
@@ -78,7 +78,7 @@ impl Position {
             && self.aligned(from, to, ksq)
         {
             if self.is_capture(m)
-                && !(RAY_PASS_BB[ksq as usize][from as usize] & Bitboard::from(to)).is_empty()
+                && !(squares_beyond(ksq, from) & Bitboard::from(to)).is_empty()
             {
                 return true;
             }

@@ -66,7 +66,7 @@ impl<const SIZE: usize> Magic<SIZE> {
 }
 
 /// Selects which attack function `build_magics` delegates to.
-pub(crate) enum LeaperType {
+pub(super) enum LeaperType {
     Knight,
     Bishop,
     /// Reverse-knight (squares that attack a given square). Shares Bishop's

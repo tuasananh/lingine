@@ -264,9 +264,9 @@ pub(crate) const fn build_magics<const SIZE: usize, const SHIFT: usize>(
     magics
 }
 
-/// `BETWEEN_BB[s1][s2]` is the set of squares strictly between `s1` and `s2`
+/// `SQUARES_BETWEEN[s1][s2]` is the set of squares strictly between `s1` and `s2`
 /// on the same rank or file, *plus* `s2` itself.
-pub(crate) const fn init_between_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+pub(crate) const fn init_squares_between() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
     let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
     let mut s1 = 0;
     while s1 < Square::COUNT {
@@ -323,9 +323,9 @@ pub(crate) const fn init_between_bb() -> [[Bitboard; Square::COUNT]; Square::COU
     table
 }
 
-/// `RAY_PASS_BB[s1][s2]` is the set of squares from `s2` extending *away*
+/// `SQUARES_BEYOND[s1][s2]` is the set of squares from `s2` extending *away*
 /// from `s1` to the edge of the board, along the same rank or file.
-pub(crate) const fn init_ray_pass_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+pub(crate) const fn init_squares_beyond() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
     let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
     let mut s1 = 0;
     while s1 < Square::COUNT {
