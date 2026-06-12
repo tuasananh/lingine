@@ -4,7 +4,7 @@ pub use piece_square_table::*;
 use crate::core::{Piece, Position, Score, Square};
 
 /// Stores the evaluation values for Middlegame (MG) and Endgame (EG)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct PackedScore {
     pub mg: i32,
     pub eg: i32,
@@ -246,13 +246,13 @@ mod tests {
                     pos.do_move(m);
 
                     // Compute scores & phase from scratch
-                    let (expected_mg, expected_eg) = pos.compute_tapered_evaluation_scores();
+                    let expected_score = pos.compute_tapered_evaluation_scores();
                     let expected_phase = pos.calculate_board_phase();
 
                     // Assert incremental score matches full board scan
                     assert_eq!(
                         pos.mg_score(),
-                        expected_mg,
+                        expected_score.mg,
                         "MG score mismatch for FEN {} move {}: {}",
                         idx,
                         m_idx,
@@ -260,7 +260,7 @@ mod tests {
                     );
                     assert_eq!(
                         pos.eg_score(),
-                        expected_eg,
+                        expected_score.eg,
                         "EG score mismatch for FEN {} move {}: {}",
                         idx,
                         m_idx,

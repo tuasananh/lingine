@@ -46,7 +46,7 @@ impl Position {
             // A non-king move is legal if the piece is not pinned (blocker) OR:
             // - it is not a Cannon, or it is a Cannon but not a capture move
             // - and the move is aligned with the King
-            if !self.state.blockers_for_king[us as usize].is_occupied(from)
+            if !self.state.blockers_for_king[us as usize].contains(from)
                 || ((pt != PieceType::Cannon || !self.is_capture(m))
                     && self.aligned(from, to, self.king_square(us)))
             {
@@ -74,18 +74,30 @@ impl Position {
 
         // Direct check?
         if pt == PieceType::Cannon
-            && self.state.check_squares[PieceType::Rook as usize].is_occupied(from)
+            // The space between the cannon and the king is empty
+            && self.state.check_squares[PieceType::Rook as usize].contains(from)
+            // The movement is aligned in the same rank or file
             && self.aligned(from, to, ksq)
         {
-            if self.is_capture(m) && !(squares_beyond(ksq, from) & Bitboard::from(to)).is_empty() {
+            // The move is a capture and the cannon is moving away from the king
+            // For example: (victim) .. X .. C .. K -> C .. X .. K -> Check!
+            if self.is_capture(m) && squares_beyond(ksq, from).contains(to) {
                 return true;
             }
-        } else if self.state.check_squares[pt as usize].is_occupied(to) {
+        } else if self.state.check_squares[pt as usize].contains(to) {
             return true;
         }
 
         // Discovered check?
-        if self.state.blockers_for_king[them as usize].is_occupied(from)
+        // The move can be a discovered check if:
+        // - The piece moved is a blocker
+        // - And, either:
+        //   - It moves out of the file/rank (this is obvious)
+        //   - It stays in the same file/rank, but it captures another piece. This is
+        //     because we can
+        //   have something like C .. B1 .. B2 .. K -> B1 captures B2 and then we have a
+        // check!
+        if self.state.blockers_for_king[them as usize].contains(from)
             && (!self.aligned(from, to, ksq) || self.is_capture(m))
         {
             return true;
@@ -111,22 +123,20 @@ impl Position {
         occupied: Bitboard,
         attacker: Side,
     ) -> Bitboard {
-        let opponent_pawns = self.bitboard_of(attacker, PieceType::Pawn);
-        let opponent_knights = self.bitboard_of(attacker, PieceType::Knight);
-        let opponent_rooks = self.bitboard_of(attacker, PieceType::Rook);
-        let opponent_cannons = self.bitboard_of(attacker, PieceType::Cannon);
-        let opponent_king = self.bitboard_of(attacker, PieceType::King);
+        let pawns = self.bitboard_by_type(PieceType::Pawn);
+        let knights = self.bitboard_by_type(PieceType::Knight);
+        let rooks = self.bitboard_by_type(PieceType::Rook);
+        let cannons = self.bitboard_by_type(PieceType::Cannon);
+        let king = self.bitboard_by_type(PieceType::King);
+        let pawn_attackers = pawn_attacks_to(square, attacker) & pawns;
+        let knight_attackers = knight_attacks_to(square, occupied) & knights;
+        // Intersect with Rooks AND the King: under the Flying General rule, two Kings
+        // facing each other on an open file counts as a check (treated as a
+        // Rook attack).
+        let rook_attackers = rook_attacks(square, occupied) & (rooks | king);
+        let cannon_attackers = cannon_captures(square, occupied) & cannons;
 
-        let pawn_attackers = pawn_attacks_to(square, attacker) & opponent_pawns;
-        let knight_attackers = knight_attacks_to(square, occupied) & opponent_knights;
-
-        // Intersect with attacker Rooks AND the attacker King: under the Flying General
-        // rule, two Kings facing each other on an open file counts as a check
-        // (treated as a Rook attack).
-        let rook_attackers = rook_attacks(square, occupied) & (opponent_rooks | opponent_king);
-
-        let cannon_attackers = cannon_captures(square, occupied) & opponent_cannons;
-
-        pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
+        (pawn_attackers | knight_attackers | rook_attackers | cannon_attackers)
+            & self.bitboard_by_color(attacker)
     }
 }

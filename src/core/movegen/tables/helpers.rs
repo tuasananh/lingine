@@ -128,7 +128,7 @@ pub(crate) const fn cannon_ray(pos: i8, len: i8, occ: u32) -> u32 {
 /// x-rays once a screen is present.
 ///
 /// Contrast with [`cannon_ray`] which only marks the capture target square.
-pub(crate) const fn cannon_attack_ray(pos: i8, len: i8, occ: u32) -> u32 {
+pub(crate) const fn cannon_beyond_attack(pos: i8, len: i8, occ: u32) -> u32 {
     let mut mask = 0u32;
 
     // Left side.

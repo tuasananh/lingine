@@ -2,10 +2,10 @@ use strum::EnumCount;
 use thiserror::Error;
 
 use crate::core::{
-    Score,
     bitboard::Bitboard,
     types::{File, Move, Piece, PieceType, Rank, Side, Square},
 };
+use crate::eval::PackedScore;
 
 use zobrist_table::*;
 mod attacks;
@@ -30,10 +30,8 @@ pub struct StateInfo {
     pub sixtymove_clock: u16,
     /// Whether the side to move was in check in this position state.
     pub in_check: bool,
-    /// Precalculated incremental middlegame score (from Red's perspective)
-    pub mg_score: Score,
-    /// Precalculated incremental endgame score (from Red's perspective)
-    pub eg_score: Score,
+    /// Precalculated incremental score (from Red's perspective)
+    pub score: PackedScore,
     /// Precalculated incremental game phase
     pub phase: i32,
     /// Checker pieces checking the King of the side to move.
@@ -202,8 +200,7 @@ impl Position {
                 zobrist: 0,
                 sixtymove_clock: 0,
                 in_check: false,
-                mg_score: 0,
-                eg_score: 0,
+                score: PackedScore::ZERO,
                 phase: 0,
                 checkers: Bitboard::new(),
                 blockers_for_king: [Bitboard::new(); Side::COUNT],
@@ -300,7 +297,7 @@ impl Position {
         pos.game_ply = (fullmove.saturating_sub(1) * 2) + (side_to_move as u16);
 
         pos.state.sixtymove_clock = rule60;
-        (pos.state.mg_score, pos.state.eg_score) = pos.compute_tapered_evaluation_scores();
+        pos.state.score = pos.compute_tapered_evaluation_scores();
         pos.state.phase = pos.calculate_board_phase();
         pos.set_check_info();
 

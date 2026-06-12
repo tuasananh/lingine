@@ -4,7 +4,7 @@ use crate::core::{
     movegen::tables::{
         ADVISOR_ATTACKS, BISHOP_MAGICS, FILE_ATTACKS_BY_MASK, FILE_TABLE, KING_ATTACKS,
         KNIGHT_MAGICS, KNIGHT_TO_MAGICS, PAWN_ATTACKS, PAWN_ATTACKS_TO, RANK_TABLE,
-        SQUARES_BETWEEN, SQUARES_BEYOND,
+        SQUARES_BETWEEN, SQUARES_BEYOND, SQUARES_IN_LINE,
     },
     types::Square,
 };
@@ -13,7 +13,7 @@ use crate::core::{
 /// 10-bit integer. Splits across two u64 halves to stay within 64-bit
 /// multiply range, using a magic multiplier to compress 5 spaced bits each.
 #[inline]
-pub fn gather_file_bits(bits: u128, f: usize) -> usize {
+pub const fn gather_file_bits(bits: u128, f: usize) -> usize {
     let occ = bits >> f;
     const STEP_MASK: u64 = 0x10_0804_0201;
     const MAGIC_MULTIPLIER: u64 = 0x1010101010;
@@ -72,7 +72,7 @@ pub fn knight_attacks_to(square: Square, occupied: Bitboard) -> Bitboard {
 }
 
 #[inline]
-fn sliding_attacks<const ROOK: bool>(square: Square, occupied: Bitboard) -> Bitboard {
+const fn sliding_attacks<const ROOK: bool>(square: Square, occupied: Bitboard) -> Bitboard {
     let idx = square as usize;
     let f = idx % 9;
     let r = idx / 9;
@@ -90,7 +90,7 @@ fn sliding_attacks<const ROOK: bool>(square: Square, occupied: Bitboard) -> Bitb
         )
     };
     let rank_bb = unsafe { Bitboard::from_raw((rank_mask as u128) << (r * 9)) };
-    rank_bb | FILE_ATTACKS_BY_MASK[f][file_mask as usize]
+    rank_bb.const_or(FILE_ATTACKS_BY_MASK[f][file_mask as usize])
 }
 
 /// Returns all squares reachable by a Rook from `square` given `occupied`:
@@ -98,7 +98,7 @@ fn sliding_attacks<const ROOK: bool>(square: Square, occupied: Bitboard) -> Bitb
 /// (inclusive). Includes both quiet and capture targets; does not filter
 /// friendly pieces.
 #[inline]
-pub fn rook_attacks(sq: Square, occ: Bitboard) -> Bitboard {
+pub const fn rook_attacks(sq: Square, occ: Bitboard) -> Bitboard {
     sliding_attacks::<true>(sq, occ)
 }
 
@@ -114,7 +114,7 @@ pub fn cannon_captures(sq: Square, occ: Bitboard) -> Bitboard {
 /// Returns the full cannon attacks ray: all squares behind exactly one screen,
 /// up to and including the second piece.
 #[inline]
-pub fn cannon_attack_ray(square: Square, occupied: Bitboard) -> Bitboard {
+pub const fn cannon_beyond_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let idx = square as usize;
     let f = idx % 9;
     let r = idx / 9;
@@ -123,7 +123,7 @@ pub fn cannon_attack_ray(square: Square, occupied: Bitboard) -> Bitboard {
     let rank_mask = RANK_TABLE[f].cannon_attack_ray[rank_occ];
     let file_mask = FILE_TABLE[r].cannon_attack_ray[file_occ];
     let rank_bb = unsafe { Bitboard::from_raw((rank_mask as u128) << (r * 9)) };
-    rank_bb | FILE_ATTACKS_BY_MASK[f][file_mask as usize]
+    rank_bb.const_or(FILE_ATTACKS_BY_MASK[f][file_mask as usize])
 }
 
 /// Returns a bitboard containing the squares strictly between `from` and `to`
@@ -139,6 +139,13 @@ pub fn squares_between(from: Square, to: Square) -> Bitboard {
 #[inline]
 pub fn squares_beyond(from: Square, to: Square) -> Bitboard {
     SQUARES_BEYOND[from as usize][to as usize]
+}
+
+/// Returns a bitboard containing the squares that `from` and `to`
+/// make a line
+#[inline]
+pub fn squares_in_line(from: Square, to: Square) -> Bitboard {
+    SQUARES_IN_LINE[from as usize][to as usize]
 }
 
 #[cfg(test)]
@@ -208,7 +215,7 @@ mod tests {
         assert_eq!(att_cannon_blocked.raw(), 1u128 << (5 * 9));
 
         // Test the full cannon attack ray (behind exactly one screen)
-        let ray = cannon_attack_ray(Square::A0, occupied);
+        let ray = cannon_beyond_attacks(Square::A0, occupied);
         let mut expected_ray = 0u128;
         expected_ray |= 1u128 << (3 * 9); // A3
         expected_ray |= 1u128 << (4 * 9); // A4
@@ -250,5 +257,37 @@ mod tests {
         let mut expected_blocked = 0u128;
         expected_blocked |= 1u128 << (2 * 9); // A2 is still valid
         assert_eq!(blocked_attacks.raw(), expected_blocked);
+    }
+
+    #[test]
+    fn test_squares_between_and_beyond() {
+        // Rook/Cannon path between A0 and A3
+        let between_a0_a3 = squares_between(Square::A0, Square::A3);
+        let mut expected_between = Bitboard::new();
+        expected_between.set_bit(Square::A1);
+        expected_between.set_bit(Square::A2);
+        expected_between.set_bit(Square::A3);
+        assert_eq!(between_a0_a3, expected_between);
+
+        // Knight path: King at D1 (sq1) and Knight at F2 (sq2)
+        // Leg should be E2
+        let between_d1_f2 = squares_between(Square::D1, Square::F2);
+        let mut expected_knight_leg = Bitboard::new();
+        expected_knight_leg.set_bit(Square::E2);
+        expected_knight_leg.set_bit(Square::F2);
+        assert_eq!(between_d1_f2, expected_knight_leg);
+
+        // squares_beyond: from A0 to A3, should extend from A3 away to the edge
+        // (A4..A9)
+        let beyond_a0_a3 = squares_beyond(Square::A0, Square::A3);
+        let mut expected_beyond = Bitboard::new();
+        expected_beyond.set_bit(Square::A3);
+        expected_beyond.set_bit(Square::A4);
+        expected_beyond.set_bit(Square::A5);
+        expected_beyond.set_bit(Square::A6);
+        expected_beyond.set_bit(Square::A7);
+        expected_beyond.set_bit(Square::A8);
+        expected_beyond.set_bit(Square::A9);
+        assert_eq!(beyond_a0_a3, expected_beyond);
     }
 }
