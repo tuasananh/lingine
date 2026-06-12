@@ -285,7 +285,8 @@ const fn init_file_table() -> [FileEntry; 10] {
         while occ < 1024 {
             table[r as usize].rook[occ as usize] = rook_ray(r, 10, occ) as u16;
             table[r as usize].cannon[occ as usize] = cannon_ray(r, 10, occ) as u16;
-            table[r as usize].cannon_attack_ray[occ as usize] = cannon_attack_ray(r, 10, occ) as u16;
+            table[r as usize].cannon_attack_ray[occ as usize] =
+                cannon_attack_ray(r, 10, occ) as u16;
             occ += 1;
         }
         r += 1;
@@ -596,13 +597,14 @@ const fn init_between_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
         let mut s2 = 0;
         while s2 < Square::COUNT {
             let mut bits = 1u128 << s2; // always include s2
-            
+
             let f1 = s1 % 9;
             let r1 = s1 / 9;
             let f2 = s2 % 9;
             let r2 = s2 / 9;
-            
-            if f1 == f2 { // same file
+
+            if f1 == f2 {
+                // same file
                 let min_r = if r1 < r2 { r1 } else { r2 };
                 let max_r = if r1 > r2 { r1 } else { r2 };
                 let mut r = min_r + 1;
@@ -610,7 +612,8 @@ const fn init_between_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
                     bits |= 1 << (r * 9 + f1);
                     r += 1;
                 }
-            } else if r1 == r2 { // same rank
+            } else if r1 == r2 {
+                // same rank
                 let min_f = if f1 < f2 { f1 } else { f2 };
                 let max_f = if f1 > f2 { f1 } else { f2 };
                 let mut f = min_f + 1;
@@ -623,12 +626,20 @@ const fn init_between_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
                 let dr = (r2 as i8 - r1 as i8).abs();
                 let df = (f2 as i8 - f1 as i8).abs();
                 if (dr == 2 && df == 1) || (dr == 1 && df == 2) {
-                    let leg_r = if dr == 2 { (r1 as i8 + r2 as i8) / 2 } else { r2 as i8 };
-                    let leg_f = if df == 2 { (f1 as i8 + f2 as i8) / 2 } else { f2 as i8 };
+                    let leg_r = if dr == 2 {
+                        (r1 as i8 + r2 as i8) / 2
+                    } else {
+                        r2 as i8
+                    };
+                    let leg_f = if df == 2 {
+                        (f1 as i8 + f2 as i8) / 2
+                    } else {
+                        f2 as i8
+                    };
                     bits |= 1 << (leg_r * 9 + leg_f);
                 }
             }
-            
+
             table[s1][s2] = unsafe { Bitboard::from_raw(bits) };
             s2 += 1;
         }
@@ -648,8 +659,9 @@ const fn init_ray_pass_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
             let f2 = s2 % 9;
             let r2 = s2 / 9;
             let mut bits = 0u128;
-            
-            if f1 == f2 { // same file
+
+            if f1 == f2 {
+                // same file
                 if r2 > r1 {
                     let mut r = r2;
                     while r < 10 {
@@ -660,11 +672,14 @@ const fn init_ray_pass_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
                     let mut r = r2;
                     loop {
                         bits |= 1 << (r * 9 + f1);
-                        if r == 0 { break; }
+                        if r == 0 {
+                            break;
+                        }
                         r -= 1;
                     }
                 }
-            } else if r1 == r2 { // same rank
+            } else if r1 == r2 {
+                // same rank
                 if f2 > f1 {
                     let mut f = f2;
                     while f < 9 {
@@ -675,12 +690,14 @@ const fn init_ray_pass_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
                     let mut f = f2;
                     loop {
                         bits |= 1 << (r1 * 9 + f);
-                        if f == 0 { break; }
+                        if f == 0 {
+                            break;
+                        }
                         f -= 1;
                     }
                 }
             }
-            
+
             if bits != 0 {
                 table[s1][s2] = unsafe { Bitboard::from_raw(bits) };
             }
@@ -693,4 +710,3 @@ const fn init_ray_pass_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
 
 pub static BETWEEN_BB: [[Bitboard; Square::COUNT]; Square::COUNT] = init_between_bb();
 pub static RAY_PASS_BB: [[Bitboard; Square::COUNT]; Square::COUNT] = init_ray_pass_bb();
-

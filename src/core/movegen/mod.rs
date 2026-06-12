@@ -83,8 +83,10 @@ fn generate_pseudo_legal<const IS_RED: bool>(pos: &Position, moves: &mut MoveLis
     let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & us_pieces;
     while let Some(from) = cannons.pop_lsb() {
         // Cannon moves consist of:
-        // - Quiet slides: Moves along empty squares, identical to Rook attacks but restricted to unoccupied squares (& !occupied).
-        // - Leap captures: Captures along the rank/file that jump over exactly one piece (the screen) and land on an opponent piece (& them_pieces).
+        // - Quiet slides: Moves along empty squares, identical to Rook attacks but
+        //   restricted to unoccupied squares (& !occupied).
+        // - Leap captures: Captures along the rank/file that jump over exactly one
+        //   piece (the screen) and land on an opponent piece (& them_pieces).
         let mut targets = (rook_attacks(from, occupied) & !occupied)
             | (cannon_captures(from, occupied) & them_pieces);
         while let Some(to_sq) = targets.pop_lsb() {

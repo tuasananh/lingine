@@ -154,7 +154,8 @@ impl Position {
         }
     }
 
-    /// Precalculate and store check-giving squares and blocker information for the current state.
+    /// Precalculate and store check-giving squares and blocker information for
+    /// the current state.
     pub(super) fn set_check_info(&mut self) {
         let us = self.side_to_move();
         let them = us.opposite();

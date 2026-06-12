@@ -157,7 +157,7 @@ impl TranspositionTable {
     const AGE_MASK: u8 = 0b111111; // 6 bits for age, allowing up to 64 iterations before wrap-around
     const AGE_CYCLE: u8 = Self::AGE_MASK + 1; // 64 iterations before age wraps around
 
-    pub fn incremente_age(&mut self) {
+    pub fn increment_age(&mut self) {
         self.age = (self.age + 1) & Self::AGE_MASK;
     }
 
@@ -197,9 +197,7 @@ impl TranspositionTable {
     /// Resets all transposition entries back to defaults.
     pub fn clear(&mut self) {
         self.age = 0;
-        for entry in self.table.iter_mut() {
-            *entry = None;
-        }
+        self.table.fill(None);
     }
 
     /// Probes the table for an entry matching the given Zobrist key.
@@ -257,12 +255,10 @@ impl TranspositionTable {
             return 0;
         }
         let sample_size = self.table.len().min(1000);
-        let mut filled = 0;
-        for i in 0..sample_size {
-            if self.table[i].is_some() {
-                filled += 1;
-            }
-        }
+        let filled = self.table[..sample_size]
+            .iter()
+            .filter(|e| e.is_some())
+            .count();
         (filled * 1000 / sample_size) as u32
     }
 }

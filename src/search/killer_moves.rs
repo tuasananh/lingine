@@ -20,7 +20,7 @@ impl KillerMoves {
     pub fn update(&mut self, mv: Move, ply: u8) {
         let ply_index = ply as usize;
 
-        if self.table[ply_index][0].is_none() || self.table[ply_index][0].unwrap() != mv {
+        if self.table[ply_index][0] != Some(mv) {
             self.table[ply_index][1] = self.table[ply_index][0];
             self.table[ply_index][0] = Some(mv);
         }

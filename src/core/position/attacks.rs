@@ -35,7 +35,8 @@ impl Position {
 
         let occupied = (self.bitboard_occupied() ^ Bitboard::from(from)) | Bitboard::from(to);
 
-        // If the moving piece is a King, check whether the destination square is attacked by opponent
+        // If the moving piece is a King, check whether the destination square is
+        // attacked by opponent
         if pt == PieceType::King {
             return self.checkers_to(to, occupied, us.opposite()).is_empty();
         }

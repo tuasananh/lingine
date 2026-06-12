@@ -42,14 +42,16 @@ pub struct SharedContext<'a> {
     pub keep_running: Arc<RunningStatus>,
 }
 
-/// Shared context parameters passed down the recursive search stack.
+/// Encapsulates all state needed for a single search invocation, including
+/// the board position, analytics counters, heuristic tables, and shared
+/// context like the transposition table and stop flag.
 pub struct Searcher<'a> {
     pos: Position,
     /// Tracks total nodes searched during this `go` invocation.
     nodes: u64,
     /// The time budget allocated for this search, if any.
     time_manager: TimeManager,
-    /// Absolute time budget allowed for this search ply.
+    /// Killer move table for ordering quiet moves that caused beta cutoffs.
     killer_moves: KillerMoves,
     /// The principal variation table, storing the best move found at each ply.
     pv_table: PrincipalVariationTable,
@@ -76,7 +78,7 @@ impl<'a> Searcher<'a> {
         shared.history_moves.decay();
 
         let is_running = shared.keep_running.clone();
-        shared.transposition_table.incremente_age();
+        shared.transposition_table.increment_age();
 
         let search = Searcher {
             pos,

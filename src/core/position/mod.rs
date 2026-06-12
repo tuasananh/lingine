@@ -42,7 +42,8 @@ pub struct StateInfo {
     pub blockers_for_king: [Bitboard; Side::COUNT],
     /// The slider pieces pinning other pieces for both sides' kings.
     pub pinners: [Bitboard; Side::COUNT],
-    /// Check squares for each piece type of the side to move (against the opponent king).
+    /// Check squares for each piece type of the side to move (against the
+    /// opponent king).
     pub check_squares: [Bitboard; PieceType::COUNT],
     /// Whether we need a full check validation.
     pub need_full_check: bool,
@@ -181,14 +182,11 @@ impl Position {
         }
     }
 
-    /// Finds the last piece that was captured, or None if last move is not a
-    /// capture move
+    /// Returns the piece captured by the last move, or `None` if the last
+    /// move was quiet or no moves have been played.
     #[inline]
     pub fn last_captured_piece(&self) -> Option<Piece> {
-        self.history
-            .last()
-            .map(|s| s.captured_piece)
-            .unwrap_or(None)
+        self.history.last().and_then(|s| s.captured_piece)
     }
 
     /// Parses and initializes the position state from a standard FEN string.
@@ -413,14 +411,14 @@ mod tests {
     fn test_debug_gives_check() {
         let fen = "CRH1k1e2/3ca4/4ea3/9/2hr5/9/9/4E4/4A4/4KA3 w - - 0 1";
         let mut pos = Position::from_fen(fen).unwrap();
-        
+
         fn debug_helper(pos: &mut Position, depth: u32, history: &mut Vec<Move>) {
             if depth == 0 {
                 return;
             }
             let mut moves = crate::core::MoveList::new();
             crate::core::generate_moves(pos, crate::core::MoveGenType::Legal, &mut moves);
-            
+
             for &m in &moves {
                 let actual = pos.gives_check(m);
                 pos.do_move(m);
@@ -434,11 +432,18 @@ mod tests {
                     println!("Side to move: {:?}", us);
                     println!("King square of opponent: {:?}", ksq);
                     println!("Occupied bitboard:\n{}", pos.bitboard_occupied());
-                    println!("Rook check squares:\n{}", pos.state.check_squares[PieceType::Rook as usize]);
-                    println!("Cannon check squares:\n{}", pos.state.check_squares[PieceType::Cannon as usize]);
+                    println!(
+                        "Rook check squares:\n{}",
+                        pos.state.check_squares[PieceType::Rook as usize]
+                    );
+                    println!(
+                        "Cannon check squares:\n{}",
+                        pos.state.check_squares[PieceType::Cannon as usize]
+                    );
                     pos.undo_move(m);
                     pos.print_board();
-                    let history_strs: Vec<String> = history.iter().map(|mv| format!("{}", mv)).collect();
+                    let history_strs: Vec<String> =
+                        history.iter().map(|mv| format!("{}", mv)).collect();
                     panic!(
                         "Mismatch for move {} with history {:?}:\nactual (gives_check): {}\nexpected (is_in_check): {}",
                         m, history_strs, actual, expected
@@ -450,7 +455,7 @@ mod tests {
                 pos.undo_move(m);
             }
         }
-        
+
         let mut history = Vec::new();
         debug_helper(&mut pos, 3, &mut history);
     }
@@ -480,7 +485,13 @@ mod tests {
         }
     }
 
-    fn verify_helper(pos: &mut Position, depth: u32, history: &mut Vec<Move>, initial_fen: &str, pos_idx: usize) {
+    fn verify_helper(
+        pos: &mut Position,
+        depth: u32,
+        history: &mut Vec<Move>,
+        initial_fen: &str,
+        pos_idx: usize,
+    ) {
         if depth == 0 {
             return;
         }
@@ -489,18 +500,21 @@ mod tests {
 
         for &m in &moves {
             let actual_legal = pos.legal(m);
-            
+
             let us = pos.side_to_move();
             let mut temp_pos = pos.clone();
             temp_pos.do_move(m);
             let expected_legal = !temp_pos.is_in_check(us);
-            
+
             if actual_legal != expected_legal {
                 println!("LEGALITY MISMATCH!");
                 println!("Initial FEN of Position {}: {}", pos_idx, initial_fen);
                 println!("Move: {}", m);
                 println!("History: {:?}", history);
-                println!("actual_legal: {}, expected_legal: {}", actual_legal, expected_legal);
+                println!(
+                    "actual_legal: {}, expected_legal: {}",
+                    actual_legal, expected_legal
+                );
                 pos.print_board();
                 panic!("Legality mismatch");
             }
@@ -508,17 +522,20 @@ mod tests {
             if actual_legal {
                 let actual_check = pos.gives_check(m);
                 let expected_check = temp_pos.is_in_check(temp_pos.side_to_move());
-                
+
                 if actual_check != expected_check {
                     println!("GIVES_CHECK MISMATCH!");
                     println!("Initial FEN of Position {}: {}", pos_idx, initial_fen);
                     println!("Move: {}", m);
                     println!("History: {:?}", history);
-                    println!("actual_check: {}, expected_check: {}", actual_check, expected_check);
+                    println!(
+                        "actual_check: {}, expected_check: {}",
+                        actual_check, expected_check
+                    );
                     pos.print_board();
                     panic!("Gives check mismatch");
                 }
-                
+
                 history.push(m);
                 verify_helper(&mut temp_pos, depth - 1, history, initial_fen, pos_idx);
                 history.pop();
@@ -528,21 +545,23 @@ mod tests {
 
     #[test]
     fn test_regression_cannon_gives_check() {
-        // Reproduces gives_check mismatch on Cannon move (a9a8 checking King on e8 through d8 blocker)
+        // Reproduces gives_check mismatch on Cannon move (a9a8 checking King on e8
+        // through d8 blocker)
         let fen = "CRH1k1e2/3ca4/4ea3/9/2hr5/9/9/4E4/4A4/4KA3 w - - 0 1";
         let mut pos = Position::from_fen(fen).unwrap();
-        
+
         // Red plays c9e8 (Red Knight H captures Black Advisor on e8)
         let m1 = Move::new(Square::C9, Square::E8);
         assert!(pos.legal(m1));
         pos.do_move(m1);
-        
+
         // Black plays e9e8 (Black King captures Red Knight on e8)
         let m2 = Move::new(Square::E9, Square::E8);
         assert!(pos.legal(m2));
         pos.do_move(m2);
-        
-        // Red plays a9a8 (Red Cannon a9 to a8, checking Black King e8 via Black Cannon d8)
+
+        // Red plays a9a8 (Red Cannon a9 to a8, checking Black King e8 via Black Cannon
+        // d8)
         let m3 = Move::new(Square::A9, Square::A8);
         assert!(pos.legal(m3));
         assert!(pos.gives_check(m3), "Cannon move a9a8 should give check");
@@ -550,36 +569,42 @@ mod tests {
 
     #[test]
     fn test_regression_knight_leg_pin_legality() {
-        // Reproduces Knight leg blocker pin: Red Cannon at e2 blocks the leg of Black Knight f2 jumping to d1.
-        // Moving Red Cannon e2 to a2 (or any non-blocking square) is illegal because it exposes the Red King d1 to check.
+        // Reproduces Knight leg blocker pin: Red Cannon at e2 blocks the leg of Black
+        // Knight f2 jumping to d1. Moving Red Cannon e2 to a2 (or any
+        // non-blocking square) is illegal because it exposes the Red King d1 to check.
         let fen = "4ka3/4a4/9/9/4H4/p8/9/4C3c/7h1/2EK5 w - - 0 1";
         let mut pos = Position::from_fen(fen).unwrap();
-        
+
         // Setup the specific position by playing quiet/legal moves
         // Red moves Red King from d0 to d1 (d0d1)
         let m1 = Move::new(Square::D0, Square::D1);
         pos.do_move(m1);
-        
+
         // Black moves Black Knight from h1 to f2 (h1f2)
         let m2 = Move::new(Square::H1, Square::F2);
         pos.do_move(m2);
-        
+
         // Red tries to move Red Cannon from e2 to a2 (e2a2)
         let m3 = Move::new(Square::E2, Square::A2);
-        assert!(!pos.legal(m3), "e2a2 should be illegal because it unblocks Black Knight leg check");
+        assert!(
+            !pos.legal(m3),
+            "e2a2 should be illegal because it unblocks Black Knight leg check"
+        );
     }
 
     #[test]
     fn test_regression_cannon_pin_capture_legality() {
-        // Reproduces Cannon pin capture: Red Cannon at e2 pins Black Pawn at e5 and Red Pawn at e4.
-        // Black Pawn e5 captures Red Pawn e4. This is illegal because it leaves only 1 blocker (e4),
-        // exposing the Black King e9 to check by the Red Cannon e2.
+        // Reproduces Cannon pin capture: Red Cannon at e2 pins Black Pawn at e5 and Red
+        // Pawn at e4. Black Pawn e5 captures Red Pawn e4. This is illegal
+        // because it leaves only 1 blocker (e4), exposing the Black King e9 to
+        // check by the Red Cannon e2.
         let fen = "rheakaehr/9/1c5c1/p1p3p1p/4p4/4P4/P1P3P1P/4C2C1/9/RHEAKAEHR b - - 0 1";
         let pos = Position::from_fen(fen).unwrap();
-        
+
         let m = Move::new(Square::E5, Square::E4);
-        assert!(!pos.legal(m), "e5e4 should be illegal because it leaves only 1 blocker under Cannon pin");
+        assert!(
+            !pos.legal(m),
+            "e5e4 should be illegal because it leaves only 1 blocker under Cannon pin"
+        );
     }
 }
-
-
