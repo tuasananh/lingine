@@ -264,8 +264,8 @@ pub(crate) const fn build_magics<const SIZE: usize, const SHIFT: usize>(
     magics
 }
 
-/// `SQUARES_BETWEEN[s1][s2]` is the set of squares strictly between `s1` and `s2`
-/// on the same rank or file, *plus* `s2` itself.
+/// `SQUARES_BETWEEN[s1][s2]` is the set of squares strictly between `s1` and
+/// `s2` on the same rank or file, *plus* `s2` itself.
 pub(crate) const fn init_squares_between() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
     let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
     let mut s1 = 0;

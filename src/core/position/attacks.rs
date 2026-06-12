@@ -77,9 +77,7 @@ impl Position {
             && self.state.check_squares[PieceType::Rook as usize].is_occupied(from)
             && self.aligned(from, to, ksq)
         {
-            if self.is_capture(m)
-                && !(squares_beyond(ksq, from) & Bitboard::from(to)).is_empty()
-            {
+            if self.is_capture(m) && !(squares_beyond(ksq, from) & Bitboard::from(to)).is_empty() {
                 return true;
             }
         } else if self.state.check_squares[pt as usize].is_occupied(to) {
