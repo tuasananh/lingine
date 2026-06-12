@@ -229,7 +229,7 @@ jobs:
       # ── 12. Upload artefacts ──────────────────────────────────────────────
       - name: Upload eval artefacts
         if: always() && steps.summary.outputs.report_path != ''
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: gauntlet-eval-${{ steps.commit.outputs.sha }}
           path: |
