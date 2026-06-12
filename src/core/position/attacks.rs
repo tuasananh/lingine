@@ -1,9 +1,27 @@
 use crate::core::{
-    Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_captures, knight_attacks_to,
-    pawn_attacks_to, rook_attacks,
+    Bitboard, Move, PieceType, Position, Side, Square, cannon_captures, knight_attacks_to,
+    movegen::RAY_PASS_BB, pawn_attacks_to, rook_attacks,
 };
 
 impl Position {
+    /// Helper to check if three squares are orthogonally aligned.
+    #[inline]
+    fn aligned(&self, s1: Square, s2: Square, s3: Square) -> bool {
+        let f1 = s1.file() as u8;
+        let f2 = s2.file() as u8;
+        let f3 = s3.file() as u8;
+        if f1 == f2 && f2 == f3 {
+            return true;
+        }
+        let r1 = s1.rank() as u8;
+        let r2 = s2.rank() as u8;
+        let r3 = s3.rank() as u8;
+        if r1 == r2 && r2 == r3 {
+            return true;
+        }
+        false
+    }
+
     /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is
     /// not left in check).
     #[inline]
@@ -13,24 +31,35 @@ impl Position {
         let to = m.to();
         let moved_piece =
             self.board[from as usize].expect("No piece at the source square for legality check");
+        let pt = moved_piece.piece_type();
 
-        let king_sq = if moved_piece.piece_type() == PieceType::King {
-            to
-        } else {
-            self.king_square(us)
-        };
+        let occupied = (self.bitboard_occupied() ^ Bitboard::from(from)) | Bitboard::from(to);
 
-        let mut occupied = self.bitboard_occupied();
-        occupied.clear_bit(from);
-        occupied.set_bit(to);
+        // If the moving piece is a King, check whether the destination square is attacked by opponent
+        if pt == PieceType::King {
+            return self.checkers_to(to, occupied, us.opposite()).is_empty();
+        }
 
-        self.checkers_to_after_move(king_sq, occupied, us.opposite(), from, to, moved_piece)
+        // If we don't need full check, the move is legal under the fast path:
+        if !self.state.need_full_check {
+            // A non-king move is legal if the piece is not pinned (blocker) OR:
+            // - it is not a Cannon, or it is a Cannon but not a capture move
+            // - and the move is aligned with the King
+            if !self.state.blockers_for_king[us as usize].is_occupied(from)
+                || ((pt != PieceType::Cannon || !self.is_capture(m))
+                    && self.aligned(from, to, self.king_square(us)))
+            {
+                return true;
+            }
+        }
+
+        // Otherwise, run the fallback check: King must not be attacked after the move
+        (self.checkers_to(self.king_square(us), occupied, us.opposite()) & !Bitboard::from(to))
             .is_empty()
     }
 
     /// Evaluates if playing the move `m` places the opponent's General in
-    /// check. Runs a simulation update of `occupied` bitboards and
-    /// calculates checkers pointing to the General.
+    /// check.
     #[inline]
     pub fn gives_check(&self, m: Move) -> bool {
         let us = self.side_to_move();
@@ -39,16 +68,31 @@ impl Position {
         let to = m.to();
         let moved_piece =
             self.board[from as usize].expect("No piece at the source square for gives_check");
-        let them_king_sq = self.king_square(them);
+        let pt = moved_piece.piece_type();
+        let ksq = self.king_square(them);
 
-        let mut occupied = self.bitboard_by_color[Side::Red as usize]
-            | self.bitboard_by_color[Side::Black as usize];
-        occupied.clear_bit(from);
-        occupied.set_bit(to);
+        // Direct check?
+        if pt == PieceType::Cannon
+            && self.state.check_squares[PieceType::Rook as usize].is_occupied(from)
+            && self.aligned(from, to, ksq)
+        {
+            if self.is_capture(m)
+                && !(RAY_PASS_BB[ksq as usize][from as usize] & Bitboard::from(to)).is_empty()
+            {
+                return true;
+            }
+        } else if self.state.check_squares[pt as usize].is_occupied(to) {
+            return true;
+        }
 
-        !self
-            .checkers_to_after_move(them_king_sq, occupied, us, from, to, moved_piece)
-            .is_empty()
+        // Discovered check?
+        if self.state.blockers_for_king[them as usize].is_occupied(from)
+            && (!self.aligned(from, to, ksq) || self.is_capture(m))
+        {
+            return true;
+        }
+
+        false
     }
 
     /// Checks whether a [`square`] is currently being attacked by [`attacker`]
@@ -57,27 +101,6 @@ impl Position {
         let occupied = self.bitboard_by_color[Side::Red as usize]
             | self.bitboard_by_color[Side::Black as usize];
         !self.checkers_to(square, occupied, attacker).is_empty()
-    }
-
-    /// Checks whether a [`square`] is currently being attacked by [`attacker`]
-    /// after doing a move
-    #[inline]
-    pub fn is_square_attacked_after_move(
-        &self,
-        square: Square,
-        attacker: Side,
-        from: Square,
-        to: Square,
-        moved_piece: Piece,
-    ) -> bool {
-        let mut occupied = self.bitboard_by_color[Side::Red as usize]
-            | self.bitboard_by_color[Side::Black as usize];
-        occupied.clear_bit(from);
-        occupied.set_bit(to);
-
-        !self
-            .checkers_to_after_move(square, occupied, attacker, from, to, moved_piece)
-            .is_empty()
     }
 
     /// Identifies all opponent pieces of `attacker` color that attack the
@@ -104,78 +127,6 @@ impl Position {
         let rook_attackers = rook_attacks(square, occupied) & (opponent_rooks | opponent_king);
 
         let cannon_attackers = cannon_captures(square, occupied) & opponent_cannons;
-
-        pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
-    }
-
-    /// Evaluates backward checkers attacking `square` after simulating a
-    /// specific piece move. Overrides positions without modifying active
-    /// board structures.
-    #[inline]
-    pub(super) fn checkers_to_after_move(
-        &self,
-        square: Square,
-        occupied: Bitboard,
-        attacker: Side,
-        from: Square,
-        to: Square,
-        moved_piece: Piece,
-    ) -> Bitboard {
-        let captured = self.board[to as usize];
-        let mut opponent_pawns = self.bitboard_of(attacker, PieceType::Pawn);
-        let mut opponent_knights = self.bitboard_of(attacker, PieceType::Knight);
-        let mut opponent_rooks = self.bitboard_of(attacker, PieceType::Rook);
-        let mut opponent_cannons = self.bitboard_of(attacker, PieceType::Cannon);
-        let mut opponent_king = self.bitboard_of(attacker, PieceType::King);
-
-        if let Some(captured) = captured
-            && captured.color() == attacker
-        {
-            let captured_pt = captured.piece_type();
-            match captured_pt {
-                PieceType::Pawn => opponent_pawns.clear_bit(to),
-                PieceType::Knight => opponent_knights.clear_bit(to),
-                PieceType::Rook => opponent_rooks.clear_bit(to),
-                PieceType::Cannon => opponent_cannons.clear_bit(to),
-                PieceType::King => opponent_king.clear_bit(to),
-                _ => {}
-            }
-        }
-
-        let moved_by_attacker = moved_piece.color() == attacker;
-        if moved_by_attacker {
-            let pt = moved_piece.piece_type();
-            match pt {
-                PieceType::Pawn => {
-                    opponent_pawns.clear_bit(from);
-                    opponent_pawns.set_bit(to);
-                }
-                PieceType::Knight => {
-                    opponent_knights.clear_bit(from);
-                    opponent_knights.set_bit(to);
-                }
-                PieceType::Rook => {
-                    opponent_rooks.clear_bit(from);
-                    opponent_rooks.set_bit(to);
-                }
-                PieceType::Cannon => {
-                    opponent_cannons.clear_bit(from);
-                    opponent_cannons.set_bit(to);
-                }
-                PieceType::King => {
-                    opponent_king.clear_bit(from);
-                    opponent_king.set_bit(to);
-                }
-                _ => {}
-            }
-        }
-
-        let pawn_attackers = pawn_attacks_to(square, attacker) & opponent_pawns;
-        let knight_attackers = knight_attacks_to(square, occupied) & opponent_knights;
-        let rook_atk = rook_attacks(square, occupied);
-        let rook_attackers = rook_atk & (opponent_rooks | opponent_king);
-        let cannon_atk = cannon_captures(square, occupied);
-        let cannon_attackers = cannon_atk & opponent_cannons;
 
         pawn_attackers | knight_attackers | rook_attackers | cannon_attackers
     }

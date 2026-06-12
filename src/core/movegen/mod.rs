@@ -3,6 +3,7 @@ use arrayvec::ArrayVec;
 mod attacks;
 mod tables;
 pub use attacks::*;
+pub use tables::{BETWEEN_BB, RAY_PASS_BB};
 
 use crate::core::{
     Move, PieceType, Position, Side, Square,

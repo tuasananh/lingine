@@ -15,6 +15,8 @@ pub struct RankEntry {
     /// Quiet moves skip to the first screen; captures land on the piece behind
     /// it.
     pub cannon: [u16; 512],
+    /// Full cannon attack paths including quiet/screened squares.
+    pub cannon_attacks: [u16; 512],
 }
 
 /// Vertical file attack masks for Rooks and Cannons, indexed by 10-bit
@@ -23,6 +25,8 @@ pub struct RankEntry {
 pub struct FileEntry {
     pub rook: [u16; 1024],
     pub cannon: [u16; 1024],
+    /// Full cannon attack paths including quiet/screened squares.
+    pub cannon_attacks: [u16; 1024],
 }
 
 // ============================================================================
@@ -211,10 +215,49 @@ const fn cannon_ray(pos: i32, len: i32, occ: u32) -> u32 {
     mask
 }
 
+/// Builds a 1-D cannon attack mask: all squares behind exactly one screen,
+/// up to and including the second piece.
+const fn cannon_attacks_ray(pos: i32, len: i32, occ: u32) -> u32 {
+    let mut mask = 0u32;
+
+    let mut i = pos - 1;
+    let mut screen = false;
+    while i >= 0 {
+        if screen {
+            mask |= 1 << i;
+        }
+        if (occ & (1 << i)) != 0 {
+            if screen {
+                break;
+            }
+            screen = true;
+        }
+        i -= 1;
+    }
+
+    let mut i = pos + 1;
+    let mut screen = false;
+    while i < len {
+        if screen {
+            mask |= 1 << i;
+        }
+        if (occ & (1 << i)) != 0 {
+            if screen {
+                break;
+            }
+            screen = true;
+        }
+        i += 1;
+    }
+
+    mask
+}
+
 const fn init_rank_table() -> [RankEntry; 9] {
     let mut table = [RankEntry {
         rook: [0; 512],
         cannon: [0; 512],
+        cannon_attacks: [0; 512],
     }; 9];
     let mut f = 0i32;
     while f < 9 {
@@ -222,6 +265,7 @@ const fn init_rank_table() -> [RankEntry; 9] {
         while occ < 512 {
             table[f as usize].rook[occ as usize] = rook_ray(f, 9, occ) as u16;
             table[f as usize].cannon[occ as usize] = cannon_ray(f, 9, occ) as u16;
+            table[f as usize].cannon_attacks[occ as usize] = cannon_attacks_ray(f, 9, occ) as u16;
             occ += 1;
         }
         f += 1;
@@ -233,6 +277,7 @@ const fn init_file_table() -> [FileEntry; 10] {
     let mut table = [FileEntry {
         rook: [0; 1024],
         cannon: [0; 1024],
+        cannon_attacks: [0; 1024],
     }; 10];
     let mut r = 0i32;
     while r < 10 {
@@ -240,6 +285,7 @@ const fn init_file_table() -> [FileEntry; 10] {
         while occ < 1024 {
             table[r as usize].rook[occ as usize] = rook_ray(r, 10, occ) as u16;
             table[r as usize].cannon[occ as usize] = cannon_ray(r, 10, occ) as u16;
+            table[r as usize].cannon_attacks[occ as usize] = cannon_attacks_ray(r, 10, occ) as u16;
             occ += 1;
         }
         r += 1;
@@ -542,3 +588,109 @@ pub static BISHOP_MAGICS: [Magic<16>; Square::COUNT] =
 /// Backward knight attacks share the bishop's blocking-square offsets.
 pub static KNIGHT_TO_MAGICS: [Magic<16>; Square::COUNT] =
     build_magics::<16, 4>(LeaperType::KnightTo, BISHOP_DIRS.0, BISHOP_DIRS.1);
+
+const fn init_between_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+    let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
+    let mut s1 = 0;
+    while s1 < Square::COUNT {
+        let mut s2 = 0;
+        while s2 < Square::COUNT {
+            let mut bits = 1u128 << s2; // always include s2
+            
+            let f1 = s1 % 9;
+            let r1 = s1 / 9;
+            let f2 = s2 % 9;
+            let r2 = s2 / 9;
+            
+            if f1 == f2 { // same file
+                let min_r = if r1 < r2 { r1 } else { r2 };
+                let max_r = if r1 > r2 { r1 } else { r2 };
+                let mut r = min_r + 1;
+                while r < max_r {
+                    bits |= 1 << (r * 9 + f1);
+                    r += 1;
+                }
+            } else if r1 == r2 { // same rank
+                let min_f = if f1 < f2 { f1 } else { f2 };
+                let max_f = if f1 > f2 { f1 } else { f2 };
+                let mut f = min_f + 1;
+                while f < max_f {
+                    bits |= 1 << (r1 * 9 + f);
+                    f += 1;
+                }
+            } else {
+                // Check if knight move
+                let dr = (r2 as i8 - r1 as i8).abs();
+                let df = (f2 as i8 - f1 as i8).abs();
+                if (dr == 2 && df == 1) || (dr == 1 && df == 2) {
+                    let leg_r = if dr == 2 { (r1 as i8 + r2 as i8) / 2 } else { r2 as i8 };
+                    let leg_f = if df == 2 { (f1 as i8 + f2 as i8) / 2 } else { f2 as i8 };
+                    bits |= 1 << (leg_r * 9 + leg_f);
+                }
+            }
+            
+            table[s1][s2] = unsafe { Bitboard::from_raw(bits) };
+            s2 += 1;
+        }
+        s1 += 1;
+    }
+    table
+}
+
+const fn init_ray_pass_bb() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+    let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
+    let mut s1 = 0;
+    while s1 < Square::COUNT {
+        let mut s2 = 0;
+        while s2 < Square::COUNT {
+            let f1 = s1 % 9;
+            let r1 = s1 / 9;
+            let f2 = s2 % 9;
+            let r2 = s2 / 9;
+            let mut bits = 0u128;
+            
+            if f1 == f2 { // same file
+                if r2 > r1 {
+                    let mut r = r2;
+                    while r < 10 {
+                        bits |= 1 << (r * 9 + f1);
+                        r += 1;
+                    }
+                } else if r2 < r1 {
+                    let mut r = r2;
+                    loop {
+                        bits |= 1 << (r * 9 + f1);
+                        if r == 0 { break; }
+                        r -= 1;
+                    }
+                }
+            } else if r1 == r2 { // same rank
+                if f2 > f1 {
+                    let mut f = f2;
+                    while f < 9 {
+                        bits |= 1 << (r1 * 9 + f);
+                        f += 1;
+                    }
+                } else if f2 < f1 {
+                    let mut f = f2;
+                    loop {
+                        bits |= 1 << (r1 * 9 + f);
+                        if f == 0 { break; }
+                        f -= 1;
+                    }
+                }
+            }
+            
+            if bits != 0 {
+                table[s1][s2] = unsafe { Bitboard::from_raw(bits) };
+            }
+            s2 += 1;
+        }
+        s1 += 1;
+    }
+    table
+}
+
+pub static BETWEEN_BB: [[Bitboard; Square::COUNT]; Square::COUNT] = init_between_bb();
+pub static RAY_PASS_BB: [[Bitboard; Square::COUNT]; Square::COUNT] = init_ray_pass_bb();
+

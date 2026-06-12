@@ -107,6 +107,21 @@ pub fn cannon_captures(sq: Square, occ: Bitboard) -> Bitboard {
     sliding_attacks::<false>(sq, occ)
 }
 
+/// Returns the full cannon attacks ray: all squares behind exactly one screen,
+/// up to and including the second piece.
+#[inline]
+pub fn cannon_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+    let idx = square as usize;
+    let f = idx % 9;
+    let r = idx / 9;
+    let rank_occ = ((occupied.raw() >> (r * 9)) & 0x1FF) as usize;
+    let file_occ = gather_file_bits(occupied.raw(), f);
+    let rank_mask = RANK_TABLE[f].cannon_attacks[rank_occ];
+    let file_mask = FILE_TABLE[r].cannon_attacks[file_occ];
+    let rank_bb = unsafe { Bitboard::from_raw((rank_mask as u128) << (r * 9)) };
+    rank_bb | FILE_ATTACKS_BY_MASK[f][file_mask as usize]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
