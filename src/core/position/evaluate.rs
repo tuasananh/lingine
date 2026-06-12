@@ -1,7 +1,7 @@
 use strum::EnumCount;
 
-use crate::core::{Position, Score, Side, Square};
 use crate::core::PieceType;
+use crate::core::{Position, Score, Side, Square};
 use crate::eval::{PackedScore, get_tapered_score};
 
 impl Position {

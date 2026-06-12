@@ -93,8 +93,10 @@ impl Position {
         // - The piece moved is a blocker
         // - And, either:
         //   - It moves out of the file/rank (this is obvious)
-        //   - It stays in the same file/rank, but it captures another piece. This is because we can
-        //   have something like C .. B1 .. B2 .. K -> B1 captures B2 and then we have a check!
+        //   - It stays in the same file/rank, but it captures another piece. This is
+        //     because we can
+        //   have something like C .. B1 .. B2 .. K -> B1 captures B2 and then we have a
+        // check!
         if self.state.blockers_for_king[them as usize].contains(from)
             && (!self.aligned(from, to, ksq) || self.is_capture(m))
         {
@@ -128,8 +130,9 @@ impl Position {
         let king = self.bitboard_by_type(PieceType::King);
         let pawn_attackers = pawn_attacks_to(square, attacker) & pawns;
         let knight_attackers = knight_attacks_to(square, occupied) & knights;
-        // Intersect with Rooks AND the King: under the Flying General rule, two Kings facing each other on an open file counts as a check
-        // (treated as a Rook attack).
+        // Intersect with Rooks AND the King: under the Flying General rule, two Kings
+        // facing each other on an open file counts as a check (treated as a
+        // Rook attack).
         let rook_attackers = rook_attacks(square, occupied) & (rooks | king);
         let cannon_attackers = cannon_captures(square, occupied) & cannons;
 

@@ -277,7 +277,8 @@ mod tests {
         expected_knight_leg.set_bit(Square::F2);
         assert_eq!(between_d1_f2, expected_knight_leg);
 
-        // squares_beyond: from A0 to A3, should extend from A3 away to the edge (A4..A9)
+        // squares_beyond: from A0 to A3, should extend from A3 away to the edge
+        // (A4..A9)
         let beyond_a0_a3 = squares_beyond(Square::A0, Square::A3);
         let mut expected_beyond = Bitboard::new();
         expected_beyond.set_bit(Square::A3);
