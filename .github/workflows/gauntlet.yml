@@ -221,7 +221,7 @@ jobs:
       # ── 11. PR comment ────────────────────────────────────────────────────
       - name: Post report as PR comment
         if: github.event_name == 'pull_request' && steps.summary.outputs.report_path != ''
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: gauntlet-eval
           path: ${{ steps.summary.outputs.report_path }}
