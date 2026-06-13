@@ -1,7 +1,17 @@
-mod piece_square_table;
-pub use piece_square_table::*;
+mod mobility_tables;
+mod piece_square_tables;
+pub use mobility_tables::*;
+pub use piece_square_tables::*;
 
-use crate::core::{PackedScore, Piece, Position, Score, Square};
+use crate::core::{PackedScore, Piece, PieceType, Position, Score, Square};
+
+macro_rules! packed {
+    ($( ($x:expr, $y:expr) ),* $(,)?) => {
+        [$(PackedScore::new($x, $y)),*]
+    };
+}
+
+pub(in crate::eval) use packed;
 
 // Phase Constants (32-Point Model)
 pub const PHASE_ROOK: i32 = 2; // Chariot
@@ -74,13 +84,13 @@ pub fn calculate_phase(
 #[inline]
 pub const fn piece_phase_weight(pt: crate::core::PieceType) -> i32 {
     match pt {
-        crate::core::PieceType::Rook => PHASE_ROOK,
-        crate::core::PieceType::Cannon => PHASE_CANNON,
-        crate::core::PieceType::Knight => PHASE_KNIGHT,
-        crate::core::PieceType::Advisor => PHASE_ADVISOR,
-        crate::core::PieceType::Bishop => PHASE_BISHOP,
-        crate::core::PieceType::Pawn => PHASE_PAWN,
-        crate::core::PieceType::King => PHASE_KING,
+        PieceType::Rook => PHASE_ROOK,
+        PieceType::Cannon => PHASE_CANNON,
+        PieceType::Knight => PHASE_KNIGHT,
+        PieceType::Advisor => PHASE_ADVISOR,
+        PieceType::Bishop => PHASE_BISHOP,
+        PieceType::Pawn => PHASE_PAWN,
+        PieceType::King => PHASE_KING,
     }
 }
 

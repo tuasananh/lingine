@@ -17,10 +17,12 @@ impl Position {
         }
     }
 
-    /// Get the on-the-fly calculated tapered evaluation score
+    /// Get the on-the-fly calculated incremental tapered evaluation score
     #[inline]
     pub fn tapered_score(&self) -> Score {
-        get_tapered_score(self.state.score, self.state.phase)
+        let base_score = self.state.score;
+        let mobility_score = crate::eval::compute_mobility_score(self);
+        get_tapered_score(base_score + mobility_score, self.state.phase)
     }
 
     /// Computes the complete tapered middlegame and endgame evaluation scores
