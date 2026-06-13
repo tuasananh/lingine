@@ -13,6 +13,10 @@ macro_rules! packed {
     ($( ($x:expr, $y:expr) ),* $(,)?) => {
         [$(PackedScore::new($x, $y)),*]
     };
+
+    ($x:expr, $y:expr) => {
+        PackedScore::new($x, $y)
+    };
 }
 
 pub(in crate::eval) use packed;
@@ -99,10 +103,10 @@ pub const fn piece_phase_weight(pt: PieceType) -> i32 {
 }
 
 // Tapered bonuses for having 0, 1, or 2 Advisors
-pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![(0, 0), (0, 0), (0, 0),];
+pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![(3, -4), (11, 12), (-10, -10)];
 
 // Tapered bonuses for having 0, 1, or 2 Bishops (Elephants)
-pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![(0, 0), (0, 0), (0, 0),];
+pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![(9, 9), (14, 14), (-13, -13)];
 
 /// Computes defender count bonuses for both sides.
 #[inline]
@@ -124,28 +128,40 @@ pub fn compute_defender_bonus(pos: &Position) -> PackedScore {
     score
 }
 
+pub struct PieceMaterialValue;
+
+impl PieceMaterialValue {
+    pub const ROOK: PackedScore = packed!(574, 573);
+    pub const ADVISOR: PackedScore = packed!(96, 97);
+    pub const CANNON: PackedScore = packed!(297, 252);
+    pub const PAWN: PackedScore = packed!(27, 44);
+    pub const KNIGHT: PackedScore = packed!(254, 277);
+    pub const BISHOP: PackedScore = packed!(105, 105);
+    pub const PAWN_CROSSED: PackedScore = packed!(55, 148);
+}
+
 /// Returns a piece's base material value in Middlegame and Endgame, dynamically
 /// adjusting Pawn values based on whether they have crossed the river.
 #[inline]
 pub const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedScore {
     match piece {
-        Piece::RedRook | Piece::BlackRook => PackedScore::new(600, 600),
-        Piece::RedCannon | Piece::BlackCannon => PackedScore::new(285, 240),
-        Piece::RedKnight | Piece::BlackKnight => PackedScore::new(270, 290),
-        Piece::RedBishop | Piece::BlackBishop => PackedScore::new(120, 120),
-        Piece::RedAdvisor | Piece::BlackAdvisor => PackedScore::new(110, 110),
+        Piece::RedRook | Piece::BlackRook => PieceMaterialValue::ROOK,
+        Piece::RedCannon | Piece::BlackCannon => PieceMaterialValue::CANNON,
+        Piece::RedKnight | Piece::BlackKnight => PieceMaterialValue::KNIGHT,
+        Piece::RedBishop | Piece::BlackBishop => PieceMaterialValue::BISHOP,
+        Piece::RedAdvisor | Piece::BlackAdvisor => PieceMaterialValue::ADVISOR,
         Piece::RedPawn => {
             if sq.rank() as u8 >= 5 {
-                PackedScore::new(70, 150) // Crossed river
+                PieceMaterialValue::PAWN_CROSSED
             } else {
-                PackedScore::new(30, 30) // Uncrossed
+                PieceMaterialValue::PAWN
             }
         }
         Piece::BlackPawn => {
             if sq.rank() as u8 <= 4 {
-                PackedScore::new(70, 150) // Crossed river
+                PieceMaterialValue::PAWN_CROSSED
             } else {
-                PackedScore::new(30, 30) // Uncrossed
+                PieceMaterialValue::PAWN
             }
         }
         Piece::RedKing | Piece::BlackKing => PackedScore::ZERO,
