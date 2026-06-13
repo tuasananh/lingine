@@ -16,15 +16,15 @@ pub struct EvalParams {
 
 pub static DEFAULT_PARAMS: EvalParams = EvalParams {
     material: [
-        PackedScore::new(600, 600), // Rook = 0
-        PackedScore::new(110, 110), // Advisor = 1
-        PackedScore::new(285, 240), // Cannon = 2
-        PackedScore::new(30, 30),   // Pawn = 3
-        PackedScore::new(270, 290), // Knight = 4
-        PackedScore::new(120, 120), // Bishop = 5
-        PackedScore::ZERO,          // King = 6
+        PieceMaterialValue::ROOK,    // Rook = 0
+        PieceMaterialValue::ADVISOR, // Advisor = 1
+        PieceMaterialValue::CANNON,  // Cannon = 2
+        PieceMaterialValue::PAWN,    // Pawn = 3
+        PieceMaterialValue::KNIGHT,  // Knight = 4
+        PieceMaterialValue::BISHOP,  // Bishop = 5
+        PackedScore::ZERO,           // King = 6
     ],
-    pawn_crossed: PackedScore::new(70, 150),
+    pawn_crossed: PieceMaterialValue::PAWN_CROSSED,
     psts: [
         PIECE_SQUARE_TABLE_ROOK_TAPERED,    // Rook = 0
         PIECE_SQUARE_TABLE_ADVISOR_TAPERED, // Advisor = 1
