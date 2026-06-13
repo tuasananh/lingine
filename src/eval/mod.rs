@@ -1,61 +1,7 @@
 mod piece_square_table;
 pub use piece_square_table::*;
 
-use crate::core::{Piece, Position, Score, Square};
-
-/// Stores the evaluation values for Middlegame (MG) and Endgame (EG)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PackedScore {
-    pub mg: i32,
-    pub eg: i32,
-}
-
-impl PackedScore {
-    pub const ZERO: Self = Self { mg: 0, eg: 0 };
-
-    #[inline]
-    pub const fn new(mg: i32, eg: i32) -> Self {
-        Self { mg, eg }
-    }
-}
-
-impl std::ops::Add for PackedScore {
-    type Output = Self;
-    #[inline]
-    fn add(self, other: Self) -> Self {
-        Self {
-            mg: self.mg + other.mg,
-            eg: self.eg + other.eg,
-        }
-    }
-}
-
-impl std::ops::Sub for PackedScore {
-    type Output = Self;
-    #[inline]
-    fn sub(self, other: Self) -> Self {
-        Self {
-            mg: self.mg - other.mg,
-            eg: self.eg - other.eg,
-        }
-    }
-}
-
-impl std::ops::AddAssign for PackedScore {
-    #[inline]
-    fn add_assign(&mut self, other: Self) {
-        self.mg += other.mg;
-        self.eg += other.eg;
-    }
-}
-
-impl std::ops::SubAssign for PackedScore {
-    #[inline]
-    fn sub_assign(&mut self, other: Self) {
-        self.mg -= other.mg;
-        self.eg -= other.eg;
-    }
-}
+use crate::core::{PackedScore, Piece, Position, Score, Square};
 
 // Phase Constants (32-Point Model)
 pub const PHASE_ROOK: i32 = 2; // Chariot
@@ -73,9 +19,9 @@ pub const MAX_PHASE: i32 =
 /// Blends Middlegame and Endgame scores based on the current game phase.
 /// Performs signed round-to-nearest integer division.
 #[inline]
-pub fn get_tapered_score(mg_score: Score, eg_score: Score, current_phase: Score) -> Score {
+pub fn get_tapered_score(score: PackedScore, current_phase: Score) -> Score {
     let phase = current_phase.clamp(0, MAX_PHASE);
-    let sum = mg_score * phase + eg_score * (MAX_PHASE - phase);
+    let sum = score.mg * phase + score.eg * (MAX_PHASE - phase);
 
     if sum >= 0 {
         (sum + MAX_PHASE / 2) / MAX_PHASE
@@ -174,35 +120,6 @@ pub fn evaluate(pos: &Position) -> Score {
     pos.tapered_score()
 }
 
-/// Returns a piece's base material value, dynamically adjusting Pawn values
-/// based on whether they have crossed the river.
-#[inline]
-pub const fn piece_material_value(piece: Piece, sq: Square) -> Score {
-    match piece {
-        Piece::RedRook | Piece::BlackRook => 600,
-        Piece::RedCannon | Piece::BlackCannon => 285,
-        Piece::RedKnight | Piece::BlackKnight => 270,
-        Piece::RedBishop | Piece::BlackBishop => 120, // Elephant
-        Piece::RedAdvisor | Piece::BlackAdvisor => 110,
-        Piece::RedPawn => {
-            if sq.rank() as u8 >= 5 {
-                70
-            } else {
-                30
-            }
-        }
-        Piece::BlackPawn => {
-            if sq.rank() as u8 <= 4 {
-                70
-            } else {
-                30
-            }
-        }
-        Piece::RedKing | Piece::BlackKing => 0, /* Treated as 0 for incremental score (kings
-                                                 * never captured) */
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -238,30 +155,21 @@ mod tests {
 
             for (m_idx, m) in moves.iter().copied().enumerate() {
                 if pos.legal(m) {
-                    let pre_mg = pos.mg_score();
-                    let pre_eg = pos.eg_score();
+                    let pre_score = pos.score();
                     let pre_phase = pos.phase();
 
                     // Do the move
                     pos.do_move(m);
 
                     // Compute scores & phase from scratch
-                    let (expected_mg, expected_eg) = pos.compute_tapered_evaluation_scores();
+                    let expected = pos.compute_tapered_evaluation_scores();
                     let expected_phase = pos.calculate_board_phase();
 
                     // Assert incremental score matches full board scan
                     assert_eq!(
-                        pos.mg_score(),
-                        expected_mg,
-                        "MG score mismatch for FEN {} move {}: {}",
-                        idx,
-                        m_idx,
-                        m
-                    );
-                    assert_eq!(
-                        pos.eg_score(),
-                        expected_eg,
-                        "EG score mismatch for FEN {} move {}: {}",
+                        pos.score(),
+                        expected,
+                        "Score mismatch for FEN {} move {}: {}",
                         idx,
                         m_idx,
                         m
@@ -280,17 +188,9 @@ mod tests {
 
                     // Assert scores rolled back perfectly
                     assert_eq!(
-                        pos.mg_score(),
-                        pre_mg,
-                        "MG score rollback mismatch for FEN {} move {}: {}",
-                        idx,
-                        m_idx,
-                        m
-                    );
-                    assert_eq!(
-                        pos.eg_score(),
-                        pre_eg,
-                        "EG score rollback mismatch for FEN {} move {}: {}",
+                        pos.score(),
+                        pre_score,
+                        "Score rollback mismatch for FEN {} move {}: {}",
                         idx,
                         m_idx,
                         m

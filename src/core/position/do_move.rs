@@ -60,19 +60,13 @@ impl Position {
         let from_pst = piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
         let to_pst = piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
 
-        let sgn = piece.color().sign();
-
-        self.state.mg_score += sgn * (-from_val.mg - from_pst.mg + to_val.mg + to_pst.mg);
-        self.state.eg_score += sgn * (-from_val.eg - from_pst.eg + to_val.eg + to_pst.eg);
+        self.state.score += piece.color().signum() * (to_val + to_pst - from_val - from_pst);
 
         if let Some(cap) = captured {
             let cap_val = piece_material_value_tapered(cap, to);
             let cap_pst = piece_square_table_value_tapered(cap.piece_type(), cap.color(), to);
-            let sgn = cap.color().sign();
 
-            self.state.mg_score -= sgn * (cap_val.mg + cap_pst.mg);
-            self.state.eg_score -= sgn * (cap_val.eg + cap_pst.eg);
-
+            self.state.score -= cap.color().signum() * (cap_val + cap_pst);
             self.state.phase -= piece_phase_weight(cap.piece_type());
         }
 

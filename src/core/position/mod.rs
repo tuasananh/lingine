@@ -1,11 +1,7 @@
 use strum::EnumCount;
 use thiserror::Error;
 
-use crate::core::{
-    Score,
-    bitboard::Bitboard,
-    types::{File, Move, Piece, PieceType, Rank, Side, Square},
-};
+use crate::core::{Bitboard, File, Move, PackedScore, Piece, PieceType, Rank, Side, Square};
 
 use zobrist_table::*;
 mod attacks;
@@ -30,10 +26,8 @@ pub struct StateInfo {
     pub sixtymove_clock: u16,
     /// Whether the side to move was in check in this position state.
     pub in_check: bool,
-    /// Precalculated incremental middlegame score (from Red's perspective)
-    pub mg_score: Score,
-    /// Precalculated incremental endgame score (from Red's perspective)
-    pub eg_score: Score,
+    /// Precalculated incremental mid- and end-game score (from Red's perspective)
+    pub score: PackedScore,
     /// Precalculated incremental game phase
     pub phase: i32,
     /// Checker pieces checking the King of the side to move.
@@ -204,8 +198,7 @@ impl Position {
                 zobrist: 0,
                 sixtymove_clock: 0,
                 in_check: false,
-                mg_score: 0,
-                eg_score: 0,
+                score: PackedScore::ZERO,
                 phase: 0,
                 checkers: Bitboard::new(),
                 blockers_for_king: [Bitboard::new(); Side::COUNT],
@@ -287,23 +280,20 @@ impl Position {
             pos.state.zobrist ^= ZOBRIST.side;
         }
 
-        let mut rule60 = 0;
-        if tokens.len() > 4
-            && let Ok(r60) = tokens[4].parse::<u16>()
-        {
-            rule60 = r60;
-        }
+        let rule60 = tokens
+            .get(4)
+            .and_then(|x| x.parse::<u16>().ok())
+            .unwrap_or(0);
 
-        let mut fullmove = 1;
-        if tokens.len() > 5
-            && let Ok(fm) = tokens[5].parse::<u16>()
-        {
-            fullmove = fm;
-        }
+        let fullmove = tokens
+            .get(5)
+            .and_then(|x| x.parse::<u16>().ok())
+            .unwrap_or(1);
+
         pos.game_ply = (fullmove.saturating_sub(1) * 2) + (side_to_move as u16);
 
         pos.state.sixtymove_clock = rule60;
-        (pos.state.mg_score, pos.state.eg_score) = pos.compute_tapered_evaluation_scores();
+        pos.state.score = pos.compute_tapered_evaluation_scores();
         pos.state.phase = pos.calculate_board_phase();
         pos.set_check_info();
 
