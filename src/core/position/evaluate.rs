@@ -3,7 +3,8 @@ use strum::EnumCount;
 use crate::core::{PackedScore, Position, Score, Side, Square};
 
 use crate::core::PieceType;
-use crate::eval::get_tapered_score;
+use crate::core::{Position, Score, Side, Square};
+use crate::eval::{PackedScore, get_tapered_score};
 
 impl Position {
     /// Get the current evaluation score from the position, with the perspective
