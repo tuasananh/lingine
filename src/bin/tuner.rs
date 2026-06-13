@@ -99,6 +99,11 @@ fn main() {
         std::process::exit(1);
     }
 
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    println!("Running tuner with {} parallel worker threads.", num_threads);
+
     let mut params = EvalParams::default();
     let mut best_k = optimize_k(&entries, &params);
     let mut best_mse = calculate_mse(&entries, &params, best_k);
@@ -113,6 +118,7 @@ fn main() {
     for iter in 1..=args.iterations {
         let mut improved = false;
         println!("--- Iteration {}/{} ---", iter, args.iterations);
+        let iter_start = std::time::Instant::now();
 
         for i in 0..param_count {
             // Try +1
@@ -136,7 +142,27 @@ fn main() {
             } else {
                 params_vec[i] += 1; // Revert to original
             }
+
+            // Print progress and ETA every 100 parameters
+            if (i + 1) % 100 == 0 || i + 1 == param_count {
+                let elapsed = iter_start.elapsed().as_secs_f64();
+                let progress = (i + 1) as f64 / param_count as f64;
+                let total_est = elapsed / progress;
+                let eta = total_est - elapsed;
+                print!(
+                    "\r  Progress: {:>4}/{:<4} ({:>5.1}%) | Elapsed: {:>5.1}s | ETA: {:>5.1}s | Current MSE: {:.10}",
+                    i + 1,
+                    param_count,
+                    progress * 100.0,
+                    elapsed,
+                    eta,
+                    best_mse
+                );
+                use std::io::Write;
+                std::io::stdout().flush().unwrap();
+            }
         }
+        println!(); // Clear the carriage return line
 
         params.update_from_vector(&params_vec);
         best_k = optimize_k(&entries, &params);
@@ -161,20 +187,38 @@ fn main() {
 }
 
 fn calculate_mse(entries: &[Entry], params: &EvalParams, k: f64) -> f64 {
-    let mut sum_sq_error = 0.0;
-    for entry in entries {
-        let eval = evaluate_with_params(&entry.pos, params);
-        let side_to_move = entry.pos.side_to_move();
-        let score = match side_to_move {
-            Side::Red => eval,
-            Side::Black => -eval,
-        } as f64;
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
 
-        let sigmoid = 1.0 / (1.0 + 10.0f64.powf(-k * score / 400.0));
-        let err = entry.result - sigmoid;
-        sum_sq_error += err * err;
-    }
-    sum_sq_error / entries.len() as f64
+    let chunk_size = (entries.len() + num_threads - 1) / num_threads;
+
+    let total_sq_error: f64 = std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for chunk in entries.chunks(chunk_size) {
+            let handle = s.spawn(move || {
+                let mut local_error = 0.0;
+                for entry in chunk {
+                    let eval = evaluate_with_params(&entry.pos, params);
+                    let side_to_move = entry.pos.side_to_move();
+                    let score = match side_to_move {
+                        Side::Red => eval,
+                        Side::Black => -eval,
+                    } as f64;
+
+                    let sigmoid = 1.0 / (1.0 + 10.0f64.powf(-k * score / 400.0));
+                    let err = entry.result - sigmoid;
+                    local_error += err * err;
+                }
+                local_error
+            });
+            handles.push(handle);
+        }
+
+        handles.into_iter().map(|h| h.join().unwrap()).sum()
+    });
+
+    total_sq_error / entries.len() as f64
 }
 
 // Find K that minimizes MSE using ternary search
