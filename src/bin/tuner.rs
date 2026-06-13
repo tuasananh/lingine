@@ -1,15 +1,19 @@
 use clap::Parser;
 use lingine::core::{
-    cannon_captures, knight_attacks, rook_attacks, PackedScore, Piece, PieceType,
-    Position, Side, Square,
+    PackedScore, Piece, PieceType, Position, Side, Square, cannon_captures, knight_attacks,
+    rook_attacks,
 };
-use lingine::eval::{evaluate_with_params, EvalParams};
+use lingine::eval::{EvalParams, evaluate_with_params};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Texel tuning tool for Lingine using Adam Optimizer")]
+#[command(
+    author,
+    version,
+    about = "Texel tuning tool for Lingine using Adam Optimizer"
+)]
 struct Args {
     #[arg(short, long, default_value = "tools/texel_data_large.epd")]
     file: PathBuf,
@@ -80,8 +84,8 @@ fn add_mobility_features(pos: &Position, features: &mut Vec<(usize, f64)>) {
         // Cannons
         let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & friendly;
         while let Some(from) = cannons.pop_lsb() {
-            let attacks =
-                (rook_attacks(from, occupied) & !occupied) | (cannon_captures(from, occupied) & enemy);
+            let attacks = (rook_attacks(from, occupied) & !occupied)
+                | (cannon_captures(from, occupied) & enemy);
             let count = attacks.count_ones() as usize;
             add_coeff(features, MOBILITY_OFFSET + 9 + 18 + count, us_sign);
         }
@@ -153,7 +157,11 @@ fn compile_features(pos: &Position, result: f64) -> SparsePosition {
             let file_indep = if file <= 4 { file } else { 8 - file };
             let pst_idx = rank * 5 + file_indep;
 
-            add_coeff(&mut features, PST_OFFSET + (pt as usize) * 50 + pst_idx, us_sign);
+            add_coeff(
+                &mut features,
+                PST_OFFSET + (pt as usize) * 50 + pst_idx,
+                us_sign,
+            );
         }
     }
 
@@ -249,8 +257,7 @@ fn compute_gradients(entries: &[SparsePosition], weights: &[f64], k: f64) -> Vec
                     let sigmoid = 1.0 / (1.0 + 10.0f64.powf(-k * score / 400.0));
                     let diff = sigmoid - entry.result;
 
-                    let deriv =
-                        sigmoid * (1.0 - sigmoid) * std::f64::consts::LN_10 * (k / 400.0);
+                    let deriv = sigmoid * (1.0 - sigmoid) * std::f64::consts::LN_10 * (k / 400.0);
                     let scale = 2.0 * diff * deriv;
 
                     let phase = entry.phase;
@@ -533,11 +540,7 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
         "\n====================================================================="
     )
     .unwrap();
-    writeln!(
-        s,
-        "  COPY-PASTEABLE PARAMETERS FOR src/eval/ FEATURE FILES"
-    )
-    .unwrap();
+    writeln!(s, "  COPY-PASTEABLE PARAMETERS FOR src/eval/ FEATURE FILES").unwrap();
     writeln!(
         s,
         "====================================================================="
@@ -575,7 +578,11 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     )
     .unwrap();
 
-    writeln!(s, "\n// --- Paste this into src/eval/piece_material_value.rs ---").unwrap();
+    writeln!(
+        s,
+        "\n// --- Paste this into src/eval/piece_material_value.rs ---"
+    )
+    .unwrap();
     writeln!(s, "pub(in crate::eval) struct PieceMaterialValue;\n").unwrap();
     writeln!(s, "impl PieceMaterialValue {{").unwrap();
     writeln!(
