@@ -377,7 +377,7 @@ mod tests {
         }
         for color in [Side::Red, Side::Black] {
             assert_eq!(a.king_square(color), b.king_square(color));
-            assert_eq!(a.is_in_check(color), b.is_in_check(color));
+            assert_eq!(a.is_side_in_check(color), b.is_side_in_check(color));
             assert_eq!(a.bitboard_by_color(color), b.bitboard_by_color(color));
         }
         for pt in PieceType::iter() {

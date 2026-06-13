@@ -1,5 +1,7 @@
 use std::num::NonZero;
 
+use lingine::core::{Position, StateInfo};
+
 fn main() {
     println!(
         "Sizeof Option<Square>: {}",
@@ -21,4 +23,6 @@ fn main() {
         "Sizeof Option<NonZero<u32>>: {}",
         std::mem::size_of::<Option<NonZero<u32>>>()
     );
+    println!("Sideof Position: {}", std::mem::size_of::<Position>());
+    println!("Sideof StateInfo: {}", std::mem::size_of::<StateInfo>());
 }

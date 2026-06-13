@@ -32,7 +32,7 @@ impl super::Searcher<'_> {
             return rule_score;
         }
 
-        let in_check = self.pos.is_in_check(self.pos.side_to_move());
+        let in_check = self.pos.is_in_check();
 
         let alpha_orig = alpha;
         let mut best_score = -score::INFINITY;

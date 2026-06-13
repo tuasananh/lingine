@@ -46,7 +46,7 @@ impl super::Searcher<'_> {
         // save the King.
         //
         // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) {
+        if self.pos.is_in_check() {
             depth += 1;
         }
 
@@ -74,9 +74,7 @@ impl super::Searcher<'_> {
             is_singular = self.singular_extension(depth, ply, &ctx, value);
         };
 
-        let us = self.pos.side_to_move();
-
-        let in_check = self.pos.is_in_check(us);
+        let in_check = self.pos.is_in_check();
 
         if !ROOT && !PV && !in_check {
             let eval = tt_value.map_or_else(|| self.pos.evaluate(), |x| x.score);

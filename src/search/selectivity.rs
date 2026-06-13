@@ -76,7 +76,7 @@ impl super::Searcher<'_> {
         if moves_played >= LMR_MOVES_PLAYED_THRESHOLD
             && depth >= LMR_DEPTH_THRESHOLD
             && self.pos.is_quiet(mv)
-            && !self.pos.is_in_check(self.pos.side_to_move())
+            && !self.pos.is_in_check()
             && !self.killer_moves.contains(mv, ply)
             && !self.pos.gives_check(mv)
         {

@@ -170,13 +170,21 @@ impl Position {
     }
 
     /// Checks if the given player's King is currently in check.
+    ///
+    /// Mainly used for tests.
     #[inline]
-    pub fn is_in_check(&self, color: Side) -> bool {
+    pub fn is_side_in_check(&self, color: Side) -> bool {
         if color == self.side_to_move() {
             self.state.in_check
         } else {
             self.is_square_attacked(self.king_square(color), color.opposite())
         }
+    }
+
+    /// Checks if the player to move is currently in check.
+    #[inline]
+    pub fn is_in_check(&self) -> bool {
+        self.state.in_check
     }
 
     /// Returns the piece captured by the last move, or `None` if the last
@@ -416,7 +424,7 @@ mod tests {
             for &m in &moves {
                 let actual = pos.gives_check(m);
                 pos.do_move(m);
-                let expected = pos.is_in_check(pos.side_to_move());
+                let expected = pos.is_side_in_check(pos.side_to_move());
                 if actual != expected {
                     let us = pos.side_to_move();
                     let them = us.opposite();
@@ -498,7 +506,7 @@ mod tests {
             let us = pos.side_to_move();
             let mut temp_pos = pos.clone();
             temp_pos.do_move(m);
-            let expected_legal = !temp_pos.is_in_check(us);
+            let expected_legal = !temp_pos.is_side_in_check(us);
 
             if actual_legal != expected_legal {
                 println!("LEGALITY MISMATCH!");
@@ -515,7 +523,7 @@ mod tests {
 
             if actual_legal {
                 let actual_check = pos.gives_check(m);
-                let expected_check = temp_pos.is_in_check(temp_pos.side_to_move());
+                let expected_check = temp_pos.is_side_in_check(temp_pos.side_to_move());
 
                 if actual_check != expected_check {
                     println!("GIVES_CHECK MISMATCH!");
