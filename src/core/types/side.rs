@@ -20,8 +20,12 @@ impl Side {
         }
     }
 
+    /// Returns the number representing the sign of self
+    ///
+    /// * 1 for Side::Red
+    /// * -1 for Side::Black
     #[inline]
-    pub const fn sign(&self) -> Score {
+    pub const fn signum(&self) -> Score {
         match self {
             Side::Red => 1,
             Side::Black => -1,

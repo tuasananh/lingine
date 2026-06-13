@@ -47,6 +47,7 @@ impl Position {
         self.game_ply += 1;
         self.history.push(self.state);
         self.state.zobrist ^= ZOBRIST.side;
+        self.state.plies_since_null += 1;
 
         let from = m.from();
         let to = m.to();
@@ -58,24 +59,14 @@ impl Position {
             + piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
         let to_score = piece_material_value_tapered(piece, to)
             + piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
-        let diff = to_score - from_score;
 
-        if piece.color() == Side::Red {
-            self.state.score += diff;
-        } else {
-            self.state.score -= diff;
-        }
+        self.state.score += piece.color().signum() * (to_score - from_score);
 
         if let Some(cap) = captured {
-            let cap_score = piece_material_value_tapered(cap, to)
-                + piece_square_table_value_tapered(cap.piece_type(), cap.color(), to);
+            let cap_val = piece_material_value_tapered(cap, to);
+            let cap_pst = piece_square_table_value_tapered(cap.piece_type(), cap.color(), to);
 
-            if cap.color() == Side::Red {
-                self.state.score -= cap_score;
-            } else {
-                self.state.score += cap_score;
-            }
-
+            self.state.score -= cap.color().signum() * (cap_val + cap_pst);
             self.state.phase -= piece_phase_weight(cap.piece_type());
         }
 
@@ -112,6 +103,44 @@ impl Position {
         let state = self.history.pop().expect("No state in history to undo");
         self.state = state;
         self.game_ply -= 1;
+    }
+
+    /// Plays a null move (passes the turn to the opponent), pushing the current
+    /// state onto the history stack to support undoing.
+    #[inline]
+    pub fn do_null_move(&mut self) {
+        self.game_ply += 1;
+        self.history.push(self.state);
+        self.state.zobrist ^= ZOBRIST.side;
+        self.state.last_move = None;
+        self.state.captured_piece = None;
+        self.state.sixtymove_clock += 1;
+        self.state.plies_since_null = 0;
+        self.set_check_info();
+    }
+
+    /// Restores the position to the state before the null move was played.
+    #[inline]
+    pub fn undo_null_move(&mut self) {
+        let state = self
+            .history
+            .pop()
+            .expect("No state in history to undo null move");
+        self.state = state;
+        self.game_ply -= 1;
+    }
+
+    /// Checks if the given side has any active attacking pieces (Rook, Knight,
+    /// Cannon).
+    ///
+    /// This is to prevent zugzswang in Null Move Pruning.
+    #[inline]
+    pub fn has_attacking_pieces(&self, color: Side) -> bool {
+        let (r, k, c) = match color {
+            Side::Red => (Piece::RedRook, Piece::RedKnight, Piece::RedCannon),
+            Side::Black => (Piece::BlackRook, Piece::BlackKnight, Piece::BlackCannon),
+        };
+        self.piece_count(r) > 0 || self.piece_count(k) > 0 || self.piece_count(c) > 0
     }
 
     /// Update blockers and pinners for king of color `c`

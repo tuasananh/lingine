@@ -1,25 +1,14 @@
 use crate::core::{
     Bitboard, Move, PieceType, Position, Side, Square, cannon_captures, knight_attacks_to,
-    movegen::squares_beyond, pawn_attacks_to, rook_attacks,
+    movegen::squares_beyond, pawn_attacks_to, rook_attacks, squares_in_line,
 };
 
 impl Position {
-    /// Helper to check if three squares are orthogonally aligned.
+    /// Helper to check if three squares are orthogonally aligned
+    /// (all on the same rank or all on the same file).
     #[inline]
     fn aligned(&self, s1: Square, s2: Square, s3: Square) -> bool {
-        let f1 = s1.file() as u8;
-        let f2 = s2.file() as u8;
-        let f3 = s3.file() as u8;
-        if f1 == f2 && f2 == f3 {
-            return true;
-        }
-        let r1 = s1.rank() as u8;
-        let r2 = s2.rank() as u8;
-        let r3 = s3.rank() as u8;
-        if r1 == r2 && r2 == r3 {
-            return true;
-        }
-        false
+        squares_in_line(s1, s2).contains(s3)
     }
 
     /// Validates if a pseudo-legal move `m` is fully legal (i.e. the King is

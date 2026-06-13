@@ -1,11 +1,7 @@
 use strum::EnumCount;
 use thiserror::Error;
 
-use crate::core::{
-    bitboard::Bitboard,
-    types::{File, Move, Piece, PieceType, Rank, Side, Square},
-};
-use crate::eval::PackedScore;
+use crate::core::{Bitboard, File, Move, PackedScore, Piece, PieceType, Rank, Side, Square};
 
 use zobrist_table::*;
 mod attacks;
@@ -30,7 +26,8 @@ pub struct StateInfo {
     pub sixtymove_clock: u16,
     /// Whether the side to move was in check in this position state.
     pub in_check: bool,
-    /// Precalculated incremental score (from Red's perspective)
+    /// Precalculated incremental mid- and end-game score (from Red's
+    /// perspective)
     pub score: PackedScore,
     /// Precalculated incremental game phase
     pub phase: i32,
@@ -45,6 +42,8 @@ pub struct StateInfo {
     pub check_squares: [Bitboard; PieceType::COUNT],
     /// Whether we need a full check validation.
     pub need_full_check: bool,
+    /// Number of plies played since the last null move.
+    pub plies_since_null: u16,
 }
 
 /// Encapsulates the complete game board representation, bitboards, turn
@@ -207,6 +206,7 @@ impl Position {
                 pinners: [Bitboard::new(); Side::COUNT],
                 check_squares: [Bitboard::new(); PieceType::COUNT],
                 need_full_check: false,
+                plies_since_null: 0,
             },
             history: Vec::new(),
             game_ply: 0,
@@ -281,19 +281,16 @@ impl Position {
             pos.state.zobrist ^= ZOBRIST.side;
         }
 
-        let mut rule60 = 0;
-        if tokens.len() > 4
-            && let Ok(r60) = tokens[4].parse::<u16>()
-        {
-            rule60 = r60;
-        }
+        let rule60 = tokens
+            .get(4)
+            .and_then(|x| x.parse::<u16>().ok())
+            .unwrap_or(0);
 
-        let mut fullmove = 1;
-        if tokens.len() > 5
-            && let Ok(fm) = tokens[5].parse::<u16>()
-        {
-            fullmove = fm;
-        }
+        let fullmove = tokens
+            .get(5)
+            .and_then(|x| x.parse::<u16>().ok())
+            .unwrap_or(1);
+
         pos.game_ply = (fullmove.saturating_sub(1) * 2) + (side_to_move as u16);
 
         pos.state.sixtymove_clock = rule60;
@@ -603,5 +600,41 @@ mod tests {
             !pos.legal(m),
             "e5e4 should be illegal because it leaves only 1 blocker under Cannon pin"
         );
+    }
+
+    #[test]
+    fn test_null_moves() {
+        let mut pos = Position::new();
+        let initial_hash = pos.zobrist_hash();
+        let initial_side = pos.side_to_move();
+        let initial_ply = pos.game_ply;
+
+        // Verify attacking pieces check
+        assert!(pos.has_attacking_pieces(Side::Red));
+        assert!(pos.has_attacking_pieces(Side::Black));
+        assert_eq!(pos.state.plies_since_null, 0);
+
+        // Make a normal move
+        let w_move = Move::new(Square::E0, Square::D0);
+        pos.do_move(w_move);
+        assert_eq!(pos.state.plies_since_null, 1);
+
+        // Make null move
+        pos.do_null_move();
+        assert_ne!(pos.zobrist_hash(), initial_hash);
+        assert_eq!(pos.side_to_move(), initial_side);
+        assert_eq!(pos.game_ply, initial_ply + 2);
+        assert_eq!(pos.state.plies_since_null, 0);
+
+        // Undo null move
+        pos.undo_null_move();
+        assert_eq!(pos.state.plies_since_null, 1);
+
+        // Undo normal move
+        pos.undo_move(w_move);
+        assert_eq!(pos.zobrist_hash(), initial_hash);
+        assert_eq!(pos.side_to_move(), initial_side);
+        assert_eq!(pos.game_ply, initial_ply);
+        assert_eq!(pos.state.plies_since_null, 0);
     }
 }

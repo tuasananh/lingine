@@ -147,17 +147,7 @@ impl Bitboard {
     /// horizontal row (`Rank`).
     #[inline]
     pub const fn from_rank(r: Rank) -> Self {
-        let mut bits = 0u128;
-        let mut f = 0u8;
-        let r = r as u8;
-
-        while f < File::COUNT as u8 {
-            let square_index = (r * File::COUNT as u8) + f;
-            bits |= 1u128 << square_index;
-            f += 1;
-        }
-
-        Self(bits)
+        Self(0x1FFu128 << (r as u8 * 9))
     }
 
     /// Returns a precomputed bitboard covering one half of the board (5 ranks)

@@ -51,7 +51,7 @@ impl super::Searcher<'_> {
         }
 
         // Base case: fall back to quiescence search
-        if depth == 0 {
+        if depth <= 0 {
             return self.quiescence_search(0, ply, alpha, beta);
         }
 
@@ -73,6 +73,17 @@ impl super::Searcher<'_> {
 
             is_singular = self.singular_extension(depth, ply, &ctx, value);
         };
+
+        let us = self.pos.side_to_move();
+
+        let in_check = self.pos.is_in_check(us);
+
+        if !ROOT && !PV && !in_check {
+            let eval = tt_value.map_or_else(|| self.pos.evaluate(), |x| x.score);
+            if let Some(score) = self.null_move_pruning(depth, ply, beta, eval, ctx) {
+                return score;
+            }
+        }
 
         let mut moves = MoveList::new();
         generate_moves(&self.pos, MoveGenType::Legal, &mut moves);

@@ -343,10 +343,18 @@ pub(crate) const fn init_squares_in_line() -> [[Bitboard; Square::COUNT]; Square
         while s2 < Square::COUNT {
             let sq1 = Square::from_repr(s1 as u8).unwrap();
             let sq2 = Square::from_repr(s2 as u8).unwrap();
-            table[s1][s2] = rook_attacks(sq1, Bitboard::new())
-                .const_and(rook_attacks(sq2, Bitboard::new()))
-                .const_or(Bitboard::from_square(sq1))
-                .const_or(Bitboard::from_square(sq2));
+            let f1 = sq1.file() as u8;
+            let f2 = sq2.file() as u8;
+            let r1 = sq1.rank() as u8;
+            let r2 = sq2.rank() as u8;
+            table[s1][s2] = if f1 == f2 || r1 == r2 {
+                rook_attacks(sq1, Bitboard::new())
+                    .const_and(rook_attacks(sq2, Bitboard::new()))
+                    .const_or(Bitboard::from_square(sq1))
+                    .const_or(Bitboard::from_square(sq2))
+            } else {
+                Bitboard::new()
+            };
             s2 += 1;
         }
         s1 += 1;

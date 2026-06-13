@@ -6,5 +6,5 @@ mod side;
 pub use location::*;
 pub use r#move::*;
 pub use pieces::*;
-pub use score::Score;
+pub use score::{PackedScore, Score};
 pub use side::*;
