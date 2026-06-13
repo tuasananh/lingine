@@ -2,7 +2,7 @@ use strum::EnumCount;
 
 use crate::{
     core::{
-        Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_attack_ray,
+        Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_beyond_attacks,
         knight_attacks_to, pawn_attacks_to, position::ZOBRIST, rook_attacks, squares_between,
     },
     eval::{piece_material_value_tapered, piece_phase_weight, piece_square_table_value_tapered},
@@ -55,12 +55,12 @@ impl Position {
             self.board[from as usize].expect("Cannot do_move with no piece at the source square");
         let captured = self.board[to as usize];
 
-        let from_val = piece_material_value_tapered(piece, from);
-        let to_val = piece_material_value_tapered(piece, to);
-        let from_pst = piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
-        let to_pst = piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
+        let from_score = piece_material_value_tapered(piece, from)
+            + piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
+        let to_score = piece_material_value_tapered(piece, to)
+            + piece_square_table_value_tapered(piece.piece_type(), piece.color(), to);
 
-        self.state.score += piece.color().signum() * (to_val + to_pst - from_val - from_pst);
+        self.state.score += piece.color().signum() * (to_score - from_score);
 
         if let Some(cap) = captured {
             let cap_val = piece_material_value_tapered(cap, to);
@@ -130,7 +130,8 @@ impl Position {
         self.game_ply -= 1;
     }
 
-    /// Checks if the given side has any active attacking pieces (Rook, Knight, Cannon).
+    /// Checks if the given side has any active attacking pieces (Rook, Knight,
+    /// Cannon).
     ///
     /// This is to prevent zugzswang in Null Move Pruning.
     #[inline]
@@ -210,7 +211,7 @@ impl Position {
 
         self.state.check_squares[PieceType::Pawn as usize] = pawn_attacks_to(ksq, us);
         self.state.check_squares[PieceType::Knight as usize] = knight_attacks_to(ksq, occupied);
-        self.state.check_squares[PieceType::Cannon as usize] = cannon_attack_ray(ksq, occupied);
+        self.state.check_squares[PieceType::Cannon as usize] = cannon_beyond_attacks(ksq, occupied);
         self.state.check_squares[PieceType::Rook as usize] = rook_attacks(ksq, occupied);
 
         self.state.check_squares[PieceType::King as usize] = Bitboard::new();

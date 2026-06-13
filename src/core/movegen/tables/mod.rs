@@ -38,3 +38,4 @@ pub static KNIGHT_TO_MAGICS: [Magic<16>; Square::COUNT] =
 
 pub static SQUARES_BETWEEN: [[Bitboard; Square::COUNT]; Square::COUNT] = init_squares_between();
 pub static SQUARES_BEYOND: [[Bitboard; Square::COUNT]; Square::COUNT] = init_squares_beyond();
+pub static SQUARES_IN_LINE: [[Bitboard; Square::COUNT]; Square::COUNT] = init_squares_in_line();

@@ -26,7 +26,8 @@ pub struct StateInfo {
     pub sixtymove_clock: u16,
     /// Whether the side to move was in check in this position state.
     pub in_check: bool,
-    /// Precalculated incremental mid- and end-game score (from Red's perspective)
+    /// Precalculated incremental mid- and end-game score (from Red's
+    /// perspective)
     pub score: PackedScore,
     /// Precalculated incremental game phase
     pub phase: i32,

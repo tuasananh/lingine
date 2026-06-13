@@ -28,8 +28,8 @@ impl Position {
     pub fn compute_tapered_evaluation_scores(&self) -> PackedScore {
         let mut score = PackedScore::ZERO;
         for sq_idx in 0..Square::COUNT {
-            let sq = Square::from_repr(sq_idx as u8).unwrap();
             if let Some(piece) = self.board[sq_idx] {
+                let sq = Square::from_repr(sq_idx as u8).unwrap();
                 let color = piece.color();
                 let val = crate::eval::piece_material_value_tapered(piece, sq);
                 let pst =

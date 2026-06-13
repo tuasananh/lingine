@@ -98,14 +98,15 @@ impl super::Searcher<'_> {
 
     /// Performs Null Move Pruning (NMP).
     ///
-    /// NMP passes the turn to the opponent (a "null move") and performs a search at
-    /// a reduced depth. If the resulting score is still >= beta, we can prune the
-    /// current node under the assumption that the position is so strong that the
-    /// opponent cannot prevent a beta cutoff even if we do nothing.
+    /// NMP passes the turn to the opponent (a "null move") and performs a
+    /// search at a reduced depth. If the resulting score is still >= beta,
+    /// we can prune the current node under the assumption that the position
+    /// is so strong that the opponent cannot prevent a beta cutoff even if
+    /// we do nothing.
     ///
-    /// At higher depths (>= 12 plies), NMP performs a "Verification Search" to prevent
-    /// pruning deep mating threats or tactical surprises. NMP is disabled recursively
-    /// during verification by setting `nmp_min_ply`.
+    /// At higher depths (>= 12 plies), NMP performs a "Verification Search" to
+    /// prevent pruning deep mating threats or tactical surprises. NMP is
+    /// disabled recursively during verification by setting `nmp_min_ply`.
     #[inline]
     pub(super) fn null_move_pruning(
         &mut self,
@@ -119,18 +120,23 @@ impl super::Searcher<'_> {
         const NMP_DEPTH_THRESHOLD: i8 = 3;
         // Base depth reduction plies.
         const NMP_REDUCTIONS: i8 = 3;
-        // Divisor for dynamic depth reduction scale: R = NMP_REDUCTIONS + depth / NMP_DIVISOR
+        // Divisor for dynamic depth reduction scale: R = NMP_REDUCTIONS + depth /
+        // NMP_DIVISOR
         const NMP_DIVISOR: i8 = 6;
         // Depth threshold where verification search is triggered.
         const NMP_VERIFICATION_DEPTH: i8 = 12;
 
         // Check if NMP preconditions are met:
         // 1. Depth is high enough.
-        // 2. We are not already inside a null move search (to prevent infinite null move chains).
+        // 2. We are not already inside a null move search (to prevent infinite null
+        //    move chains).
         // 3. No move is excluded (to avoid interfering with singular extensions).
-        // 4. Static evaluation is high enough relative to beta (scaled down from Pikafish).
-        // 5. The side to move has attacking pieces (Rook, Knight, Cannon) to avoid zugzwang.
-        // 6. Current ply is above nmp_min_ply (not currently in verification search bounds).
+        // 4. Static evaluation is high enough relative to beta (scaled down from
+        //    Pikafish).
+        // 5. The side to move has attacking pieces (Rook, Knight, Cannon) to avoid
+        //    zugzwang.
+        // 6. Current ply is above nmp_min_ply (not currently in verification search
+        //    bounds).
         if depth >= NMP_DEPTH_THRESHOLD
             && !ctx.is_null_move_search
             && ctx.excluded_move.is_none()

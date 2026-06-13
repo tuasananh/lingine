@@ -37,7 +37,7 @@ jobs:
     steps:
       # ── 1. Checkout ───────────────────────────────────────────────────────
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -221,7 +221,7 @@ jobs:
       # ── 11. PR comment ────────────────────────────────────────────────────
       - name: Post report as PR comment
         if: github.event_name == 'pull_request' && steps.summary.outputs.report_path != ''
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: gauntlet-eval
           path: ${{ steps.summary.outputs.report_path }}
@@ -229,7 +229,7 @@ jobs:
       # ── 12. Upload artefacts ──────────────────────────────────────────────
       - name: Upload eval artefacts
         if: always() && steps.summary.outputs.report_path != ''
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: gauntlet-eval-${{ steps.commit.outputs.sha }}
           path: |
@@ -248,7 +248,7 @@ jobs:
 
     steps:
       - name: Download eval report artefact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: gauntlet-eval-${{ needs.gauntlet.outputs.sha }}
           path: eval-results

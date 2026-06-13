@@ -68,6 +68,12 @@ impl Bitboard {
         (self.0 & (1u128 << (square as u8))) != 0
     }
 
+    /// Checks if this board (set of squares) contains the square
+    #[inline]
+    pub const fn contains(&self, square: Square) -> bool {
+        self.is_occupied(square)
+    }
+
     /// Activates (sets to 1) the bit corresponding to the given square.
     #[inline]
     pub const fn set_bit(&mut self, square: Square) {
@@ -115,8 +121,14 @@ impl Bitboard {
         Self(self.0 & b.0)
     }
 
+    #[inline]
+    pub const fn from_square(s: Square) -> Self {
+        Self(1u128 << (s as u8))
+    }
+
     /// Constructs a bitboard with all bits active along the specified vertical
     /// column (`File`).
+    #[inline]
     pub const fn from_file(f: File) -> Self {
         let mut bits = 0u128;
         let mut r = 0u8;
@@ -133,12 +145,14 @@ impl Bitboard {
 
     /// Constructs a bitboard with all bits active along the specified
     /// horizontal row (`Rank`).
+    #[inline]
     pub const fn from_rank(r: Rank) -> Self {
         Self(0x1FFu128 << (r as u8 * 9))
     }
 
     /// Returns a precomputed bitboard covering one half of the board (5 ranks)
     /// for a given player:
+    #[inline]
     pub const fn side(side: Side) -> Self {
         match side {
             Side::Red => Self::from_rank(Rank::R0)
@@ -155,6 +169,7 @@ impl Bitboard {
     }
 
     /// Returns a precomputed bitboard covering the palace of the given player
+    #[inline]
     pub const fn palace(side: Side) -> Self {
         let ranks = match side {
             Side::Red => Self::from_rank(Rank::R0)

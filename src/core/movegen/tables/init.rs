@@ -1,9 +1,10 @@
 use super::helpers::{
-    bishop_attacks, cannon_attack_ray, cannon_ray, knight_attacks, knight_to_attacks,
-    palace_step_attacks, pawn_attacks_from, rook_ray, sparse_rand,
+    bishop_attacks, cannon_ray, knight_attacks, knight_to_attacks, palace_step_attacks,
+    pawn_attacks_from, rook_ray, sparse_rand,
 };
 use super::types::{FileEntry, LeaperType, Magic, RankEntry};
-use crate::core::{Bitboard, File, Rank, Square};
+use crate::core::movegen::tables::helpers::cannon_beyond_attack;
+use crate::core::{Bitboard, File, Rank, Square, cannon_beyond_attacks, rook_attacks};
 use strum::EnumCount;
 
 const RANK_STRIDE: i8 = File::COUNT as i8;
@@ -94,7 +95,7 @@ pub(crate) const fn init_rank_table() -> [RankEntry; File::COUNT] {
             table[f as usize].cannon_captures[occ as usize] =
                 cannon_ray(f, File::COUNT as i8, occ) as u16;
             table[f as usize].cannon_attack_ray[occ as usize] =
-                cannon_attack_ray(f, File::COUNT as i8, occ) as u16;
+                cannon_beyond_attack(f, File::COUNT as i8, occ) as u16;
             occ += 1;
         }
         f += 1;
@@ -119,7 +120,7 @@ pub(crate) const fn init_file_table() -> [FileEntry; Rank::COUNT] {
             table[r as usize].cannon_captures[occ as usize] =
                 cannon_ray(r, Rank::COUNT as i8, occ) as u16;
             table[r as usize].cannon_attack_ray[occ as usize] =
-                cannon_attack_ray(r, Rank::COUNT as i8, occ) as u16;
+                cannon_beyond_attack(r, Rank::COUNT as i8, occ) as u16;
             occ += 1;
         }
         r += 1;
@@ -272,50 +273,31 @@ pub(crate) const fn init_squares_between() -> [[Bitboard; Square::COUNT]; Square
     while s1 < Square::COUNT {
         let mut s2 = 0;
         while s2 < Square::COUNT {
-            let mut bits = 1u128 << s2;
-
             let sq1 = Square::from_repr(s1 as u8).unwrap();
             let sq2 = Square::from_repr(s2 as u8).unwrap();
-            let f1 = sq1.file() as usize;
-            let r1 = sq1.rank() as usize;
-            let f2 = sq2.file() as usize;
-            let r2 = sq2.rank() as usize;
+            table[s1][s2] = {
+                let f1 = sq1.file() as i8;
+                let r1 = sq1.rank() as i8;
+                let f2 = sq2.file() as i8;
+                let r2 = sq2.rank() as i8;
 
-            if f1 == f2 {
-                let min_r = if r1 < r2 { r1 } else { r2 };
-                let max_r = if r1 > r2 { r1 } else { r2 };
-                let mut r = min_r + 1;
-                while r < max_r {
-                    bits |= 1 << (r * File::COUNT + f1);
-                    r += 1;
-                }
-            } else if r1 == r2 {
-                let min_f = if f1 < f2 { f1 } else { f2 };
-                let max_f = if f1 > f2 { f1 } else { f2 };
-                let mut f = min_f + 1;
-                while f < max_f {
-                    bits |= 1 << (r1 * File::COUNT + f);
-                    f += 1;
-                }
-            } else {
-                let dr = (r2 as i8 - r1 as i8).abs();
-                let df = (f2 as i8 - f1 as i8).abs();
-                if (dr == 2 && df == 1) || (dr == 1 && df == 2) {
-                    let leg_r = if dr == 2 {
-                        (r1 as i8 + r2 as i8) / 2
+                if f1 == f2 || r1 == r2 {
+                    rook_attacks(sq1, Bitboard::from_square(sq2))
+                        .const_and(rook_attacks(sq2, Bitboard::from_square(sq1)))
+                        .const_or(Bitboard::from_square(sq2))
+                } else {
+                    let dr = (r2 - r1).abs();
+                    let df = (f2 - f1).abs();
+                    if (dr == 2 && df == 1) || (dr == 1 && df == 2) {
+                        let leg_r = if dr == 2 { (r1 + r2) / 2 } else { r2 };
+                        let leg_f = if df == 2 { (f1 + f2) / 2 } else { f2 };
+                        let leg_sq = Square::from_repr((leg_r * 9 + leg_f) as u8).unwrap();
+                        Bitboard::from_square(leg_sq).const_or(Bitboard::from_square(sq2))
                     } else {
-                        r2 as i8
-                    };
-                    let leg_f = if df == 2 {
-                        (f1 as i8 + f2 as i8) / 2
-                    } else {
-                        f2 as i8
-                    };
-                    bits |= 1 << (leg_r as usize * File::COUNT + leg_f as usize);
+                        Bitboard::new()
+                    }
                 }
-            }
-
-            table[s1][s2] = unsafe { Bitboard::from_raw(bits) };
+            };
             s2 += 1;
         }
         s1 += 1;
@@ -333,51 +315,38 @@ pub(crate) const fn init_squares_beyond() -> [[Bitboard; Square::COUNT]; Square:
         while s2 < Square::COUNT {
             let sq1 = Square::from_repr(s1 as u8).unwrap();
             let sq2 = Square::from_repr(s2 as u8).unwrap();
-            let f1 = sq1.file() as usize;
-            let r1 = sq1.rank() as usize;
-            let f2 = sq2.file() as usize;
-            let r2 = sq2.rank() as usize;
-            let mut bits = 0u128;
+            table[s1][s2] = {
+                let f1 = sq1.file() as i8;
+                let r1 = sq1.rank() as i8;
+                let f2 = sq2.file() as i8;
+                let r2 = sq2.rank() as i8;
 
-            if f1 == f2 {
-                if r2 > r1 {
-                    let mut r = r2;
-                    while r < Rank::COUNT {
-                        bits |= 1 << (r * File::COUNT + f1);
-                        r += 1;
-                    }
-                } else if r2 < r1 {
-                    let mut r = r2;
-                    loop {
-                        bits |= 1 << (r * File::COUNT + f1);
-                        if r == 0 {
-                            break;
-                        }
-                        r -= 1;
-                    }
+                if f1 == f2 || r1 == r2 {
+                    cannon_beyond_attacks(sq1, Bitboard::from_square(sq2))
+                        .const_or(Bitboard::from_square(sq2))
+                } else {
+                    Bitboard::new()
                 }
-            } else if r1 == r2 {
-                if f2 > f1 {
-                    let mut f = f2;
-                    while f < File::COUNT {
-                        bits |= 1 << (r1 * File::COUNT + f);
-                        f += 1;
-                    }
-                } else if f2 < f1 {
-                    let mut f = f2;
-                    loop {
-                        bits |= 1 << (r1 * File::COUNT + f);
-                        if f == 0 {
-                            break;
-                        }
-                        f -= 1;
-                    }
-                }
-            }
+            };
+            s2 += 1;
+        }
+        s1 += 1;
+    }
+    table
+}
 
-            if bits != 0 {
-                table[s1][s2] = unsafe { Bitboard::from_raw(bits) };
-            }
+pub(crate) const fn init_squares_in_line() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+    let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
+    let mut s1 = 0;
+    while s1 < Square::COUNT {
+        let mut s2 = 0;
+        while s2 < Square::COUNT {
+            let sq1 = Square::from_repr(s1 as u8).unwrap();
+            let sq2 = Square::from_repr(s2 as u8).unwrap();
+            table[s1][s2] = rook_attacks(sq1, Bitboard::new())
+                .const_and(rook_attacks(sq2, Bitboard::new()))
+                .const_or(Bitboard::from_square(sq1))
+                .const_or(Bitboard::from_square(sq2));
             s2 += 1;
         }
         s1 += 1;

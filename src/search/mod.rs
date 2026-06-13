@@ -62,7 +62,8 @@ pub struct Searcher<'a> {
     shared: SharedContext<'a>,
     /// The depth that the search finished at the moment.
     current_root_depth: i8,
-    /// Minimum ply for Null Move Pruning to prevent recursive pruning during verification searches
+    /// Minimum ply for Null Move Pruning to prevent recursive pruning during
+    /// verification searches
     nmp_min_ply: u8,
 }
 
