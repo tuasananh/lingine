@@ -1,8 +1,9 @@
 use strum::EnumCount;
 
+use crate::core::{PackedScore, Position, Score, Side, Square};
+
 use crate::core::PieceType;
-use crate::core::{Position, Score, Side, Square};
-use crate::eval::{PackedScore, get_tapered_score};
+use crate::eval::get_tapered_score;
 
 impl Position {
     /// Get the current evaluation score from the position, with the perspective
@@ -19,7 +20,7 @@ impl Position {
     /// Get the on-the-fly calculated tapered evaluation score
     #[inline]
     pub fn tapered_score(&self) -> Score {
-        get_tapered_score(self.state.score.mg, self.state.score.eg, self.state.phase)
+        get_tapered_score(self.state.score, self.state.phase)
     }
 
     /// Computes the complete tapered middlegame and endgame evaluation scores
@@ -34,11 +35,7 @@ impl Position {
                 let pst =
                     crate::eval::piece_square_table_value_tapered(piece.piece_type(), color, sq);
                 let piece_total = val + pst;
-                if color == Side::Red {
-                    score += piece_total;
-                } else {
-                    score -= piece_total;
-                }
+                score += color.signum() * piece_total;
             }
         }
         score
@@ -56,16 +53,10 @@ impl Position {
         )
     }
 
-    /// Get the on-the-fly calculated incremental middlegame score.
+    /// Get the on-the-fly calculated incremental mid- and end-game score.
     #[inline]
-    pub fn mg_score(&self) -> Score {
-        self.state.score.mg
-    }
-
-    /// Get the on-the-fly calculated incremental endgame score.
-    #[inline]
-    pub fn eg_score(&self) -> Score {
-        self.state.score.eg
+    pub fn score(&self) -> PackedScore {
+        self.state.score
     }
 
     /// Get the on-the-fly calculated incremental game phase.

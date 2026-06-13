@@ -1,3 +1,7 @@
+use std::ops::Mul;
+
+use derive_more::{Add, AddAssign, Sub, SubAssign};
+
 use crate::search::MAX_PLY;
 
 pub type Score = i32;
@@ -69,4 +73,38 @@ pub const fn mate_in(ply: u8) -> Score {
 #[inline]
 pub const fn mated_in(ply: u8) -> Score {
     -MATE + ply as Score
+}
+
+/// Stores the evaluation values for Middlegame (MG) and Endgame (EG)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Add, Sub, AddAssign, SubAssign)]
+pub struct PackedScore {
+    pub mg: i32,
+    pub eg: i32,
+}
+
+impl PackedScore {
+    pub const ZERO: Self = Self { mg: 0, eg: 0 };
+
+    #[inline]
+    pub const fn new(mg: i32, eg: i32) -> Self {
+        Self { mg, eg }
+    }
+}
+
+impl Mul<i32> for PackedScore {
+    type Output = PackedScore;
+
+    #[inline]
+    fn mul(self, rhs: i32) -> Self::Output {
+        PackedScore::new(self.mg * rhs, self.eg * rhs)
+    }
+}
+
+impl Mul<PackedScore> for i32 {
+    type Output = PackedScore;
+
+    #[inline]
+    fn mul(self, rhs: PackedScore) -> Self::Output {
+        rhs * self
+    }
 }
