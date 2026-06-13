@@ -8,14 +8,17 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Texel tuning tool for Lingine")]
 struct Args {
-    #[arg(short, long, default_value = "tools/texel_data.epd")]
+    #[arg(short, long, default_value = "tools/texel_data_large.epd")]
     file: PathBuf,
 
     #[arg(short, long, default_value_t = 0)]
     limit: usize,
 
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(short, long, default_value_t = 100)]
     iterations: usize,
+
+    #[arg(short, long, default_value_t = 1e-7)]
+    convergence: f64,
 }
 
 struct Entry {
@@ -133,6 +136,7 @@ fn main() {
         let mut improved = false;
         println!("--- Iteration {}/{} ---", iter, args.iterations);
         let iter_start = std::time::Instant::now();
+        let prev_mse = best_mse;
 
         for i in 0..param_count {
             if !running.load(std::sync::atomic::Ordering::SeqCst) {
@@ -188,9 +192,10 @@ fn main() {
         params.update_from_vector(&params_vec);
         best_k = optimize_k(&entries, &params);
         let current_mse = calculate_mse(&entries, &params, best_k);
+        let improvement = prev_mse - current_mse;
         println!(
-            "MSE after iteration {}: {:.10} (K: {:.6})",
-            iter, current_mse, best_k
+            "MSE after iteration {}: {:.10} (K: {:.6}, Improvement: {:.10})",
+            iter, current_mse, best_k, improvement
         );
 
         // Auto-save progress to tuner_results.txt so we won't lose it if we abort later
@@ -200,7 +205,15 @@ fn main() {
         }
 
         if !improved {
-            println!("Convergence reached. Stopping.");
+            println!("No parameters were improved. Stopping.");
+            break;
+        }
+
+        if improvement < args.convergence {
+            println!(
+                "Convergence reached (improvement {:.10} < {:.10}). Stopping.",
+                improvement, args.convergence
+            );
             break;
         }
     }

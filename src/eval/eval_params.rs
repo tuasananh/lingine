@@ -49,7 +49,7 @@ impl Default for EvalParams {
 
 impl EvalParams {
     pub fn to_vector(&self) -> Vec<i32> {
-        let mut v = Vec::with_capacity(1378);
+        let mut v = Vec::with_capacity(818);
 
         // Material
         for m in &self.material {
@@ -59,12 +59,15 @@ impl EvalParams {
         v.push(self.pawn_crossed.mg);
         v.push(self.pawn_crossed.eg);
 
-        // PSTs
+        // PSTs (only Files 0..=4 are independent, Files 5..=8 are mirrored)
         for type_idx in 0..7 {
-            for sq in 0..90 {
-                let p = self.psts[type_idx][sq];
-                v.push(p.mg);
-                v.push(p.eg);
+            for rank in 0..10 {
+                for file in 0..=4 {
+                    let sq = rank * 9 + file;
+                    let p = self.psts[type_idx][sq];
+                    v.push(p.mg);
+                    v.push(p.eg);
+                }
             }
         }
 
@@ -108,12 +111,21 @@ impl EvalParams {
         self.pawn_crossed.eg = v[idx + 1];
         idx += 2;
 
-        // PSTs
+        // PSTs (only Files 0..=4 are independent, we copy updates to Files 5..=8)
         for type_idx in 0..7 {
-            for sq in 0..90 {
-                self.psts[type_idx][sq].mg = v[idx];
-                self.psts[type_idx][sq].eg = v[idx + 1];
-                idx += 2;
+            for rank in 0..10 {
+                for file in 0..=4 {
+                    let mg = v[idx];
+                    let eg = v[idx + 1];
+                    idx += 2;
+
+                    let sq_left = rank * 9 + file;
+                    let sq_right = rank * 9 + (8 - file);
+                    self.psts[type_idx][sq_left].mg = mg;
+                    self.psts[type_idx][sq_left].eg = eg;
+                    self.psts[type_idx][sq_right].mg = mg;
+                    self.psts[type_idx][sq_right].eg = eg;
+                }
             }
         }
 
