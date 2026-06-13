@@ -3,7 +3,7 @@ use crate::core::{
     Bitboard, PackedScore, PieceType, Position, Side, cannon_captures, knight_attacks, rook_attacks,
 };
 
-const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed![
+pub(in crate::eval) const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed![
     (-10, -15),
     (-5, -8),
     (0, 0),
@@ -15,7 +15,7 @@ const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed![
     (24, 36),
 ];
 
-const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed![
+pub(in crate::eval) const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed![
     (-20, -30),
     (-15, -22),
     (-10, -15),
@@ -36,7 +36,7 @@ const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed![
     (40, 66),
 ];
 
-const CANNON_MOBILITY_BONUS: [PackedScore; 18] = packed![
+pub(in crate::eval) const CANNON_MOBILITY_BONUS: [PackedScore; 18] = packed![
     (-15, -20),
     (-10, -13),
     (-5, -7),
@@ -95,5 +95,53 @@ pub fn compute_mobility_score(pos: &Position) -> PackedScore {
     let occupied = pos.bitboard_occupied();
     let red_mobility = compute_side_mobility(pos, Side::Red, occupied);
     let black_mobility = compute_side_mobility(pos, Side::Black, occupied);
+    red_mobility - black_mobility
+}
+
+fn compute_side_mobility_with_params(
+    pos: &Position,
+    side: Side,
+    occupied: Bitboard,
+    params: &super::EvalParams,
+) -> PackedScore {
+    let mut score = PackedScore::ZERO;
+    let friendly = pos.bitboard_by_color(side);
+    let enemy = pos.bitboard_by_color(side.opposite());
+
+    // Knights
+    let mut knights = pos.bitboard_by_type(PieceType::Knight) & friendly;
+    while let Some(from) = knights.pop_lsb() {
+        let attacks = knight_attacks(from, occupied) & !friendly;
+        let count = attacks.count_ones() as usize;
+        score += params.knight_mobility[count];
+    }
+
+    // Rooks
+    let mut rooks = pos.bitboard_by_type(PieceType::Rook) & friendly;
+    while let Some(from) = rooks.pop_lsb() {
+        let attacks = rook_attacks(from, occupied) & !friendly;
+        let count = attacks.count_ones() as usize;
+        score += params.rook_mobility[count];
+    }
+
+    // Cannons
+    let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & friendly;
+    while let Some(from) = cannons.pop_lsb() {
+        let attacks =
+            (rook_attacks(from, occupied) & !occupied) | (cannon_captures(from, occupied) & enemy);
+        let count = attacks.count_ones() as usize;
+        score += params.cannon_mobility[count];
+    }
+
+    score
+}
+
+pub fn compute_mobility_score_with_params(
+    pos: &Position,
+    params: &super::EvalParams,
+) -> PackedScore {
+    let occupied = pos.bitboard_occupied();
+    let red_mobility = compute_side_mobility_with_params(pos, Side::Red, occupied, params);
+    let black_mobility = compute_side_mobility_with_params(pos, Side::Black, occupied, params);
     red_mobility - black_mobility
 }

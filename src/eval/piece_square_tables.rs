@@ -8,7 +8,7 @@ use crate::{
 use super::PackedScore;
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_KING_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_KING_TAPERED: [PackedScore; 90] = packed![
     // Rank 0
     (0, 0), (0, 0), (0, 0),  (-3, -3),   (0, 0),  (-3, -3), (0, 0), (0, 0), (0, 0),
     // Rank 1
@@ -26,7 +26,7 @@ const PIECE_SQUARE_TABLE_KING_TAPERED: [PackedScore; 90] = packed![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_ADVISOR_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_ADVISOR_TAPERED: [PackedScore; 90] = packed![
     // Rank 0
     (0, 0), (0, 0), (0, 0),   (0, 0),   (0, 0),   (0, 0), (0, 0), (0, 0), (0, 0),
     // Rank 1
@@ -44,7 +44,7 @@ const PIECE_SQUARE_TABLE_ADVISOR_TAPERED: [PackedScore; 90] = packed![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_BISHOP_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_BISHOP_TAPERED: [PackedScore; 90] = packed![
     // Rank 0
     (0, 0), (0, 0),   (0, 0), (0, 0), (0, 0), (0, 0),   (0, 0), (0, 0), (0, 0),
     // Rank 1
@@ -64,7 +64,7 @@ const PIECE_SQUARE_TABLE_BISHOP_TAPERED: [PackedScore; 90] = packed![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_KNIGHT_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_KNIGHT_TAPERED: [PackedScore; 90] = packed![
     // Rank 0 (starting rank)
     (-10, -12), (-10, -10),  (-5, -5),  (-5, -5),  (-5, -5),  (-5, -5),  (-5, -5), (-10, -10), (-10, -12),
     // Rank 1
@@ -88,7 +88,7 @@ const PIECE_SQUARE_TABLE_KNIGHT_TAPERED: [PackedScore; 90] = packed![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_ROOK_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_ROOK_TAPERED: [PackedScore; 90] = packed![
     // Rank 0 (starting rank)
     (-5, -5),   (0, 0),   (2, 2),   (5, 5),   (5, 5),   (5, 5),   (2, 2),   (0, 0),  (-5, -5),
     // Rank 1
@@ -112,7 +112,7 @@ const PIECE_SQUARE_TABLE_ROOK_TAPERED: [PackedScore; 90] = packed![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_CANNON_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_CANNON_TAPERED: [PackedScore; 90] = packed![
     // Rank 0
     (-5, -5),   (0, 0),   (0, 0),   (0, 0),   (0, 0),   (0, 0),   (0, 0),   (0, 0),  (-5, -5),
     // Rank 1
@@ -136,7 +136,7 @@ const PIECE_SQUARE_TABLE_CANNON_TAPERED: [PackedScore; 90] = packed![
 ];
 
 #[rustfmt::skip]
-const PIECE_SQUARE_TABLE_PAWN_TAPERED: [PackedScore; 90] = packed![
+pub(in crate::eval) const PIECE_SQUARE_TABLE_PAWN_TAPERED: [PackedScore; 90] = packed![
     // Ranks 0, 1, 2 (deep in own side)
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
@@ -183,4 +183,24 @@ pub const fn piece_square_table_value_tapered(
         PieceType::Cannon => PIECE_SQUARE_TABLE_CANNON_TAPERED[index],
         PieceType::Pawn => PIECE_SQUARE_TABLE_PAWN_TAPERED[index],
     }
+}
+
+#[inline]
+pub fn piece_square_table_value_tapered_with_params(
+    piece_type: PieceType,
+    color: Side,
+    sq: Square,
+    params: &super::EvalParams,
+) -> PackedScore {
+    let index = match color {
+        Side::Red => sq as usize,
+        Side::Black => {
+            let file = sq.file() as usize;
+            let rank = sq.rank() as usize;
+            let mirrored_rank = Rank::COUNT - 1 - rank;
+            let mirrored_file = File::COUNT - 1 - file;
+            mirrored_rank * File::COUNT + mirrored_file
+        }
+    };
+    params.psts[piece_type as usize][index]
 }

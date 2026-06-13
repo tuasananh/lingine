@@ -1,9 +1,13 @@
+pub mod eval_params;
 mod mobility_tables;
 mod piece_square_tables;
+pub use eval_params::*;
 pub use mobility_tables::*;
 pub use piece_square_tables::*;
 
-use crate::core::{PackedScore, Piece, PieceType, Position, Score, Square};
+use strum::EnumCount;
+
+use crate::core::{PackedScore, Piece, PieceType, Position, Score, Side, Square};
 
 macro_rules! packed {
     ($( ($x:expr, $y:expr) ),* $(,)?) => {
@@ -95,18 +99,10 @@ pub const fn piece_phase_weight(pt: PieceType) -> i32 {
 }
 
 // Tapered bonuses for having 0, 1, or 2 Advisors
-pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![
-    (0, 0),
-    (0, 0),
-    (0, 0),
-];
+pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![(0, 0), (0, 0), (0, 0),];
 
 // Tapered bonuses for having 0, 1, or 2 Bishops (Elephants)
-pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![
-    (0, 0),
-    (0, 0),
-    (0, 0),
-];
+pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![(0, 0), (0, 0), (0, 0),];
 
 /// Computes defender count bonuses for both sides.
 #[inline]
@@ -162,6 +158,71 @@ pub const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedSco
 #[inline]
 pub fn evaluate(pos: &Position) -> Score {
     pos.tapered_score()
+}
+
+#[inline]
+pub fn piece_material_value_tapered_with_params(
+    piece: Piece,
+    sq: Square,
+    params: &EvalParams,
+) -> PackedScore {
+    let pt = piece.piece_type();
+    if pt == PieceType::Pawn {
+        let crossed = match piece.color() {
+            Side::Red => sq.rank() as u8 >= 5,
+            Side::Black => sq.rank() as u8 <= 4,
+        };
+        if crossed {
+            params.pawn_crossed
+        } else {
+            params.material[PieceType::Pawn as usize]
+        }
+    } else if pt == PieceType::King {
+        PackedScore::ZERO
+    } else {
+        params.material[pt as usize]
+    }
+}
+
+#[inline]
+pub fn compute_defender_bonus_with_params(pos: &Position, params: &EvalParams) -> PackedScore {
+    let mut score = PackedScore::ZERO;
+
+    // Red defenders
+    let red_advisors = pos.piece_count(Piece::RedAdvisor) as usize;
+    let red_bishops = pos.piece_count(Piece::RedBishop) as usize;
+    score += params.advisor_count_bonus[red_advisors.min(2)];
+    score += params.bishop_count_bonus[red_bishops.min(2)];
+
+    // Black defenders
+    let black_advisors = pos.piece_count(Piece::BlackAdvisor) as usize;
+    let black_bishops = pos.piece_count(Piece::BlackBishop) as usize;
+    score -= params.advisor_count_bonus[black_advisors.min(2)];
+    score -= params.bishop_count_bonus[black_bishops.min(2)];
+
+    score
+}
+
+pub fn evaluate_with_params(pos: &Position, params: &EvalParams) -> Score {
+    let mut base_score = PackedScore::ZERO;
+    let mut phase = 0;
+
+    for sq_idx in 0..Square::COUNT {
+        if let Some(piece) = pos.piece_at(Square::from_repr(sq_idx as u8).unwrap()) {
+            let sq = Square::from_repr(sq_idx as u8).unwrap();
+            let color = piece.color();
+            let val = piece_material_value_tapered_with_params(piece, sq, params);
+            let pst =
+                piece_square_table_value_tapered_with_params(piece.piece_type(), color, sq, params);
+            base_score += color.signum() * (val + pst);
+            phase += piece_phase_weight(piece.piece_type());
+        }
+    }
+
+    let mobility_score = compute_mobility_score_with_params(pos, params);
+    let defender_score = compute_defender_bonus_with_params(pos, params);
+
+    get_tapered_score(base_score + mobility_score + defender_score, phase)
 }
 
 #[cfg(test)]
