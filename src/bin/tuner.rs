@@ -26,6 +26,14 @@ struct Entry {
 fn main() {
     let args = Args::parse();
 
+    let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        println!("\nCtrl+C detected! Gracefully shutting down and printing best parameters...");
+        r.store(false, std::sync::atomic::Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+
     println!("Loading EPD file from: {:?}", args.file);
     let file = match File::open(&args.file) {
         Ok(f) => f,
@@ -116,11 +124,17 @@ fn main() {
     println!("Tuning {} active parameters...", param_count);
 
     for iter in 1..=args.iterations {
+        if !running.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
         let mut improved = false;
         println!("--- Iteration {}/{} ---", iter, args.iterations);
         let iter_start = std::time::Instant::now();
 
         for i in 0..param_count {
+            if !running.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
             // Try +1
             params_vec[i] += 1;
             params.update_from_vector(&params_vec);
@@ -163,6 +177,10 @@ fn main() {
             }
         }
         println!(); // Clear the carriage return line
+
+        if !running.load(std::sync::atomic::Ordering::SeqCst) {
+            break;
+        }
 
         params.update_from_vector(&params_vec);
         best_k = optimize_k(&entries, &params);
