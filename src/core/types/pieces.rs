@@ -8,7 +8,7 @@ use crate::core::Side;
 #[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum PieceType {
-    Rook, Advisor, Cannon, Pawn, Knight, Bishop, King
+    Rook = 0, Advisor, Cannon, Pawn, Knight, Bishop, King
 }
 
 /// Represents standard Xiangqi pieces, categorized by color and piece type.
@@ -23,6 +23,8 @@ pub enum Piece {
 
 impl Piece {
     pub const COUNT: usize = Self::BlackKing as usize + 1;
+    // piece_red + SEPARATOR == piece_black
+    pub const SEPARATOR: u8 = 8;
 }
 
 impl Piece {

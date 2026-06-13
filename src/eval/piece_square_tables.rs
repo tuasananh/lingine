@@ -186,7 +186,7 @@ pub const fn piece_square_table_value_tapered(
 }
 
 #[inline]
-pub fn piece_square_table_value_tapered_with_params(
+pub(in crate::eval) fn piece_square_table_value_tapered_with_params(
     piece_type: PieceType,
     color: Side,
     sq: Square,

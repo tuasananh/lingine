@@ -30,7 +30,7 @@ pub struct StateInfo {
     /// perspective)
     pub score: PackedScore,
     /// Precalculated incremental game phase
-    pub phase: i32,
+    pub phase: u8,
     /// Checker pieces checking the King of the side to move.
     pub checkers: Bitboard,
     /// Pinned pieces (blockers) for both sides' kings.
@@ -119,6 +119,13 @@ impl Position {
     #[inline]
     pub fn piece_count(&self, piece: Piece) -> u8 {
         self.piece_count[piece as usize]
+    }
+
+    #[inline]
+    pub fn piece_type_count(&self, piece_type: PieceType) -> u8 {
+        let piece_red = Piece::from_repr(piece_type as u8).unwrap();
+        let piece_black = Piece::from_repr((piece_type as u8) + Piece::SEPARATOR).unwrap();
+        self.piece_count(piece_red) + self.piece_count(piece_black)
     }
 
     /// Get the bitboard of the [`piece_type`], which represents the pieces of
@@ -302,7 +309,7 @@ impl Position {
         pos.game_ply = (fullmove.saturating_sub(1) * 2) + (side_to_move as u16);
 
         pos.state.sixtymove_clock = rule60;
-        pos.state.score = pos.compute_tapered_evaluation_scores();
+        pos.state.score = pos.tapered_score_from_scratch();
         pos.state.phase = pos.calculate_board_phase();
         pos.set_check_info();
 
