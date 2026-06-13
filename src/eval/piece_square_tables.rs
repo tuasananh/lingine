@@ -1,5 +1,7 @@
+use strum::EnumCount;
+
 use crate::{
-    core::{PieceType, Side, Square},
+    core::{File, PieceType, Rank, Side, Square},
     eval::packed,
 };
 
@@ -167,9 +169,9 @@ pub const fn piece_square_table_value_tapered(
             // Mirror rank vertically: 9 - rank, and file horizontally: 8 - file
             let file = sq.file() as usize;
             let rank = sq.rank() as usize;
-            let mirrored_rank = 9 - rank;
-            let mirrored_file = 8 - file;
-            mirrored_rank * 9 + mirrored_file
+            let mirrored_rank = Rank::COUNT - 1 - rank;
+            let mirrored_file = File::COUNT - 1 - file;
+            mirrored_rank * File::COUNT + mirrored_file
         }
     };
     match piece_type {

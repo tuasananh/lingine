@@ -82,7 +82,7 @@ pub fn calculate_phase(
 
 /// Gets the phase weight of a specific piece type.
 #[inline]
-pub const fn piece_phase_weight(pt: crate::core::PieceType) -> i32 {
+pub const fn piece_phase_weight(pt: PieceType) -> i32 {
     match pt {
         PieceType::Rook => PHASE_ROOK,
         PieceType::Cannon => PHASE_CANNON,

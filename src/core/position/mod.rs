@@ -52,23 +52,23 @@ pub struct StateInfo {
 pub struct Position {
     /// Flat 90-square array mapping square index (0 to 89) to the Piece
     /// occupying it.
-    board: [Option<Piece>; Square::COUNT],
+    board: [Option<Piece>; Square::COUNT], // 1 * 90 = 90 bytes
     /// Precomputed bitboards showing piece placements grouped by `PieceType`.
-    bitboard_by_type: [Bitboard; PieceType::COUNT],
+    bitboard_by_type: [Bitboard; PieceType::COUNT], // 7 * 16 = 112 bytes
     /// Precomputed bitboards showing piece placements grouped by `Color`.
-    bitboard_by_color: [Bitboard; Side::COUNT],
+    bitboard_by_color: [Bitboard; Side::COUNT], // 2 * 16 = 32 bytes
     /// Active count of each piece category on the board.
-    piece_count: [u8; Piece::COUNT],
+    piece_count: [u8; Piece::COUNT], // 15 bytes
     /// Current state of position
-    state: StateInfo,
+    state: StateInfo, // 224 bytes
     /// Stack tracking previous move parameter histories for undoing moves.
-    history: Vec<StateInfo>,
+    history: Vec<StateInfo>, // ptr (8) + size (8) + cap(8) = 24 bytes
     /// Total moves played in the game so far (Red = 0, Black = 1, Red's
     /// next = 2, etc.).
-    game_ply: u16,
+    game_ply: u16, // 2 bytes
     /// Palace coordinates of both players' Generals (Kings) for faster check
     /// detection.
-    king_squares: [Square; Side::COUNT],
+    king_squares: [Square; Side::COUNT], // 2 bytes
 }
 
 #[derive(Error, Debug)]
