@@ -1,12 +1,15 @@
 use clap::Parser;
-use lingine::core::{PackedScore, Position, Side};
-use lingine::eval::{EvalParams, evaluate_with_params};
+use lingine::core::{
+    cannon_captures, knight_attacks, rook_attacks, PackedScore, Piece, PieceType,
+    Position, Side, Square,
+};
+use lingine::eval::{evaluate_with_params, EvalParams};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Texel tuning tool for Lingine")]
+#[command(author, version, about = "Texel tuning tool for Lingine using Adam Optimizer")]
 struct Args {
     #[arg(short, long, default_value = "tools/texel_data_large.epd")]
     file: PathBuf,
@@ -14,16 +17,287 @@ struct Args {
     #[arg(short, long, default_value_t = 0)]
     limit: usize,
 
-    #[arg(short, long, default_value_t = 100)]
+    #[arg(short, long, default_value_t = 200)]
     iterations: usize,
 
     #[arg(short, long, default_value_t = 1e-7)]
     convergence: f64,
+
+    #[arg(short = 'r', long, default_value_t = 1.0)]
+    learning_rate: f64,
 }
 
 struct Entry {
     pos: Position,
     result: f64, // 1.0 (Win), 0.5 (Draw), 0.0 (Loss)
+}
+
+struct SparsePosition {
+    features: Vec<(usize, f64)>, // (parameter_index, coefficient)
+    phase: f64,
+    result: f64,
+}
+
+const PARAM_PAWN: usize = 3;
+const PARAM_PAWN_CROSSED: usize = 7;
+
+const PST_OFFSET: usize = 8;
+const MOBILITY_OFFSET: usize = 358;
+const DEFENDER_OFFSET: usize = 403;
+
+fn add_coeff(features: &mut Vec<(usize, f64)>, idx: usize, val: f64) {
+    if let Some(pos) = features.iter_mut().position(|(i, _)| *i == idx) {
+        features[pos].1 += val;
+    } else {
+        features.push((idx, val));
+    }
+}
+
+fn add_mobility_features(pos: &Position, features: &mut Vec<(usize, f64)>) {
+    let occupied = pos.bitboard_occupied();
+
+    for side in [Side::Red, Side::Black] {
+        let us_sign = side.signum() as f64;
+        let friendly = pos.bitboard_by_color(side);
+        let enemy = pos.bitboard_by_color(side.opposite());
+
+        // Knights
+        let mut knights = pos.bitboard_by_type(PieceType::Knight) & friendly;
+        while let Some(from) = knights.pop_lsb() {
+            let attacks = knight_attacks(from, occupied) & !friendly;
+            let count = attacks.count_ones() as usize;
+            add_coeff(features, MOBILITY_OFFSET + count, us_sign);
+        }
+
+        // Rooks
+        let mut rooks = pos.bitboard_by_type(PieceType::Rook) & friendly;
+        while let Some(from) = rooks.pop_lsb() {
+            let attacks = rook_attacks(from, occupied) & !friendly;
+            let count = attacks.count_ones() as usize;
+            add_coeff(features, MOBILITY_OFFSET + 9 + count, us_sign);
+        }
+
+        // Cannons
+        let mut cannons = pos.bitboard_by_type(PieceType::Cannon) & friendly;
+        while let Some(from) = cannons.pop_lsb() {
+            let attacks =
+                (rook_attacks(from, occupied) & !occupied) | (cannon_captures(from, occupied) & enemy);
+            let count = attacks.count_ones() as usize;
+            add_coeff(features, MOBILITY_OFFSET + 9 + 18 + count, us_sign);
+        }
+    }
+}
+
+fn add_defender_features(pos: &Position, features: &mut Vec<(usize, f64)>) {
+    // Red defenders
+    let red_advisors = pos.piece_count(Piece::RedAdvisor) as usize;
+    let red_bishops = pos.piece_count(Piece::RedBishop) as usize;
+    add_coeff(features, DEFENDER_OFFSET + red_advisors.min(2), 1.0);
+    add_coeff(features, DEFENDER_OFFSET + 3 + red_bishops.min(2), 1.0);
+
+    // Black defenders
+    let black_advisors = pos.piece_count(Piece::BlackAdvisor) as usize;
+    let black_bishops = pos.piece_count(Piece::BlackBishop) as usize;
+    add_coeff(features, DEFENDER_OFFSET + black_advisors.min(2), -1.0);
+    add_coeff(features, DEFENDER_OFFSET + 3 + black_bishops.min(2), -1.0);
+}
+
+fn calculate_phase(pos: &Position) -> f64 {
+    (pos.piece_type_count(PieceType::Rook) * 2
+        + pos.piece_type_count(PieceType::Cannon) * 2
+        + pos.piece_type_count(PieceType::Knight) * 2
+        + pos.piece_type_count(PieceType::Advisor) * 1
+        + pos.piece_type_count(PieceType::Bishop) * 1) as f64
+}
+
+fn compile_features(pos: &Position, result: f64) -> SparsePosition {
+    let mut features = Vec::new();
+
+    for sq_idx in 0..90 {
+        let sq = Square::from_repr(sq_idx).unwrap();
+        if let Some(piece) = pos.piece_at(sq) {
+            let pt = piece.piece_type();
+            let pc = piece.color();
+            let us_sign = pc.signum() as f64;
+
+            // 1. Material
+            if pt == PieceType::Pawn {
+                let crossed = match pc {
+                    Side::Red => sq.rank() as u8 >= 5,
+                    Side::Black => sq.rank() as u8 <= 4,
+                };
+                if crossed {
+                    add_coeff(&mut features, PARAM_PAWN_CROSSED, us_sign);
+                } else {
+                    add_coeff(&mut features, PARAM_PAWN, us_sign);
+                }
+            } else if pt == PieceType::King {
+                // King material is fixed to 0
+            } else {
+                add_coeff(&mut features, pt as usize, us_sign);
+            }
+
+            // 2. Piece-Square Tables (PST)
+            let sq_mirrored = match pc {
+                Side::Red => sq,
+                Side::Black => {
+                    let file = sq.file() as usize;
+                    let rank = sq.rank() as usize;
+                    let mirrored_rank = 9 - rank;
+                    let mirrored_file = 8 - file;
+                    Square::from_repr((mirrored_rank * 9 + mirrored_file) as u8).unwrap()
+                }
+            };
+            let rank = sq_mirrored.rank() as usize;
+            let file = sq_mirrored.file() as usize;
+            let file_indep = if file <= 4 { file } else { 8 - file };
+            let pst_idx = rank * 5 + file_indep;
+
+            add_coeff(&mut features, PST_OFFSET + (pt as usize) * 50 + pst_idx, us_sign);
+        }
+    }
+
+    add_mobility_features(pos, &mut features);
+    add_defender_features(pos, &mut features);
+
+    let phase = calculate_phase(pos);
+
+    // Score is from side-to-move's perspective
+    let side_sign = pos.side_to_move().signum() as f64;
+    for f in &mut features {
+        f.1 *= side_sign;
+    }
+
+    SparsePosition {
+        features,
+        phase,
+        result,
+    }
+}
+
+fn calculate_score(features: &SparsePosition, weights: &[f64]) -> f64 {
+    let mut mg_sum = 0.0;
+    let mut eg_sum = 0.0;
+    for &(idx, coeff) in &features.features {
+        mg_sum += weights[idx * 2] * coeff;
+        eg_sum += weights[idx * 2 + 1] * coeff;
+    }
+    let phase = features.phase;
+    (mg_sum * phase + eg_sum * (32.0 - phase)) / 32.0
+}
+
+fn calculate_mse_features(entries: &[SparsePosition], weights: &[f64], k: f64) -> f64 {
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let chunk_size = entries.len().div_ceil(num_threads);
+
+    let total_sq_error: f64 = std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for chunk in entries.chunks(chunk_size) {
+            let handle = s.spawn(move || {
+                let mut local_error = 0.0;
+                for entry in chunk {
+                    let score = calculate_score(entry, weights);
+                    let sigmoid = 1.0 / (1.0 + 10.0f64.powf(-k * score / 400.0));
+                    let err = entry.result - sigmoid;
+                    local_error += err * err;
+                }
+                local_error
+            });
+            handles.push(handle);
+        }
+        handles.into_iter().map(|h| h.join().unwrap()).sum()
+    });
+
+    total_sq_error / entries.len() as f64
+}
+
+fn optimize_k_features(entries: &[SparsePosition], weights: &[f64]) -> f64 {
+    let mut low = 0.0;
+    let mut high = 10.0;
+
+    for _ in 0..100 {
+        let m1 = low + (high - low) / 3.0;
+        let m2 = high - (high - low) / 3.0;
+
+        let err1 = calculate_mse_features(entries, weights, m1);
+        let err2 = calculate_mse_features(entries, weights, m2);
+
+        if err1 < err2 {
+            high = m2;
+        } else {
+            low = m1;
+        }
+    }
+    (low + high) / 2.0
+}
+
+fn compute_gradients(entries: &[SparsePosition], weights: &[f64], k: f64) -> Vec<f64> {
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let chunk_size = entries.len().div_ceil(num_threads);
+
+    std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for chunk in entries.chunks(chunk_size) {
+            let handle = s.spawn(move || {
+                let mut local_gradients = vec![0.0; weights.len()];
+                for entry in chunk {
+                    let score = calculate_score(entry, weights);
+                    let sigmoid = 1.0 / (1.0 + 10.0f64.powf(-k * score / 400.0));
+                    let diff = sigmoid - entry.result;
+
+                    let deriv =
+                        sigmoid * (1.0 - sigmoid) * std::f64::consts::LN_10 * (k / 400.0);
+                    let scale = 2.0 * diff * deriv;
+
+                    let phase = entry.phase;
+                    for &(idx, coeff) in &entry.features {
+                        local_gradients[idx * 2] += scale * coeff * (phase / 32.0);
+                        local_gradients[idx * 2 + 1] += scale * coeff * ((32.0 - phase) / 32.0);
+                    }
+                }
+                local_gradients
+            });
+            handles.push(handle);
+        }
+
+        let mut total_gradients = vec![0.0; weights.len()];
+        for h in handles {
+            let local_grads = h.join().unwrap();
+            for (i, val) in local_grads.into_iter().enumerate() {
+                total_gradients[i] += val;
+            }
+        }
+
+        let n = entries.len() as f64;
+        for val in &mut total_gradients {
+            *val /= n;
+        }
+
+        total_gradients
+    })
+}
+
+fn calculate_score_exact(features: &SparsePosition, weights: &[f64]) -> f64 {
+    let mut mg_sum = 0.0;
+    let mut eg_sum = 0.0;
+    for &(idx, coeff) in &features.features {
+        mg_sum += weights[idx * 2] * coeff;
+        eg_sum += weights[idx * 2 + 1] * coeff;
+    }
+    let mg = mg_sum.round() as i32;
+    let eg = eg_sum.round() as i32;
+    let phase = features.phase.round() as i32;
+    let sum = mg * phase + eg * (32 - phase);
+    let val = if sum >= 0 {
+        (sum + 16) / 32
+    } else {
+        (sum - 16) / 32
+    };
+    val as f64
 }
 
 fn main() {
@@ -47,9 +321,9 @@ fn main() {
     };
     let reader = BufReader::new(file);
 
-    let mut entries = Vec::new();
+    let mut raw_entries = Vec::new();
     for (line_idx, line) in reader.lines().enumerate() {
-        if args.limit > 0 && entries.len() >= args.limit {
+        if args.limit > 0 && raw_entries.len() >= args.limit {
             break;
         }
 
@@ -64,8 +338,6 @@ fn main() {
             continue;
         }
 
-        // Parse FEN and result. E.g.
-        // rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w c9 "0.5";
         let parts: Vec<&str> = line.split(" c9 ").collect();
         if parts.len() < 2 {
             continue;
@@ -74,7 +346,6 @@ fn main() {
         let fen = parts[0].trim();
         let result_part = parts[1].trim();
 
-        // Extract result value inside quotes
         let result_str = result_part
             .trim_start_matches('"')
             .trim_end_matches(';')
@@ -92,7 +363,7 @@ fn main() {
         };
 
         match Position::from_fen(fen) {
-            Ok(pos) => entries.push(Entry { pos, result }),
+            Ok(pos) => raw_entries.push(Entry { pos, result }),
             Err(e) => {
                 eprintln!(
                     "Warning: invalid FEN at line {}: {} ({:?})",
@@ -104,112 +375,124 @@ fn main() {
         }
     }
 
-    println!("Loaded {} positions.", entries.len());
-    if entries.is_empty() {
+    println!("Loaded {} positions.", raw_entries.len());
+    if raw_entries.is_empty() {
         eprintln!("ERROR: No valid positions loaded. Exiting.");
         std::process::exit(1);
     }
 
-    let num_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4);
-    println!(
-        "Running tuner with {} parallel worker threads.",
-        num_threads
-    );
+    // Initialize parameters
+    let params = EvalParams::default();
+    let params_vec_i32 = params.to_vector();
+    let mut weights: Vec<f64> = params_vec_i32.iter().map(|&x| x as f64).collect();
 
-    let mut params = EvalParams::default();
-    let mut best_k = optimize_k(&entries, &params);
-    let mut best_mse = calculate_mse(&entries, &params, best_k);
+    // Verify feature extraction against the engine's evaluate_with_params
+    println!("Verifying feature extraction consistency...");
+    let mut verified = true;
+    for (idx, entry) in raw_entries.iter().take(100).enumerate() {
+        let eval = evaluate_with_params(&entry.pos, &params);
+        let side_to_move = entry.pos.side_to_move();
+        let expected_score = match side_to_move {
+            Side::Red => eval,
+            Side::Black => -eval,
+        } as f64;
+
+        let sparse = compile_features(&entry.pos, entry.result);
+        let computed_score = calculate_score_exact(&sparse, &weights);
+        let diff = (expected_score - computed_score).abs();
+        if diff > 1e-2 {
+            println!(
+                "WARNING: Verification failed at index {}: expected {}, computed {}",
+                idx, expected_score, computed_score
+            );
+            verified = false;
+        }
+    }
+    if verified {
+        println!("Verification successful! Feature extraction is 100% consistent with evaluation.");
+    } else {
+        println!("ERROR: Feature extraction is inconsistent. Please check the mapping.");
+        std::process::exit(1);
+    }
+
+    println!("Compiling sparse features for all positions...");
+    let entries: Vec<SparsePosition> = raw_entries
+        .into_iter()
+        .map(|entry| compile_features(&entry.pos, entry.result))
+        .collect();
+
+    let mut best_k = optimize_k_features(&entries, &weights);
+    let mut best_mse = calculate_mse_features(&entries, &weights, best_k);
 
     println!("Initial K: {:.6}", best_k);
     println!("Initial MSE: {:.10}", best_mse);
 
-    let mut params_vec = params.to_vector();
-    let param_count = params_vec.len();
-    println!("Tuning {} active parameters...", param_count);
+    // Adam configuration
+    let alpha = args.learning_rate;
+    let beta1 = 0.9;
+    let beta2 = 0.999;
+    let epsilon = 1e-8;
+
+    let mut m = vec![0.0; weights.len()];
+    let mut v = vec![0.0; weights.len()];
+    let mut beta1_pow = beta1;
+    let mut beta2_pow = beta2;
+
+    println!("Tuning {} active parameters using Adam...", weights.len());
 
     for iter in 1..=args.iterations {
         if !running.load(std::sync::atomic::Ordering::SeqCst) {
             break;
         }
-        let mut improved = false;
-        println!("--- Iteration {}/{} ---", iter, args.iterations);
+
         let iter_start = std::time::Instant::now();
         let prev_mse = best_mse;
 
-        for i in 0..param_count {
-            if !running.load(std::sync::atomic::Ordering::SeqCst) {
-                break;
-            }
-            // Try +1
-            params_vec[i] += 1;
-            params.update_from_vector(&params_vec);
-            let score_plus = calculate_mse(&entries, &params, best_k);
+        // Compute gradients
+        let gradients = compute_gradients(&entries, &weights, best_k);
 
-            // Try -1
-            params_vec[i] -= 2;
-            params.update_from_vector(&params_vec);
-            let score_minus = calculate_mse(&entries, &params, best_k);
-
-            if score_plus < best_mse && score_plus < score_minus {
-                params_vec[i] += 2; // Keep +1
-                best_mse = score_plus;
-                improved = true;
-            } else if score_minus < best_mse {
-                // Keep -1 (already set to params_vec[i] - 1)
-                best_mse = score_minus;
-                improved = true;
-            } else {
-                params_vec[i] += 1; // Revert to original
+        // Update parameters
+        for i in 0..weights.len() {
+            // King material (indices 12 & 13) is fixed at 0
+            if i == 12 || i == 13 {
+                continue;
             }
 
-            // Print progress and ETA every 100 parameters
-            if (i + 1) % 100 == 0 || i + 1 == param_count {
-                let elapsed = iter_start.elapsed().as_secs_f64();
-                let progress = (i + 1) as f64 / param_count as f64;
-                let total_est = elapsed / progress;
-                let eta = total_est - elapsed;
-                print!(
-                    "\r  Progress: {:>4}/{:<4} ({:>5.1}%) | Elapsed: {:>5.1}s | ETA: {:>5.1}s | Current MSE: {:.10}",
-                    i + 1,
-                    param_count,
-                    progress * 100.0,
-                    elapsed,
-                    eta,
-                    best_mse
-                );
-                use std::io::Write;
-                std::io::stdout().flush().unwrap();
-            }
-        }
-        println!(); // Clear the carriage return line
+            m[i] = beta1 * m[i] + (1.0 - beta1) * gradients[i];
+            v[i] = beta2 * v[i] + (1.0 - beta2) * gradients[i] * gradients[i];
 
-        if !running.load(std::sync::atomic::Ordering::SeqCst) {
-            break;
+            let m_hat = m[i] / (1.0 - beta1_pow);
+            let v_hat = v[i] / (1.0 - beta2_pow);
+
+            weights[i] -= alpha * m_hat / (v_hat.sqrt() + epsilon);
         }
 
-        params.update_from_vector(&params_vec);
-        best_k = optimize_k(&entries, &params);
-        let current_mse = calculate_mse(&entries, &params, best_k);
-        let improvement = prev_mse - current_mse;
+        beta1_pow *= beta1;
+        beta2_pow *= beta2;
+
+        best_k = optimize_k_features(&entries, &weights);
+        best_mse = calculate_mse_features(&entries, &weights, best_k);
+        let improvement = prev_mse - best_mse;
+
+        let elapsed = iter_start.elapsed().as_secs_f64();
         println!(
-            "MSE after iteration {}: {:.10} (K: {:.6}, Improvement: {:.10})",
-            iter, current_mse, best_k, improvement
+            "Iteration {:>3}/{:<3} | MSE: {:.10} | K: {:.6} | Improvement: {:.10} | Time: {:.2}s",
+            iter, args.iterations, best_mse, best_k, improvement, elapsed
         );
 
-        // Auto-save progress to tuner_results.txt so we won't lose it if we abort later
-        let output_str = format_optimized_parameters(&params);
+        // Auto-save progress
+        let mut final_params = EvalParams::default();
+        let mut final_params_vec = vec![0; weights.len()];
+        for (i, &w) in weights.iter().enumerate() {
+            final_params_vec[i] = w.round() as i32;
+        }
+        final_params.update_from_vector(&final_params_vec);
+        let output_str = format_optimized_parameters(&final_params);
         if let Err(e) = std::fs::write("tuner_results.txt", &output_str) {
             eprintln!("WARNING: Failed to auto-save tuner results: {:?}", e);
         }
 
-        if !improved {
-            println!("No parameters were improved. Stopping.");
-            break;
-        }
-
-        if improvement < args.convergence {
+        if improvement.abs() < args.convergence {
             println!(
                 "Convergence reached (improvement {:.10} < {:.10}). Stopping.",
                 improvement, args.convergence
@@ -223,9 +506,13 @@ fn main() {
     println!("Final MSE: {:.10}", best_mse);
 
     // Sync params with the best vector before printing
-    params.update_from_vector(&params_vec);
-
-    let output_str = format_optimized_parameters(&params);
+    let mut final_params = EvalParams::default();
+    let mut final_params_vec = vec![0; weights.len()];
+    for (i, &w) in weights.iter().enumerate() {
+        final_params_vec[i] = w.round() as i32;
+    }
+    final_params.update_from_vector(&final_params_vec);
+    let output_str = format_optimized_parameters(&final_params);
 
     // Print to stdout
     println!("{}", output_str);
@@ -235,62 +522,6 @@ fn main() {
         Ok(_) => println!("Successfully saved copy-pasteable results to tuner_results.txt"),
         Err(e) => eprintln!("WARNING: Failed to save tuner results to file: {:?}", e),
     }
-}
-
-fn calculate_mse(entries: &[Entry], params: &EvalParams, k: f64) -> f64 {
-    let num_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4);
-
-    let chunk_size = entries.len().div_ceil(num_threads);
-
-    let total_sq_error: f64 = std::thread::scope(|s| {
-        let mut handles = Vec::new();
-        for chunk in entries.chunks(chunk_size) {
-            let handle = s.spawn(move || {
-                let mut local_error = 0.0;
-                for entry in chunk {
-                    let eval = evaluate_with_params(&entry.pos, params);
-                    let side_to_move = entry.pos.side_to_move();
-                    let score = match side_to_move {
-                        Side::Red => eval,
-                        Side::Black => -eval,
-                    } as f64;
-
-                    let sigmoid = 1.0 / (1.0 + 10.0f64.powf(-k * score / 400.0));
-                    let err = entry.result - sigmoid;
-                    local_error += err * err;
-                }
-                local_error
-            });
-            handles.push(handle);
-        }
-
-        handles.into_iter().map(|h| h.join().unwrap()).sum()
-    });
-
-    total_sq_error / entries.len() as f64
-}
-
-// Find K that minimizes MSE using ternary search
-fn optimize_k(entries: &[Entry], params: &EvalParams) -> f64 {
-    let mut low = 0.0;
-    let mut high = 10.0;
-
-    for _ in 0..100 {
-        let m1 = low + (high - low) / 3.0;
-        let m2 = high - (high - low) / 3.0;
-
-        let err1 = calculate_mse(entries, params, m1);
-        let err2 = calculate_mse(entries, params, m2);
-
-        if err1 < err2 {
-            high = m2;
-        } else {
-            low = m1;
-        }
-    }
-    (low + high) / 2.0
 }
 
 fn format_optimized_parameters(params: &EvalParams) -> String {
