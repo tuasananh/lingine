@@ -1,5 +1,5 @@
 use clap::Parser;
-use lingine::core::{Position, Side};
+use lingine::core::{PackedScore, Position, Side};
 use lingine::eval::{EvalParams, evaluate_with_params};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -110,7 +110,10 @@ fn main() {
     let num_threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    println!("Running tuner with {} parallel worker threads.", num_threads);
+    println!(
+        "Running tuner with {} parallel worker threads.",
+        num_threads
+    );
 
     let mut params = EvalParams::default();
     let mut best_k = optimize_k(&entries, &params);
@@ -190,6 +193,12 @@ fn main() {
             iter, current_mse, best_k
         );
 
+        // Auto-save progress to tuner_results.txt so we won't lose it if we abort later
+        let output_str = format_optimized_parameters(&params);
+        if let Err(e) = std::fs::write("tuner_results.txt", &output_str) {
+            eprintln!("WARNING: Failed to auto-save tuner results: {:?}", e);
+        }
+
         if !improved {
             println!("Convergence reached. Stopping.");
             break;
@@ -200,8 +209,19 @@ fn main() {
     println!("Optimized K: {:.6}", best_k);
     println!("Final MSE: {:.10}", best_mse);
 
-    // Print copy-pasteable weights
-    print_optimized_parameters(&params);
+    // Sync params with the best vector before printing
+    params.update_from_vector(&params_vec);
+
+    let output_str = format_optimized_parameters(&params);
+
+    // Print to stdout
+    println!("{}", output_str);
+
+    // Save to tuner_results.txt
+    match std::fs::write("tuner_results.txt", &output_str) {
+        Ok(_) => println!("Successfully saved copy-pasteable results to tuner_results.txt"),
+        Err(e) => eprintln!("WARNING: Failed to save tuner results to file: {:?}", e),
+    }
 }
 
 fn calculate_mse(entries: &[Entry], params: &EvalParams, k: f64) -> f64 {
@@ -209,7 +229,7 @@ fn calculate_mse(entries: &[Entry], params: &EvalParams, k: f64) -> f64 {
         .map(|n| n.get())
         .unwrap_or(4);
 
-    let chunk_size = (entries.len() + num_threads - 1) / num_threads;
+    let chunk_size = entries.len().div_ceil(num_threads);
 
     let total_sq_error: f64 = std::thread::scope(|s| {
         let mut handles = Vec::new();
@@ -260,53 +280,111 @@ fn optimize_k(entries: &[Entry], params: &EvalParams) -> f64 {
     (low + high) / 2.0
 }
 
-fn print_optimized_parameters(params: &EvalParams) {
-    println!("\n=====================================================================");
-    println!("  COPY-PASTEABLE PARAMETERS FOR src/eval/mod.rs or piece_square_tables.rs");
-    println!("=====================================================================");
+fn format_optimized_parameters(params: &EvalParams) -> String {
+    let mut s = String::new();
+    use std::fmt::Write;
 
-    println!("\n--- Material Values ---");
-    println!("Rook:    {:?}", params.material[0]);
-    println!("Advisor: {:?}", params.material[1]);
-    println!("Cannon:  {:?}", params.material[2]);
-    println!("Pawn (Uncrossed): {:?}", params.material[3]);
-    println!("Knight:  {:?}", params.material[4]);
-    println!("Bishop:  {:?}", params.material[5]);
-    println!("Pawn (Crossed):   {:?}", params.pawn_crossed);
+    writeln!(s, "\n=====================================================================").unwrap();
+    writeln!(s, "  COPY-PASTEABLE PARAMETERS FOR src/eval/mod.rs or piece_square_tables.rs").unwrap();
+    writeln!(s, "=====================================================================").unwrap();
 
-    println!("\n--- Advisor Count Bonus ---");
-    println!("advisor_count_bonus = {:?}", params.advisor_count_bonus);
+    writeln!(s, "\n// --- Paste this into src/eval/mod.rs ---").unwrap();
+    writeln!(s, "// Tapered bonuses for having 0, 1, or 2 Advisors").unwrap();
+    writeln!(s, "pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
+        params.advisor_count_bonus[0].mg, params.advisor_count_bonus[0].eg,
+        params.advisor_count_bonus[1].mg, params.advisor_count_bonus[1].eg,
+        params.advisor_count_bonus[2].mg, params.advisor_count_bonus[2].eg,
+    ).unwrap();
 
-    println!("\n--- Bishop Count Bonus ---");
-    println!("bishop_count_bonus = {:?}", params.bishop_count_bonus);
+    writeln!(s, "\n// Tapered bonuses for having 0, 1, or 2 Bishops (Elephants)").unwrap();
+    writeln!(s, "pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
+        params.bishop_count_bonus[0].mg, params.bishop_count_bonus[0].eg,
+        params.bishop_count_bonus[1].mg, params.bishop_count_bonus[1].eg,
+        params.bishop_count_bonus[2].mg, params.bishop_count_bonus[2].eg,
+    ).unwrap();
 
-    println!("\n--- Knight Mobility Bonus ---");
-    print!("pub(crate) const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed![\n   ");
+    writeln!(s, "\npub struct PieceMaterialValue;\n").unwrap();
+    writeln!(s, "impl PieceMaterialValue {{").unwrap();
+    writeln!(s, "    pub const ROOK: PackedScore = packed!({}, {});", params.material[0].mg, params.material[0].eg).unwrap();
+    writeln!(s, "    pub const ADVISOR: PackedScore = packed!({}, {});", params.material[1].mg, params.material[1].eg).unwrap();
+    writeln!(s, "    pub const CANNON: PackedScore = packed!({}, {});", params.material[2].mg, params.material[2].eg).unwrap();
+    writeln!(s, "    pub const PAWN: PackedScore = packed!({}, {});", params.material[3].mg, params.material[3].eg).unwrap();
+    writeln!(s, "    pub const KNIGHT: PackedScore = packed!({}, {});", params.material[4].mg, params.material[4].eg).unwrap();
+    writeln!(s, "    pub const BISHOP: PackedScore = packed!({}, {});", params.material[5].mg, params.material[5].eg).unwrap();
+    writeln!(s, "    pub const PAWN_CROSSED: PackedScore = packed!({}, {});", params.pawn_crossed.mg, params.pawn_crossed.eg).unwrap();
+    writeln!(s, "}}").unwrap();
+
+    writeln!(s, "\n// --- Paste this into src/eval/mobility_tables.rs ---").unwrap();
+    writeln!(s, "pub(in crate::eval) const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed![").unwrap();
     for (i, m) in params.knight_mobility.iter().enumerate() {
-        print!(" ({}, {})", m.mg, m.eg);
         if i < 8 {
-            print!(",");
+            writeln!(s, "    ({}, {}),", m.mg, m.eg).unwrap();
+        } else {
+            writeln!(s, "    ({}, {})", m.mg, m.eg).unwrap();
         }
     }
-    println!("\n];");
+    writeln!(s, "];").unwrap();
 
-    println!("\n--- Rook Mobility Bonus ---");
-    print!("pub(crate) const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed![\n   ");
+    writeln!(s, "\npub(in crate::eval) const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed![").unwrap();
     for (i, m) in params.rook_mobility.iter().enumerate() {
-        print!(" ({}, {})", m.mg, m.eg);
         if i < 17 {
-            print!(",");
+            writeln!(s, "    ({}, {}),", m.mg, m.eg).unwrap();
+        } else {
+            writeln!(s, "    ({}, {})", m.mg, m.eg).unwrap();
         }
     }
-    println!("\n];");
+    writeln!(s, "];").unwrap();
 
-    println!("\n--- Cannon Mobility Bonus ---");
-    print!("pub(crate) const CANNON_MOBILITY_BONUS: [PackedScore; 18] = packed![\n   ");
+    writeln!(s, "\npub(in crate::eval) const CANNON_MOBILITY_BONUS: [PackedScore; 18] = packed![").unwrap();
     for (i, m) in params.cannon_mobility.iter().enumerate() {
-        print!(" ({}, {})", m.mg, m.eg);
         if i < 17 {
-            print!(",");
+            writeln!(s, "    ({}, {}),", m.mg, m.eg).unwrap();
+        } else {
+            writeln!(s, "    ({}, {})", m.mg, m.eg).unwrap();
         }
     }
-    println!("\n];");
+    writeln!(s, "];").unwrap();
+
+    writeln!(s, "\n// --- Paste this into src/eval/piece_square_tables.rs ---").unwrap();
+    let pst_order = [
+        (6, "PIECE_SQUARE_TABLE_KING_TAPERED"),
+        (1, "PIECE_SQUARE_TABLE_ADVISOR_TAPERED"),
+        (5, "PIECE_SQUARE_TABLE_BISHOP_TAPERED"),
+        (4, "PIECE_SQUARE_TABLE_KNIGHT_TAPERED"),
+        (0, "PIECE_SQUARE_TABLE_ROOK_TAPERED"),
+        (2, "PIECE_SQUARE_TABLE_CANNON_TAPERED"),
+        (3, "PIECE_SQUARE_TABLE_PAWN_TAPERED"),
+    ];
+    for &(idx, name) in pst_order.iter() {
+        format_pst(&mut s, name, &params.psts[idx]);
+    }
+
+    s
+}
+
+fn format_pst(s: &mut String, name: &str, table: &[PackedScore; 90]) {
+    use std::fmt::Write;
+    writeln!(s, "\n#[rustfmt::skip]").unwrap();
+    writeln!(s, "pub(in crate::eval) const {}: [PackedScore; 90] = packed![", name).unwrap();
+    
+    let mut max_w = 0;
+    for &m in table {
+        let len = format!("({}, {}),", m.mg, m.eg).len();
+        if len > max_w {
+            max_w = len;
+        }
+    }
+
+    for rank in 0..10 {
+        writeln!(s, "    // Rank {}", rank).unwrap();
+        write!(s, "    ").unwrap();
+        for file in 0..9 {
+            let idx = rank * 9 + file;
+            let m = table[idx];
+            let cell = format!("({}, {}),", m.mg, m.eg);
+            write!(s, "{:width$}", cell, width = max_w + 1).unwrap();
+        }
+        writeln!(s).unwrap();
+    }
+    writeln!(s, "];").unwrap();
 }
