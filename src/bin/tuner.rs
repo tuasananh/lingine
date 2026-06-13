@@ -284,38 +284,110 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     let mut s = String::new();
     use std::fmt::Write;
 
-    writeln!(s, "\n=====================================================================").unwrap();
-    writeln!(s, "  COPY-PASTEABLE PARAMETERS FOR src/eval/mod.rs or piece_square_tables.rs").unwrap();
-    writeln!(s, "=====================================================================").unwrap();
+    writeln!(
+        s,
+        "\n====================================================================="
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "  COPY-PASTEABLE PARAMETERS FOR src/eval/ FEATURE FILES"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "====================================================================="
+    )
+    .unwrap();
 
-    writeln!(s, "\n// --- Paste this into src/eval/mod.rs ---").unwrap();
+    writeln!(s, "\n// --- Paste this into src/eval/defender_bonus.rs ---").unwrap();
     writeln!(s, "// Tapered bonuses for having 0, 1, or 2 Advisors").unwrap();
-    writeln!(s, "pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
-        params.advisor_count_bonus[0].mg, params.advisor_count_bonus[0].eg,
-        params.advisor_count_bonus[1].mg, params.advisor_count_bonus[1].eg,
-        params.advisor_count_bonus[2].mg, params.advisor_count_bonus[2].eg,
-    ).unwrap();
+    writeln!(
+        s,
+        "pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
+        params.advisor_count_bonus[0].mg,
+        params.advisor_count_bonus[0].eg,
+        params.advisor_count_bonus[1].mg,
+        params.advisor_count_bonus[1].eg,
+        params.advisor_count_bonus[2].mg,
+        params.advisor_count_bonus[2].eg,
+    )
+    .unwrap();
 
-    writeln!(s, "\n// Tapered bonuses for having 0, 1, or 2 Bishops (Elephants)").unwrap();
-    writeln!(s, "pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
-        params.bishop_count_bonus[0].mg, params.bishop_count_bonus[0].eg,
-        params.bishop_count_bonus[1].mg, params.bishop_count_bonus[1].eg,
-        params.bishop_count_bonus[2].mg, params.bishop_count_bonus[2].eg,
-    ).unwrap();
+    writeln!(
+        s,
+        "\n// Tapered bonuses for having 0, 1, or 2 Bishops (Elephants)"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
+        params.bishop_count_bonus[0].mg,
+        params.bishop_count_bonus[0].eg,
+        params.bishop_count_bonus[1].mg,
+        params.bishop_count_bonus[1].eg,
+        params.bishop_count_bonus[2].mg,
+        params.bishop_count_bonus[2].eg,
+    )
+    .unwrap();
 
-    writeln!(s, "\npub struct PieceMaterialValue;\n").unwrap();
+    writeln!(s, "\n// --- Paste this into src/eval/piece_material_value.rs ---").unwrap();
+    writeln!(s, "pub(in crate::eval) struct PieceMaterialValue;\n").unwrap();
     writeln!(s, "impl PieceMaterialValue {{").unwrap();
-    writeln!(s, "    pub const ROOK: PackedScore = packed!({}, {});", params.material[0].mg, params.material[0].eg).unwrap();
-    writeln!(s, "    pub const ADVISOR: PackedScore = packed!({}, {});", params.material[1].mg, params.material[1].eg).unwrap();
-    writeln!(s, "    pub const CANNON: PackedScore = packed!({}, {});", params.material[2].mg, params.material[2].eg).unwrap();
-    writeln!(s, "    pub const PAWN: PackedScore = packed!({}, {});", params.material[3].mg, params.material[3].eg).unwrap();
-    writeln!(s, "    pub const KNIGHT: PackedScore = packed!({}, {});", params.material[4].mg, params.material[4].eg).unwrap();
-    writeln!(s, "    pub const BISHOP: PackedScore = packed!({}, {});", params.material[5].mg, params.material[5].eg).unwrap();
-    writeln!(s, "    pub const PAWN_CROSSED: PackedScore = packed!({}, {});", params.pawn_crossed.mg, params.pawn_crossed.eg).unwrap();
+    writeln!(
+        s,
+        "    pub const ROOK: PackedScore = packed!({}, {});",
+        params.material[0].mg, params.material[0].eg
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    pub const ADVISOR: PackedScore = packed!({}, {});",
+        params.material[1].mg, params.material[1].eg
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    pub const CANNON: PackedScore = packed!({}, {});",
+        params.material[2].mg, params.material[2].eg
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    pub const PAWN: PackedScore = packed!({}, {});",
+        params.material[3].mg, params.material[3].eg
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    pub const KNIGHT: PackedScore = packed!({}, {});",
+        params.material[4].mg, params.material[4].eg
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    pub const BISHOP: PackedScore = packed!({}, {});",
+        params.material[5].mg, params.material[5].eg
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "    pub const PAWN_CROSSED: PackedScore = packed!({}, {});",
+        params.pawn_crossed.mg, params.pawn_crossed.eg
+    )
+    .unwrap();
     writeln!(s, "}}").unwrap();
 
-    writeln!(s, "\n// --- Paste this into src/eval/mobility_tables.rs ---").unwrap();
-    writeln!(s, "pub(in crate::eval) const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed![").unwrap();
+    writeln!(
+        s,
+        "\n// --- Paste this into src/eval/mobility_tables.rs ---"
+    )
+    .unwrap();
+    writeln!(
+        s,
+        "pub(in crate::eval) const KNIGHT_MOBILITY_BONUS: [PackedScore; 9] = packed!["
+    )
+    .unwrap();
     for (i, m) in params.knight_mobility.iter().enumerate() {
         if i < 8 {
             writeln!(s, "    ({}, {}),", m.mg, m.eg).unwrap();
@@ -325,7 +397,11 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     }
     writeln!(s, "];").unwrap();
 
-    writeln!(s, "\npub(in crate::eval) const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed![").unwrap();
+    writeln!(
+        s,
+        "\npub(in crate::eval) const ROOK_MOBILITY_BONUS: [PackedScore; 18] = packed!["
+    )
+    .unwrap();
     for (i, m) in params.rook_mobility.iter().enumerate() {
         if i < 17 {
             writeln!(s, "    ({}, {}),", m.mg, m.eg).unwrap();
@@ -335,7 +411,11 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     }
     writeln!(s, "];").unwrap();
 
-    writeln!(s, "\npub(in crate::eval) const CANNON_MOBILITY_BONUS: [PackedScore; 18] = packed![").unwrap();
+    writeln!(
+        s,
+        "\npub(in crate::eval) const CANNON_MOBILITY_BONUS: [PackedScore; 18] = packed!["
+    )
+    .unwrap();
     for (i, m) in params.cannon_mobility.iter().enumerate() {
         if i < 17 {
             writeln!(s, "    ({}, {}),", m.mg, m.eg).unwrap();
@@ -345,7 +425,11 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     }
     writeln!(s, "];").unwrap();
 
-    writeln!(s, "\n// --- Paste this into src/eval/piece_square_tables.rs ---").unwrap();
+    writeln!(
+        s,
+        "\n// --- Paste this into src/eval/piece_square_tables.rs ---"
+    )
+    .unwrap();
     let pst_order = [
         (6, "PIECE_SQUARE_TABLE_KING_TAPERED"),
         (1, "PIECE_SQUARE_TABLE_ADVISOR_TAPERED"),
@@ -365,8 +449,13 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
 fn format_pst(s: &mut String, name: &str, table: &[PackedScore; 90]) {
     use std::fmt::Write;
     writeln!(s, "\n#[rustfmt::skip]").unwrap();
-    writeln!(s, "pub(in crate::eval) const {}: [PackedScore; 90] = packed![", name).unwrap();
-    
+    writeln!(
+        s,
+        "pub(in crate::eval) const {}: [PackedScore; 90] = packed![",
+        name
+    )
+    .unwrap();
+
     let mut max_w = 0;
     for &m in table {
         let len = format!("({}, {}),", m.mg, m.eg).len();

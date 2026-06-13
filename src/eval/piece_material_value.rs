@@ -3,18 +3,6 @@ use crate::{
     eval::{eval_params::EvalParams, packed},
 };
 
-pub(in crate::eval) struct PieceMaterialValue;
-
-impl PieceMaterialValue {
-    pub const ROOK: PackedScore = packed!(564, 561);
-    pub const ADVISOR: PackedScore = packed!(93, 94);
-    pub const CANNON: PackedScore = packed!(298, 252);
-    pub const PAWN: PackedScore = packed!(25, 48);
-    pub const KNIGHT: PackedScore = packed!(250, 279);
-    pub const BISHOP: PackedScore = packed!(101, 101);
-    pub const PAWN_CROSSED: PackedScore = packed!(49, 143);
-}
-
 /// Returns a piece's base material value in Middlegame and Endgame, dynamically
 /// adjusting Pawn values based on whether they have crossed the river.
 #[inline]
@@ -65,4 +53,16 @@ pub(in crate::eval) fn piece_material_value_tapered_with_params(
     } else {
         params.material[pt as usize]
     }
+}
+
+pub(in crate::eval) struct PieceMaterialValue;
+
+impl PieceMaterialValue {
+    pub const ROOK: PackedScore = packed!(564, 561);
+    pub const ADVISOR: PackedScore = packed!(93, 94);
+    pub const CANNON: PackedScore = packed!(298, 252);
+    pub const PAWN: PackedScore = packed!(25, 48);
+    pub const KNIGHT: PackedScore = packed!(250, 279);
+    pub const BISHOP: PackedScore = packed!(101, 101);
+    pub const PAWN_CROSSED: PackedScore = packed!(49, 143);
 }
