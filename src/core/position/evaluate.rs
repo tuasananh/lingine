@@ -22,7 +22,8 @@ impl Position {
     pub fn tapered_score(&self) -> Score {
         let base_score = self.state.score;
         let mobility_score = crate::eval::compute_mobility_score(self);
-        get_tapered_score(base_score + mobility_score, self.state.phase)
+        let defender_score = crate::eval::compute_defender_bonus(self);
+        get_tapered_score(base_score + mobility_score + defender_score, self.state.phase)
     }
 
     /// Computes the complete tapered middlegame and endgame evaluation scores
