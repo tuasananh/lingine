@@ -46,12 +46,12 @@ pub(in crate::eval) fn piece_material_value_tapered_with_params(
         if crossed {
             params.pawn_crossed
         } else {
-            params.material[PieceType::Pawn as usize]
+            params.material[PieceType::Pawn]
         }
     } else if pt == PieceType::King {
         PackedScore::ZERO
     } else {
-        params.material[pt as usize]
+        params.material[pt]
     }
 }
 

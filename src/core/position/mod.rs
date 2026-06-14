@@ -104,13 +104,13 @@ impl Position {
     /// Get the piece currently at [`square`]
     #[inline]
     pub fn piece_at(&self, square: Square) -> Option<Piece> {
-        self.board[square as usize]
+        self.board[square]
     }
 
     /// Get the number of [`piece`] currently in the board
     #[inline]
     pub fn piece_count(&self, piece: Piece) -> u8 {
-        self.piece_count[piece as usize]
+        self.piece_count[piece]
     }
 
     #[inline]
@@ -123,14 +123,14 @@ impl Position {
     /// that type currently on the board
     #[inline]
     pub fn bitboard_by_type(&self, piece_type: PieceType) -> Bitboard {
-        self.bitboard_by_type[piece_type as usize]
+        self.bitboard_by_type[piece_type]
     }
 
     /// Get the bitboard of the side [`color`], which represents the pieces
     /// owned by [`color`] currently on the board
     #[inline]
     pub fn bitboard_by_color(&self, color: Side) -> Bitboard {
-        self.bitboard_by_color[color as usize]
+        self.bitboard_by_color[color]
     }
 
     #[inline]
@@ -146,7 +146,7 @@ impl Position {
     /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
-        self.board[square as usize].is_none()
+        self.board[square].is_none()
     }
 
     /// Checks whether or not [`mv`] is a capture move.
@@ -164,7 +164,7 @@ impl Position {
     /// Get the square where the king of side [`color`] is currently at
     #[inline]
     pub fn king_square(&self, color: Side) -> Square {
-        self.king_squares[color as usize]
+        self.king_squares[color]
     }
 
     /// Checks if the given player's King is currently in check.
@@ -299,7 +299,7 @@ impl Position {
             print!("{} |", rank as usize);
             for file in File::all() {
                 let square = Square::from_file_rank(file, rank);
-                let piece_char = match self.board[square as usize] {
+                let piece_char = match self.board[square] {
                     Some(Piece::RedRook) => 'R',
                     Some(Piece::RedKnight) => 'H',
                     Some(Piece::RedBishop) => 'E',
@@ -417,11 +417,11 @@ mod tests {
                     println!("Occupied bitboard:\n{}", pos.bitboard_occupied());
                     println!(
                         "Rook check squares:\n{}",
-                        pos.state.check_squares[PieceType::Rook as usize]
+                        pos.state.check_squares[PieceType::Rook]
                     );
                     println!(
                         "Cannon check squares:\n{}",
-                        pos.state.check_squares[PieceType::Cannon as usize]
+                        pos.state.check_squares[PieceType::Cannon]
                     );
                     pos.undo_move(m);
                     pos.print_board();

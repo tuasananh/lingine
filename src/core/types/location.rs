@@ -1,6 +1,4 @@
-use std::ops::Index;
-
-use crate::impl_from_repr;
+use crate::core::types::{impl_from_repr, impl_index};
 
 /// Represents the 10 ranks (horizontal rows) of a Xiangqi board, from R0 to R9.
 #[rustfmt::skip]
@@ -64,14 +62,7 @@ pub enum Square {
     A9, B9, C9, D9, E9, F9, G9, H9, I9,
 }
 
-impl<T> Index<Square> for [T; Square::COUNT] {
-    type Output = T;
-
-    fn index(&self, index: Square) -> &Self::Output {
-        unsafe { self.get_unchecked(index as usize) }
-    }
-}
-
+impl_index!(Square);
 impl_from_repr!(Square);
 
 impl Square {

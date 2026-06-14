@@ -1,5 +1,5 @@
 use crate::{
-    core::{File, PieceType, Rank, Side, Square},
+    core::{PieceType, Side, Square},
     eval::packed,
 };
 
@@ -12,16 +12,9 @@ pub(crate) const fn piece_square_table_value_tapered(
     sq: Square,
 ) -> PackedScore {
     let index = match color {
-        Side::Red => sq as usize,
-        Side::Black => {
-            // Mirror rank vertically: 9 - rank, and file horizontally: 8 - file
-            let file = sq.file() as usize;
-            let rank = sq.rank() as usize;
-            let mirrored_rank = Rank::COUNT - 1 - rank;
-            let mirrored_file = File::COUNT - 1 - file;
-            mirrored_rank * File::COUNT + mirrored_file
-        }
-    };
+        Side::Red => sq,
+        Side::Black => sq.mirrored(),
+    } as usize;
     match piece_type {
         PieceType::King => PIECE_SQUARE_TABLE_KING_TAPERED[index],
         PieceType::Advisor => PIECE_SQUARE_TABLE_ADVISOR_TAPERED[index],
@@ -41,16 +34,10 @@ pub(in crate::eval) fn piece_square_table_value_tapered_with_params(
     params: &super::EvalParams,
 ) -> PackedScore {
     let index = match color {
-        Side::Red => sq as usize,
-        Side::Black => {
-            let file = sq.file() as usize;
-            let rank = sq.rank() as usize;
-            let mirrored_rank = Rank::COUNT - 1 - rank;
-            let mirrored_file = File::COUNT - 1 - file;
-            mirrored_rank * File::COUNT + mirrored_file
-        }
+        Side::Red => sq,
+        Side::Black => sq.mirrored(),
     };
-    params.psts[piece_type as usize][index]
+    params.psts[piece_type][index]
 }
 
 #[rustfmt::skip]

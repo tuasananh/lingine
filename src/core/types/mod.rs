@@ -9,7 +9,6 @@ pub use pieces::*;
 pub use score::{PackedScore, Score};
 pub use side::*;
 
-#[macro_export]
 macro_rules! impl_from_repr {
     ($name:ident) => {
         impl $name {
@@ -31,3 +30,24 @@ macro_rules! impl_from_repr {
         }
     };
 }
+
+macro_rules! impl_index {
+    ($name:ident) => {
+        impl<T> std::ops::Index<$name> for [T; $name::COUNT] {
+            type Output = T;
+
+            fn index(&self, index: $name) -> &Self::Output {
+                unsafe { self.get_unchecked(index as usize) }
+            }
+        }
+
+        impl<T> std::ops::IndexMut<$name> for [T; $name::COUNT] {
+            fn index_mut(&mut self, index: $name) -> &mut Self::Output {
+                unsafe { self.get_unchecked_mut(index as usize) }
+            }
+        }
+    };
+}
+
+pub(in crate::core::types) use impl_from_repr;
+pub(in crate::core::types) use impl_index;

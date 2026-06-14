@@ -1,6 +1,5 @@
-use std::ops::Index;
-
-use crate::{core::Side, impl_from_repr};
+use crate::core::Side;
+use crate::core::types::{impl_from_repr, impl_index};
 
 /// Represents the types of pieces in Xiangqi.
 /// Includes virtual/helper pieces (`KnightTo` and `PawnTo`) used in precomputed attacker logic.
@@ -11,14 +10,7 @@ pub enum PieceType {
     Rook = 0, Advisor, Cannon, Pawn, Knight, Bishop, King
 }
 
-impl<T> Index<PieceType> for [T; PieceType::COUNT] {
-    type Output = T;
-
-    fn index(&self, index: PieceType) -> &Self::Output {
-        unsafe { self.get_unchecked(index as usize) }
-    }
-}
-
+impl_index!(PieceType);
 impl_from_repr!(PieceType);
 
 impl PieceType {
@@ -49,13 +41,7 @@ pub enum Piece {
     BlackRook = 8, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing,
 }
 
-impl<T> Index<Piece> for [T; Piece::COUNT] {
-    type Output = T;
-
-    fn index(&self, index: Piece) -> &Self::Output {
-        unsafe { self.get_unchecked(index as usize) }
-    }
-}
+impl_index!(Piece);
 
 impl Piece {
     pub const COUNT: usize = Self::BlackKing as usize + 1;

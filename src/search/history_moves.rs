@@ -19,21 +19,21 @@ impl HistoryMoves {
 
     #[inline]
     pub fn get(&self, color: Side, mv: Move) -> i32 {
-        self.table[color as usize][mv.from() as usize][mv.to() as usize]
+        self.table[color][mv.from()][mv.to()]
     }
 
     #[inline]
     pub fn increase(&mut self, color: Side, mv: Move, depth: i8) {
         let depth = depth as i32;
         let bonus = depth * depth;
-        self.table[color as usize][mv.from() as usize][mv.to() as usize] += bonus;
+        self.table[color][mv.from()][mv.to()] += bonus;
     }
 
     #[inline]
     pub fn decrease(&mut self, color: Side, mv: Move, depth: i8) {
         let depth = depth as i32;
         let bonus = depth * depth;
-        self.table[color as usize][mv.from() as usize][mv.to() as usize] -= bonus;
+        self.table[color][mv.from()][mv.to()] -= bonus;
     }
 
     pub fn decay(&mut self) {

@@ -139,13 +139,7 @@ fn compile_features(pos: &Position, result: f64) -> SparsePosition {
             // 2. Piece-Square Tables (PST)
             let sq_mirrored = match pc {
                 Side::Red => sq,
-                Side::Black => {
-                    let file = sq.file() as usize;
-                    let rank = sq.rank() as usize;
-                    let mirrored_rank = 9 - rank;
-                    let mirrored_file = 8 - file;
-                    Square::from_repr((mirrored_rank * 9 + mirrored_file) as u8).unwrap()
-                }
+                Side::Black => sq.mirrored(),
             };
             let rank = sq_mirrored.rank() as usize;
             let file = sq_mirrored.file() as usize;

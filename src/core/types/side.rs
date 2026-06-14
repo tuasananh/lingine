@@ -1,6 +1,7 @@
-use std::ops::Index;
-
-use crate::{core::Score, impl_from_repr};
+use crate::core::{
+    Score,
+    types::{impl_from_repr, impl_index},
+};
 
 /// Represents the two players in a Xiangqi game: Red (Red) or Black.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -10,14 +11,7 @@ pub enum Side {
     Black,
 }
 
-impl<T> Index<Side> for [T; Side::COUNT] {
-    type Output = T;
-
-    fn index(&self, index: Side) -> &Self::Output {
-        unsafe { self.get_unchecked(index as usize) }
-    }
-}
-
+impl_index!(Side);
 impl_from_repr!(Side);
 
 impl Side {
