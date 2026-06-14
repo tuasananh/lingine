@@ -1,5 +1,5 @@
+use anyhow::{Result, bail};
 use strum::EnumCount;
-use thiserror::Error;
 
 use crate::core::{Bitboard, File, Move, PackedScore, Piece, PieceType, Rank, Side, Square};
 
@@ -69,12 +69,6 @@ pub struct Position {
     /// Palace coordinates of both players' Generals (Kings) for faster check
     /// detection.
     king_squares: [Square; Side::COUNT], // 2 bytes
-}
-
-#[derive(Error, Debug)]
-#[error("Failed to set position: {msg}")]
-pub struct PositionSetError {
-    msg: String,
 }
 
 impl Default for Position {
@@ -202,7 +196,7 @@ impl Position {
     }
 
     /// Parses and initializes the position state from a standard FEN string.
-    pub fn from_fen(fen: &str) -> Result<Self, PositionSetError> {
+    pub fn from_fen(fen: &str) -> Result<Self> {
         let mut pos = Position {
             board: [None; Square::COUNT],
             bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
@@ -230,17 +224,13 @@ impl Position {
 
         let tokens: Vec<&str> = fen.split_whitespace().collect();
         if tokens.is_empty() {
-            return Err(PositionSetError {
-                msg: "Empty FEN".to_string(),
-            });
+            bail!("Empty fen");
         }
 
         // 1. Parse piece placement ranks (10 ranks, separated by '/')
         let ranks: Vec<&str> = tokens[0].split('/').collect();
         if ranks.len() != 10 {
-            return Err(PositionSetError {
-                msg: format!("Expected 10 ranks, got {}", ranks.len()),
-            });
+            bail!("Invalid number of ranks, expected 10, got {}", ranks.len());
         }
 
         for rank_idx in 0..10 {
@@ -254,26 +244,24 @@ impl Position {
                     file_idx += empty_squares;
                 } else {
                     if file_idx >= 9 {
-                        return Err(PositionSetError {
-                            msg: "File index out of bounds".to_string(),
-                        });
+                        bail!("File index out of bounds in rank {}", rank_idx);
                     }
                     let file = File::from_repr(file_idx).unwrap();
                     let square = Square::from_file_rank(file, rank);
                     if let Some(piece) = Self::piece_from_char(c) {
                         pos.put_piece(square, Some(piece));
                     } else {
-                        return Err(PositionSetError {
-                            msg: format!("Unknown piece character: {}", c),
-                        });
+                        bail!("Unknown piece character {}", c);
                     }
                     file_idx += 1;
                 }
             }
             if file_idx != 9 {
-                return Err(PositionSetError {
-                    msg: format!("Invalid rank width: expected 9 files, got {}", file_idx),
-                });
+                bail!(
+                    "Invalid number of files for rank {}, expected 9, got {}",
+                    rank_idx,
+                    file_idx
+                );
             }
         }
 
@@ -283,9 +271,7 @@ impl Position {
                 "w" => Side::Red,
                 "b" => Side::Black,
                 _ => {
-                    return Err(PositionSetError {
-                        msg: format!("Invalid side to move: {}", tokens[1]),
-                    });
+                    bail!("Invalid side to move: {}", tokens[1]);
                 }
             }
         } else {
