@@ -14,7 +14,7 @@ pub struct EvalParams {
     pub bishop_count_bonus: [PackedScore; 3],
 }
 
-pub static DEFAULT_PARAMS: EvalParams = EvalParams {
+static DEFAULT_PARAMS: EvalParams = EvalParams {
     material: [
         PieceMaterialValue::ROOK,    // Rook = 0
         PieceMaterialValue::ADVISOR, // Advisor = 1

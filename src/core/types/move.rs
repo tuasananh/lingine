@@ -3,7 +3,7 @@ use std::{fmt::Display, num::NonZeroU16};
 use crate::core::Square;
 
 /// Represents the score of a move, typically used in move ordering heuristics.
-pub type MoveScore = i32;
+pub(crate) type MoveScore = i32;
 
 /// A compact 16-bit move representation designed for performance:
 ///

@@ -8,7 +8,7 @@ use crate::core::{
 impl super::Position {
     /// Calculates the chase information for a given color, returning a 16-bit
     /// mask of chased pieces.
-    pub fn chased(&mut self, mover: Side, id_board: &[u8; Square::COUNT]) -> u16 {
+    fn chased(&mut self, mover: Side, id_board: &[u8; Square::COUNT]) -> u16 {
         let mut chase = 0u16;
         let opponent = mover.opposite();
         let occupied = self.bitboard_by_color[Side::Red as usize]
@@ -155,7 +155,7 @@ impl super::Position {
 
     /// Detects chases from state st - d to state st on a rollback clone of
     /// self.
-    pub fn detect_chases(&mut self, d: usize, ply: u8) -> Score {
+    fn detect_chases(&mut self, d: usize, ply: u8) -> Score {
         let n = self.history.len();
         if n < d {
             return score::ZERO; // Draw
@@ -235,7 +235,7 @@ impl super::Position {
     /// chasing).
     ///
     /// This function is based on Pikafish's implementation
-    pub fn rule_judge(&mut self, ply: u8) -> Option<Score> {
+    pub(crate) fn rule_judge(&mut self, ply: u8) -> Option<Score> {
         // 1. 60-Move Rule (120 Plies since last pawn advance or capture)
         let rule60 = self.state.sixtymove_clock;
         const RULE60_PLIES_THRESHOLD: u16 = 120;

@@ -8,7 +8,7 @@ use crate::{
 use super::PackedScore;
 
 #[inline]
-pub const fn piece_square_table_value_tapered(
+pub(crate) const fn piece_square_table_value_tapered(
     piece_type: PieceType,
     color: Side,
     sq: Square,

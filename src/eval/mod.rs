@@ -1,13 +1,13 @@
 mod defender_bonus;
-pub mod eval_params;
+mod eval_params;
 mod mobility_tables;
 mod piece_material_value;
 mod piece_square_tables;
 use defender_bonus::*;
 pub use eval_params::*;
-pub use mobility_tables::*;
-pub use piece_material_value::*;
-pub use piece_square_tables::*;
+use mobility_tables::*;
+pub(crate) use piece_material_value::*;
+pub(crate) use piece_square_tables::*;
 
 use strum::EnumCount;
 

@@ -37,7 +37,7 @@ fn compute_side_mobility(pos: &Position, side: Side, occupied: Bitboard) -> Pack
 }
 
 /// Computes the mobility score for Knights, Cannons, and Rooks for both sides.
-pub fn compute_mobility_score(pos: &Position) -> PackedScore {
+pub(super) fn compute_mobility_score(pos: &Position) -> PackedScore {
     let occupied = pos.bitboard_occupied();
     let red_mobility = compute_side_mobility(pos, Side::Red, occupied);
     let black_mobility = compute_side_mobility(pos, Side::Black, occupied);
@@ -82,7 +82,7 @@ fn compute_side_mobility_with_params(
     score
 }
 
-pub fn compute_mobility_score_with_params(
+pub(super) fn compute_mobility_score_with_params(
     pos: &Position,
     params: &super::EvalParams,
 ) -> PackedScore {

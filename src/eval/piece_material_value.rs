@@ -6,7 +6,7 @@ use crate::{
 /// Returns a piece's base material value in Middlegame and Endgame, dynamically
 /// adjusting Pawn values based on whether they have crossed the river.
 #[inline]
-pub const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedScore {
+pub(crate) const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedScore {
     match piece {
         Piece::RedRook | Piece::BlackRook => PieceMaterialValue::ROOK,
         Piece::RedCannon | Piece::BlackCannon => PieceMaterialValue::CANNON,
