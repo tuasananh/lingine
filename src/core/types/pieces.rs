@@ -48,8 +48,8 @@ impl Piece {
 
     /// # Safety
     ///
-    /// This will only be valid if [`repr`] < [`Self::COUNT`] and [`repr`] is not the missing
-    /// variant.
+    /// This will only be valid if [`repr`] < [`Self::COUNT`] and [`repr`] is
+    /// not the missing variant.
     #[inline]
     pub const unsafe fn from_repr_unchecked(repr: u8) -> Self {
         unsafe { std::mem::transmute(repr) }
