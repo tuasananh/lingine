@@ -295,11 +295,9 @@ impl Position {
     /// Prints a human-readable ASCII representation of the board state.
     pub fn print_board(&self) {
         println!("  +---------------------------+");
-        for rank_idx in (0..10).rev() {
-            print!("{} |", rank_idx);
-            for file_idx in 0..9 {
-                let file = File::from_repr(file_idx).unwrap();
-                let rank = Rank::from_repr(rank_idx).unwrap();
+        for rank in Rank::all().rev() {
+            print!("{} |", rank as usize);
+            for file in File::all() {
                 let square = Square::from_file_rank(file, rank);
                 let piece_char = match self.board[square as usize] {
                     Some(Piece::RedRook) => 'R',

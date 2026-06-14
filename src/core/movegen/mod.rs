@@ -369,8 +369,7 @@ mod tests {
         use crate::core::types::{Piece, PieceType, Side};
         assert_eq!(a.side_to_move(), b.side_to_move());
         assert_eq!(a.hash(), b.hash());
-        for sq_val in 0..90 {
-            let sq = Square::from_repr(sq_val).unwrap();
+        for sq in Square::all() {
             assert_eq!(a.piece_at(sq), b.piece_at(sq));
             assert_eq!(a.is_empty(sq), b.is_empty(sq));
         }

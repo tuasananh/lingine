@@ -113,8 +113,7 @@ fn calculate_phase(pos: &Position) -> f64 {
 fn compile_features(pos: &Position, result: f64) -> SparsePosition {
     let mut features = Vec::new();
 
-    for sq_idx in 0..90 {
-        let sq = Square::from_repr(sq_idx).unwrap();
+    for sq in Square::all() {
         if let Some(piece) = pos.piece_at(sq) {
             let pt = piece.piece_type();
             let pc = piece.color();

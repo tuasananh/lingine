@@ -167,8 +167,7 @@ impl Position {
         let occupancy = occupied ^ (snipers & !self.bitboard_of(them, PieceType::Cannon));
 
         while let Some(sniper_sq) = snipers.pop_lsb() {
-            let is_cannon =
-                self.board[sniper_sq as usize].unwrap().piece_type() == PieceType::Cannon;
+            let is_cannon = self.board[sniper_sq].unwrap().piece_type() == PieceType::Cannon;
             let b = squares_between(ksq, sniper_sq)
                 & if is_cannon {
                     occupied ^ Bitboard::from(sniper_sq)

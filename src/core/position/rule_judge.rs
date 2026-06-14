@@ -163,9 +163,8 @@ impl super::Position {
         let mut white_id = 0;
         let mut black_id = 0;
         let mut id_board = [0u8; Square::COUNT];
-        for sq_idx in 0..Square::COUNT {
-            let sq = Square::from_repr(sq_idx as u8).unwrap();
-            if let Some(piece) = self.board[sq as usize] {
+        for sq in Square::all() {
+            if let Some(piece) = self.board[sq] {
                 if piece.color() == Side::Red {
                     id_board[sq as usize] = white_id;
                     white_id += 1;
@@ -346,8 +345,9 @@ impl super::Position {
 
                 // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
                 for j in (n - i)..n {
-                    let player_who_moved =
-                        Side::from_repr((self.game_ply - (n - j) as u16) as u8 & 1).unwrap();
+                    let player_who_moved = unsafe {
+                        Side::from_repr_unchecked((self.game_ply - (n - j) as u16) as u8 & 1)
+                    };
                     let state_after = if j + 1 < n {
                         &self.history[j + 1]
                     } else {
