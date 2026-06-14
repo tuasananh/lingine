@@ -12,7 +12,7 @@ impl Position {
 
     /// Computes the complete tapered middlegame and endgame evaluation scores
     /// from scratch.
-    pub fn tapered_score_from_scratch(&self) -> PackedScore {
+    pub(super) fn tapered_score_from_scratch(&self) -> PackedScore {
         tapered_score_from_scratch(self)
     }
 

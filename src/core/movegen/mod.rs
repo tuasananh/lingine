@@ -8,7 +8,7 @@ use crate::core::{Move, PieceType, Position, Side};
 
 /// The maximum number of pseudo-legal moves in any given Xiangqi position
 /// (typically <= 120).
-pub const MAX_MOVES: usize = 128;
+const MAX_MOVES: usize = 128;
 
 /// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
 /// allocation.
@@ -369,7 +369,7 @@ mod tests {
         use crate::core::types::{Piece, PieceType, Side};
         use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
-        assert_eq!(a.zobrist_hash(), b.zobrist_hash());
+        assert_eq!(a.hash(), b.hash());
         for sq_val in 0..90 {
             let sq = Square::from_repr(sq_val).unwrap();
             assert_eq!(a.piece_at(sq), b.piece_at(sq));

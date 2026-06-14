@@ -14,7 +14,7 @@ mod zobrist_table;
 /// Represents search state parameters that must be saved on a stack,
 /// allowing incremental undo_move restorations.
 #[derive(Clone, Copy, Debug)]
-pub struct StateInfo {
+struct StateInfo {
     /// The last move played to reach this state.
     pub last_move: Option<Move>,
     /// The piece captured during this move, or `None` if it was quiet.
@@ -79,7 +79,8 @@ impl Default for Position {
 
 impl Position {
     /// Standard Xiangqi starting position in FEN notation.
-    pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
+    pub(crate) const START_FEN: &str =
+        "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
     /// Initializes the position to the standard starting position by default.
     pub fn new() -> Self {
@@ -186,13 +187,6 @@ impl Position {
     #[inline]
     pub fn is_in_check(&self) -> bool {
         self.state.in_check
-    }
-
-    /// Returns the piece captured by the last move, or `None` if the last
-    /// move was quiet or no moves have been played.
-    #[inline]
-    pub fn last_captured_piece(&self) -> Option<Piece> {
-        self.history.last().and_then(|s| s.captured_piece)
     }
 
     /// Parses and initializes the position state from a standard FEN string.

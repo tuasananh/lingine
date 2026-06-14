@@ -10,7 +10,7 @@ use strum::EnumCount;
 const RANK_STRIDE: i8 = File::COUNT as i8;
 
 /// King moves: one orthogonal step within the palace.
-pub(crate) const fn init_king_attacks() -> [Bitboard; Square::COUNT] {
+pub(super) const fn init_king_attacks() -> [Bitboard; Square::COUNT] {
     const DIRS: [(i8, i8); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
     let mut table = [Bitboard::new(); Square::COUNT];
     let mut sq = 0;
@@ -24,7 +24,7 @@ pub(crate) const fn init_king_attacks() -> [Bitboard; Square::COUNT] {
 }
 
 /// Advisor moves: one diagonal step within the palace.
-pub(crate) const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
+pub(super) const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
     const DIRS: [(i8, i8); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
     let mut table = [Bitboard::new(); Square::COUNT];
     let mut sq = 0;
@@ -39,7 +39,7 @@ pub(crate) const fn init_advisor_attacks() -> [Bitboard; Square::COUNT] {
 
 /// Forward pawn attacks: squares a pawn *at* `sq` threatens.
 /// `table[0]` = Red (moves toward higher ranks), `table[1]` = Black.
-pub(crate) const fn init_pawn_attacks() -> [[Bitboard; Square::COUNT]; 2] {
+pub(super) const fn init_pawn_attacks() -> [[Bitboard; Square::COUNT]; 2] {
     let mut table = [[Bitboard::new(); Square::COUNT]; 2];
     let mut sq_idx = 0;
     while sq_idx < Square::COUNT {
@@ -59,7 +59,7 @@ pub(crate) const fn init_pawn_attacks() -> [[Bitboard; Square::COUNT]; 2] {
 
 /// Reverse pawn attacks: squares a pawn of the given colour could occupy to
 /// attack target `sq`. Used in check / threat detection.
-pub(crate) const fn init_pawn_attacks_to() -> [[Bitboard; Square::COUNT]; 2] {
+pub(super) const fn init_pawn_attacks_to() -> [[Bitboard; Square::COUNT]; 2] {
     let mut table = [[Bitboard::new(); Square::COUNT]; 2];
     let mut sq_idx = 0;
     while sq_idx < Square::COUNT {
@@ -80,7 +80,7 @@ pub(crate) const fn init_pawn_attacks_to() -> [[Bitboard; Square::COUNT]; 2] {
 
 /// Populates `RANK_TABLE[f]` for every file position `f` (0–8) and every
 /// 9-bit occupancy (0–511).
-pub(crate) const fn init_rank_table() -> [RankEntry; File::COUNT] {
+pub(super) const fn init_rank_table() -> [RankEntry; File::COUNT] {
     let mut table = [RankEntry {
         rook_slides: [0; 1 << File::COUNT],
         cannon_captures: [0; 1 << File::COUNT],
@@ -105,7 +105,7 @@ pub(crate) const fn init_rank_table() -> [RankEntry; File::COUNT] {
 
 /// Populates `FILE_TABLE[r]` for every rank position `r` (0–9) and every
 /// 10-bit occupancy (0–1023).
-pub(crate) const fn init_file_table() -> [FileEntry; Rank::COUNT] {
+pub(super) const fn init_file_table() -> [FileEntry; Rank::COUNT] {
     let mut table = [FileEntry {
         rook_slides: [0; 1 << Rank::COUNT],
         cannon_captures: [0; 1 << Rank::COUNT],
@@ -130,7 +130,7 @@ pub(crate) const fn init_file_table() -> [FileEntry; Rank::COUNT] {
 
 /// Helper table: `FILE_ATTACKS_BY_MASK[f][mask]` converts a 10-bit occupancy
 /// bitmask on file `f` back into a full 128-bit [`Bitboard`].
-pub(crate) const fn init_file_attacks_by_mask() -> [[Bitboard; 1 << Rank::COUNT]; File::COUNT] {
+pub(super) const fn init_file_attacks_by_mask() -> [[Bitboard; 1 << Rank::COUNT]; File::COUNT] {
     let mut table = [[Bitboard::new(); 1 << Rank::COUNT]; File::COUNT];
     let mut f = 0usize;
     while f < File::COUNT {
@@ -153,7 +153,7 @@ pub(crate) const fn init_file_attacks_by_mask() -> [[Bitboard; 1 << Rank::COUNT]
 }
 
 /// Builds the magic lookup table for every square for a given leaper piece.
-pub(crate) const fn build_magics<const SIZE: usize, const SHIFT: usize>(
+pub(super) const fn build_magics<const SIZE: usize, const SHIFT: usize>(
     piece: LeaperType,
     dirs_dr: [i8; SHIFT],
     dirs_df: [i8; SHIFT],
@@ -267,7 +267,7 @@ pub(crate) const fn build_magics<const SIZE: usize, const SHIFT: usize>(
 
 /// `SQUARES_BETWEEN[s1][s2]` is the set of squares strictly between `s1` and
 /// `s2` on the same rank or file, *plus* `s2` itself.
-pub(crate) const fn init_squares_between() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+pub(super) const fn init_squares_between() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
     let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
     let mut s1 = 0;
     while s1 < Square::COUNT {
@@ -307,7 +307,7 @@ pub(crate) const fn init_squares_between() -> [[Bitboard; Square::COUNT]; Square
 
 /// `SQUARES_BEYOND[s1][s2]` is the set of squares from `s2` extending *away*
 /// from `s1` to the edge of the board, along the same rank or file.
-pub(crate) const fn init_squares_beyond() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+pub(super) const fn init_squares_beyond() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
     let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
     let mut s1 = 0;
     while s1 < Square::COUNT {
@@ -335,7 +335,7 @@ pub(crate) const fn init_squares_beyond() -> [[Bitboard; Square::COUNT]; Square:
     table
 }
 
-pub(crate) const fn init_squares_in_line() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
+pub(super) const fn init_squares_in_line() -> [[Bitboard; Square::COUNT]; Square::COUNT] {
     let mut table = [[Bitboard::new(); Square::COUNT]; Square::COUNT];
     let mut s1 = 0;
     while s1 < Square::COUNT {

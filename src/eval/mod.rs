@@ -130,7 +130,7 @@ pub fn evaluate_with_params(pos: &Position, params: &EvalParams) -> Score {
 mod tests {
     use crate::{
         core::{MoveGenType, MoveList, Position, generate_moves, score},
-        eval::evaluate,
+        eval::{evaluate, tapered_score_from_scratch},
     };
 
     #[test]
@@ -168,7 +168,7 @@ mod tests {
                     pos.do_move(m);
 
                     // Compute scores & phase from scratch
-                    let expected = pos.tapered_score_from_scratch();
+                    let expected = tapered_score_from_scratch(&pos);
                     let expected_phase = pos.calculate_board_phase();
 
                     // Assert incremental score matches full board scan

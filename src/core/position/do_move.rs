@@ -13,7 +13,7 @@ impl Position {
     /// bitboards, King Palace trackers, and XORing its random signature
     /// into the Zobrist hash.
     #[inline]
-    pub fn put_piece(&mut self, square: Square, piece: Option<Piece>) {
+    pub(super) fn put_piece(&mut self, square: Square, piece: Option<Piece>) {
         let square_idx = square as usize;
         // Clear the old piece
         if let Some(piece) = self.board[square_idx] {
