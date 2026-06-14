@@ -39,13 +39,13 @@ impl Move {
     /// bits.
     #[inline]
     pub const fn from(&self) -> Square {
-        Square::from_repr(((self.0.get() >> 7) & 0x7F) as u8).unwrap()
+        unsafe { std::mem::transmute(((self.0.get() >> 7) & 0x7F) as u8) }
     }
 
     /// Extracts the target square index by masking the lower 7 bits.
     #[inline]
     pub const fn to(&self) -> Square {
-        Square::from_repr((self.0.get() & 0x7F) as u8).unwrap()
+        unsafe { std::mem::transmute((self.0.get() & 0x7F) as u8) }
     }
 
     /// Converts the move into its UCI string format

@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::core::{
     Bitboard, Move, MoveGenType, MoveList, Piece, PieceType, Score, Side, Square, cannon_captures,
     generate_moves, knight_attacks, pawn_attacks, rook_attacks, score,

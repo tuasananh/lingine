@@ -8,3 +8,26 @@ pub use r#move::*;
 pub use pieces::*;
 pub use score::{PackedScore, Score};
 pub use side::*;
+
+#[macro_export]
+macro_rules! impl_from_repr {
+    ($name:ident) => {
+        impl $name {
+            #[inline]
+            pub const fn from_repr(repr: u8) -> Option<Self> {
+                if repr < Self::COUNT as u8 {
+                    Some(unsafe { std::mem::transmute::<u8, $name>(repr) })
+                } else {
+                    None
+                }
+            }
+
+            /// # Safety
+            /// This will only be valid if [`repr`] < [`Self::COUNT`]
+            #[inline]
+            pub const unsafe fn from_repr_unchecked(repr: u8) -> Self {
+                unsafe { std::mem::transmute(repr) }
+            }
+        }
+    };
+}

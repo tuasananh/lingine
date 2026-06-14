@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::{
     core::{
         Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_beyond_attacks,

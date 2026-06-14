@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::core::{Piece, Square};
 
 /// Holds Zobrist random numbers used for fast, incremental position hashing.

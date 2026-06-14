@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::{
     core::{File, PieceType, Rank, Side, Square},
     eval::packed,

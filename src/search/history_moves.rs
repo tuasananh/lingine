@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::core::{Move, Side, Square};
 
 const DECAY_RATE: i32 = 8;

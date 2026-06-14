@@ -1,11 +1,9 @@
 use std::ops::Index;
 
-use strum::{EnumCount, FromRepr};
-
-use crate::core::Score;
+use crate::{core::Score, impl_from_repr};
 
 /// Represents the two players in a Xiangqi game: Red (Red) or Black.
-#[derive(FromRepr, EnumCount, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Side {
     Red,
@@ -20,7 +18,11 @@ impl<T> Index<Side> for [T; Side::COUNT] {
     }
 }
 
+impl_from_repr!(Side);
+
 impl Side {
+    pub const COUNT: usize = Self::Black as usize + 1;
+
     /// Returns the opposing player's color.
     #[inline]
     pub const fn opposite(&self) -> Self {

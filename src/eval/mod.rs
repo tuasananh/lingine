@@ -9,8 +9,6 @@ use mobility_tables::*;
 pub(crate) use piece_material_value::*;
 pub(crate) use piece_square_tables::*;
 
-use strum::EnumCount;
-
 use crate::core::{PackedScore, PieceType, Position, Score, Square};
 
 macro_rules! packed {
@@ -91,8 +89,7 @@ pub fn evaluate(pos: &Position) -> Score {
 #[inline]
 pub fn tapered_score_from_scratch(pos: &Position) -> PackedScore {
     let mut score = PackedScore::ZERO;
-    for sq_idx in 0..Square::COUNT as u8 {
-        let sq = Square::from_repr(sq_idx).unwrap();
+    for sq in Square::all() {
         if let Some(piece) = pos.piece_at(sq) {
             let color = piece.color();
             let val = piece_material_value_tapered(piece, sq);
@@ -108,9 +105,8 @@ pub fn evaluate_with_params(pos: &Position, params: &EvalParams) -> Score {
     let mut base_score = PackedScore::ZERO;
     let mut phase = 0;
 
-    for sq_idx in 0..Square::COUNT {
-        if let Some(piece) = pos.piece_at(Square::from_repr(sq_idx as u8).unwrap()) {
-            let sq = Square::from_repr(sq_idx as u8).unwrap();
+    for sq in Square::all() {
+        if let Some(piece) = pos.piece_at(sq) {
             let color = piece.color();
             let val = piece_material_value_tapered_with_params(piece, sq, params);
             let pst =

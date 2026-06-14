@@ -5,7 +5,6 @@ use super::helpers::{
 use super::types::{FileEntry, LeaperType, Magic, RankEntry};
 use crate::core::movegen::tables::helpers::cannon_beyond_attack;
 use crate::core::{Bitboard, File, Rank, Square, cannon_beyond_attacks, rook_attacks};
-use strum::EnumCount;
 
 const RANK_STRIDE: i8 = File::COUNT as i8;
 

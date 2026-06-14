@@ -6,7 +6,6 @@ use crate::core::{
     Bitboard, File, Rank, Side, Square,
     movegen::tables::types::{FileEntry, Magic, RankEntry},
 };
-use strum::EnumCount;
 
 use init::*;
 use types::LeaperType;

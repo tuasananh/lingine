@@ -1,5 +1,4 @@
 use crate::core::{File, Rank, Square};
-use strum::EnumCount;
 
 const RANK_STRIDE: i8 = File::COUNT as i8;
 

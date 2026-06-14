@@ -1,5 +1,4 @@
 use crate::core::{Bitboard, File, Rank};
-use strum::EnumCount;
 
 /// Horizontal rank attack masks for Rooks and Cannons, indexed by the square's
 /// file position (0–8) and a 9-bit rank occupancy (0–511).

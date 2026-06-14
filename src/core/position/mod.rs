@@ -1,8 +1,5 @@
-use anyhow::{Result, bail};
-use strum::EnumCount;
-
 use crate::core::{Bitboard, File, Move, PackedScore, Piece, PieceType, Rank, Side, Square};
-
+use anyhow::{Result, bail};
 use zobrist_table::*;
 mod attacks;
 mod do_move;
@@ -101,7 +98,7 @@ impl Position {
     /// Get the current side to make a move
     #[inline]
     pub fn side_to_move(&self) -> Side {
-        Side::from_repr(self.game_ply as u8 & 1).unwrap()
+        unsafe { std::mem::transmute(self.game_ply as u8 & 1) }
     }
 
     /// Get the piece currently at [`square`]
@@ -118,9 +115,8 @@ impl Position {
 
     #[inline]
     pub fn piece_type_count(&self, piece_type: PieceType) -> u8 {
-        let piece_red = Piece::from_repr(piece_type as u8).unwrap();
-        let piece_black = Piece::from_repr((piece_type as u8) + Piece::SEPARATOR).unwrap();
-        self.piece_count(piece_red) + self.piece_count(piece_black)
+        self.piece_count(piece_type.to_piece(Side::Red))
+            + self.piece_count(piece_type.to_piece(Side::Black))
     }
 
     /// Get the bitboard of the [`piece_type`], which represents the pieces of
@@ -227,9 +223,9 @@ impl Position {
             bail!("Invalid number of ranks, expected 10, got {}", ranks.len());
         }
 
-        for rank_idx in 0..10 {
-            let rank = Rank::from_repr(9 - rank_idx).unwrap();
-            let rank_str = ranks[rank_idx as usize];
+        for rank in Rank::all().rev() {
+            let rank_idx = rank as usize;
+            let rank_str = ranks[9 - rank_idx];
             let mut file_idx = 0u8;
 
             for c in rank_str.chars() {
@@ -240,7 +236,7 @@ impl Position {
                     if file_idx >= 9 {
                         bail!("File index out of bounds in rank {}", rank_idx);
                     }
-                    let file = File::from_repr(file_idx).unwrap();
+                    let file = unsafe { File::from_repr_unchecked(file_idx) };
                     let square = Square::from_file_rank(file, rank);
                     if let Some(piece) = Self::piece_from_char(c) {
                         pos.put_piece(square, Some(piece));

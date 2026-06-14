@@ -1,13 +1,11 @@
 use std::ops::Index;
 
-use strum::{EnumCount, EnumIter, FromRepr};
-
-use crate::core::Side;
+use crate::{core::Side, impl_from_repr};
 
 /// Represents the types of pieces in Xiangqi.
 /// Includes virtual/helper pieces (`KnightTo` and `PawnTo`) used in precomputed attacker logic.
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum PieceType {
     Rook = 0, Advisor, Cannon, Pawn, Knight, Bishop, King
@@ -21,20 +19,34 @@ impl<T> Index<PieceType> for [T; PieceType::COUNT] {
     }
 }
 
+impl_from_repr!(PieceType);
+
+impl PieceType {
+    pub const COUNT: usize = Self::King as usize + 1;
+
+    #[inline]
+    pub const fn to_piece(&self, side: Side) -> Piece {
+        match side {
+            Side::Red => unsafe { std::mem::transmute::<u8, Piece>(*self as u8) },
+            Side::Black => unsafe {
+                std::mem::transmute::<u8, Piece>(*self as u8 + Piece::BlackRook as u8)
+            },
+        }
+    }
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        (Self::Rook as u8..=Self::King as u8).map(|x| unsafe { std::mem::transmute(x) })
+    }
+}
+
 /// Represents standard Xiangqi pieces, categorized by color and piece type.
 /// Red pieces are represented by values 1-7, and Black pieces by values 9-15.
 #[rustfmt::skip]
-#[derive(FromRepr, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Piece {
     RedRook = 0, RedAdvisor, RedCannon, RedPawn, RedKnight, RedBishop, RedKing,
     BlackRook = 8, BlackAdvisor, BlackCannon, BlackPawn, BlackKnight, BlackBishop, BlackKing,
-}
-
-impl Piece {
-    pub const COUNT: usize = Self::BlackKing as usize + 1;
-    // piece_red + SEPARATOR == piece_black
-    pub const SEPARATOR: u8 = 8;
 }
 
 impl<T> Index<Piece> for [T; Piece::COUNT] {
@@ -46,16 +58,41 @@ impl<T> Index<Piece> for [T; Piece::COUNT] {
 }
 
 impl Piece {
+    pub const COUNT: usize = Self::BlackKing as usize + 1;
+
+    /// # Safety
+    ///
+    /// This will only be valid if [`repr`] < [`Self::COUNT`] and [`repr`] is not the missing
+    /// variant.
+    #[inline]
+    pub const unsafe fn from_repr_unchecked(repr: u8) -> Self {
+        unsafe { std::mem::transmute(repr) }
+    }
+
+    const MISSING: u8 = Self::RedKing as u8 + 1;
+    #[inline]
+    pub const fn from_repr(repr: u8) -> Option<Self> {
+        if repr < Self::COUNT as u8 && repr != Self::MISSING {
+            Some(unsafe { std::mem::transmute::<u8, Self>(repr) })
+        } else {
+            None
+        }
+    }
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        (Self::RedRook as u8..=Self::BlackKing as u8).filter_map(Self::from_repr)
+    }
+
     /// Extracts the `Color` of the piece, or returns `None` if it is `None`.
     #[inline]
     pub const fn color(&self) -> Side {
-        Side::from_repr((*self as u8) >> 3).unwrap()
+        unsafe { std::mem::transmute((*self as u8) >> 3) }
     }
 
     /// Extracts the `PieceType` of the piece.
     #[inline]
     pub const fn piece_type(&self) -> PieceType {
-        PieceType::from_repr((*self as u8) & 7).unwrap()
+        unsafe { std::mem::transmute((*self as u8) & 7) }
     }
 }
 
