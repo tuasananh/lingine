@@ -107,11 +107,7 @@ fn add_defender_features(pos: &Position, features: &mut Vec<(usize, f64)>) {
 }
 
 fn calculate_phase(pos: &Position) -> f64 {
-    (pos.piece_type_count(PieceType::Rook) * 2
-        + pos.piece_type_count(PieceType::Cannon) * 2
-        + pos.piece_type_count(PieceType::Knight) * 2
-        + pos.piece_type_count(PieceType::Advisor) * 1
-        + pos.piece_type_count(PieceType::Bishop) * 1) as f64
+    pos.calculate_board_phase() as f64
 }
 
 fn compile_features(pos: &Position, result: f64) -> SparsePosition {
