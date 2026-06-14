@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use strum::{EnumCount, FromRepr};
 
 use crate::core::Score;
@@ -8,6 +10,14 @@ use crate::core::Score;
 pub enum Side {
     Red,
     Black,
+}
+
+impl<T> Index<Side> for [T; Side::COUNT] {
+    type Output = T;
+
+    fn index(&self, index: Side) -> &Self::Output {
+        unsafe { self.get_unchecked(index as usize) }
+    }
 }
 
 impl Side {

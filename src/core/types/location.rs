@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use strum::{EnumCount, EnumIter, FromRepr};
 
 /// Represents the 10 ranks (horizontal rows) of a Xiangqi board, from R0 to R9.
@@ -32,6 +34,14 @@ pub enum Square {
     A7, B7, C7, D7, E7, F7, G7, H7, I7,
     A8, B8, C8, D8, E8, F8, G8, H8, I8,
     A9, B9, C9, D9, E9, F9, G9, H9, I9,
+}
+
+impl<T> Index<Square> for [T; Square::COUNT] {
+    type Output = T;
+
+    fn index(&self, index: Square) -> &Self::Output {
+        unsafe { self.get_unchecked(index as usize) }
+    }
 }
 
 impl Square {

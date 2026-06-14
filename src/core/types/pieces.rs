@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use strum::{EnumCount, EnumIter, FromRepr};
 
 use crate::core::Side;
@@ -9,6 +11,14 @@ use crate::core::Side;
 #[repr(u8)]
 pub enum PieceType {
     Rook = 0, Advisor, Cannon, Pawn, Knight, Bishop, King
+}
+
+impl<T> Index<PieceType> for [T; PieceType::COUNT] {
+    type Output = T;
+
+    fn index(&self, index: PieceType) -> &Self::Output {
+        unsafe { self.get_unchecked(index as usize) }
+    }
 }
 
 /// Represents standard Xiangqi pieces, categorized by color and piece type.
@@ -25,6 +35,14 @@ impl Piece {
     pub const COUNT: usize = Self::BlackKing as usize + 1;
     // piece_red + SEPARATOR == piece_black
     pub const SEPARATOR: u8 = 8;
+}
+
+impl<T> Index<Piece> for [T; Piece::COUNT] {
+    type Output = T;
+
+    fn index(&self, index: Piece) -> &Self::Output {
+        unsafe { self.get_unchecked(index as usize) }
+    }
 }
 
 impl Piece {
