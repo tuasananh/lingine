@@ -56,10 +56,7 @@ impl super::Searcher<'_> {
 
         let mut best_move = None;
 
-        let tt_value = self
-            .shared
-            .transposition_table
-            .probe(self.pos.zobrist_hash(), ply);
+        let tt_value = self.shared.transposition_table.probe(self.pos.hash(), ply);
         if let Some(value) = &tt_value {
             if value.is_cutoff(alpha, beta, depth) {
                 return value.score;
@@ -115,7 +112,7 @@ impl super::Searcher<'_> {
 
         let flag = Bound::with_score(best_score, alpha_orig, beta);
         self.shared.transposition_table.store(
-            self.pos.zobrist_hash(),
+            self.pos.hash(),
             ply,
             tt_value!(best_score, best_move, flag, depth),
         );

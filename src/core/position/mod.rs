@@ -94,7 +94,7 @@ impl Position {
 
     /// Get the Zobrish Hash of the current position
     #[inline]
-    pub fn zobrist_hash(&self) -> u64 {
+    pub fn hash(&self) -> u64 {
         self.state.zobrist
     }
 
@@ -600,7 +600,7 @@ mod tests {
     #[test]
     fn test_null_moves() {
         let mut pos = Position::new();
-        let initial_hash = pos.zobrist_hash();
+        let initial_hash = pos.hash();
         let initial_side = pos.side_to_move();
         let initial_ply = pos.game_ply;
 
@@ -616,7 +616,7 @@ mod tests {
 
         // Make null move
         pos.do_null_move();
-        assert_ne!(pos.zobrist_hash(), initial_hash);
+        assert_ne!(pos.hash(), initial_hash);
         assert_eq!(pos.side_to_move(), initial_side);
         assert_eq!(pos.game_ply, initial_ply + 2);
         assert_eq!(pos.state.plies_since_null, 0);
@@ -627,7 +627,7 @@ mod tests {
 
         // Undo normal move
         pos.undo_move(w_move);
-        assert_eq!(pos.zobrist_hash(), initial_hash);
+        assert_eq!(pos.hash(), initial_hash);
         assert_eq!(pos.side_to_move(), initial_side);
         assert_eq!(pos.game_ply, initial_ply);
         assert_eq!(pos.state.plies_since_null, 0);

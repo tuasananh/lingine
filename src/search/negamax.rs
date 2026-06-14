@@ -59,10 +59,7 @@ impl super::Searcher<'_> {
         self.update_analytics(ply);
 
         let mut is_singular = false;
-        let tt_value = self
-            .shared
-            .transposition_table
-            .probe(self.pos.zobrist_hash(), ply);
+        let tt_value = self.shared.transposition_table.probe(self.pos.hash(), ply);
         if let Some(value) = &tt_value {
             if !PV && value.is_cutoff(alpha, beta, depth) {
                 return value.score;
@@ -161,7 +158,7 @@ impl super::Searcher<'_> {
 
         let bound = Bound::with_score(best_score, alpha_orig, beta);
         self.shared.transposition_table.store(
-            self.pos.zobrist_hash(),
+            self.pos.hash(),
             ply,
             tt_value!(best_score, best_move, bound, depth),
         );
