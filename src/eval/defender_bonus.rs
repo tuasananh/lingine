@@ -29,8 +29,8 @@ pub(in crate::eval) fn compute_defender_bonus_with_params(
 
 // Tapered bonuses for having 0, 1, or 2 Advisors
 pub(in crate::eval) const ADVISOR_COUNT_BONUS: [PackedScore; 3] =
-    packed![(-18, 0), (36, 27), (24, -1)];
+    packed![(-32, 12), (50, 18), (20, -4)];
 
 // Tapered bonuses for having 0, 1, or 2 Bishops (Elephants)
 pub(in crate::eval) const BISHOP_COUNT_BONUS: [PackedScore; 3] =
-    packed![(4, 5), (14, 15), (32, -1)];
+    packed![(-11, 21), (15, 17), (41, -13)];
