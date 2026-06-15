@@ -1,4 +1,4 @@
-use anyhow::{Error, Result, anyhow, ensure};
+use anyhow::{Error, Result, anyhow, bail, ensure};
 
 use std::{num::NonZeroU32, time::Duration};
 
@@ -64,32 +64,26 @@ impl EngineCommand {
     /// ignored per the UCI spec), as well as structurally invalid
     /// known commands.
     /// Returns [`Some(cmd)`] for valid, fully-parsed commands.
-    pub fn parse(line: &str) -> Option<Self> {
+    pub fn parse(line: &str) -> Result<Self> {
         let tokens: Vec<&str> = line.split_whitespace().collect();
 
         match tokens.as_slice() {
-            ["uci"] => Some(Self::Uci),
-            ["debug", "on"] => Some(Self::Debug(true)),
-            ["debug", "off"] => Some(Self::Debug(false)),
-            // Missing or unrecognised value — spec says nothing, so ignore.
-            ["debug"] => None,
-            ["isready"] => Some(Self::IsReady),
+            ["uci"] => Ok(Self::Uci),
+            ["debug", "on"] => Ok(Self::Debug(true)),
+            ["debug", "off"] => Ok(Self::Debug(false)),
+            ["isready"] => Ok(Self::IsReady),
             ["setoption", tokens @ ..] => {
-                Some(Self::SetOption(SetOptionParameters::try_from(tokens).ok()?))
+                SetOptionParameters::try_from(tokens).map(Self::SetOption)
             }
-            ["register", tokens @ ..] => {
-                Some(Self::Register(RegisterParameters::try_from(tokens).ok()?))
-            }
-            ["ucinewgame"] => Some(Self::NewGame),
-            ["position", tokens @ ..] => {
-                Some(Self::Position(PositionParameters::try_from(tokens).ok()?))
-            }
-            ["go", tokens @ ..] => Some(Self::Go(GoParameters::try_from(tokens).ok()?)),
-            ["stop"] => Some(Self::Stop),
-            ["ponderhit"] => Some(Self::PonderHit),
-            ["quit"] => Some(Self::Quit),
+            ["register", tokens @ ..] => RegisterParameters::try_from(tokens).map(Self::Register),
+            ["ucinewgame"] => Ok(Self::NewGame),
+            ["position", tokens @ ..] => PositionParameters::try_from(tokens).map(Self::Position),
+            ["go", tokens @ ..] => GoParameters::try_from(tokens).map(Self::Go),
+            ["stop"] => Ok(Self::Stop),
+            ["ponderhit"] => Ok(Self::PonderHit),
+            ["quit"] => Ok(Self::Quit),
             // Unknown command — UCI spec says ignore silently.
-            _ => None,
+            _ => bail!("Unknown command"),
         }
     }
 }
@@ -560,33 +554,33 @@ mod tests {
 
     #[test]
     fn test_parse_simple_commands() {
-        assert!(EngineCommand::parse("").is_none());
-        assert!(EngineCommand::parse("   ").is_none());
-        assert!(EngineCommand::parse("unknown_command").is_none());
+        assert!(EngineCommand::parse("").is_err());
+        assert!(EngineCommand::parse("   ").is_err());
+        assert!(EngineCommand::parse("unknown_command").is_err());
 
         assert!(matches!(
             EngineCommand::parse("uci"),
-            Some(EngineCommand::Uci)
+            Ok(EngineCommand::Uci)
         ));
         assert!(matches!(
             EngineCommand::parse("isready"),
-            Some(EngineCommand::IsReady)
+            Ok(EngineCommand::IsReady)
         ));
         assert!(matches!(
             EngineCommand::parse("ucinewgame"),
-            Some(EngineCommand::NewGame)
+            Ok(EngineCommand::NewGame)
         ));
         assert!(matches!(
             EngineCommand::parse("stop"),
-            Some(EngineCommand::Stop)
+            Ok(EngineCommand::Stop)
         ));
         assert!(matches!(
             EngineCommand::parse("ponderhit"),
-            Some(EngineCommand::PonderHit)
+            Ok(EngineCommand::PonderHit)
         ));
         assert!(matches!(
             EngineCommand::parse("quit"),
-            Some(EngineCommand::Quit)
+            Ok(EngineCommand::Quit)
         ));
     }
 
@@ -594,14 +588,14 @@ mod tests {
     fn test_parse_debug() {
         assert!(matches!(
             EngineCommand::parse("debug on"),
-            Some(EngineCommand::Debug(true))
+            Ok(EngineCommand::Debug(true))
         ));
         assert!(matches!(
             EngineCommand::parse("debug off"),
-            Some(EngineCommand::Debug(false))
+            Ok(EngineCommand::Debug(false))
         ));
-        assert!(EngineCommand::parse("debug").is_none());
-        assert!(EngineCommand::parse("debug foo").is_none());
+        assert!(EngineCommand::parse("debug").is_err());
+        assert!(EngineCommand::parse("debug foo").is_err());
     }
 
     #[test]
@@ -615,7 +609,7 @@ mod tests {
         }
 
         // Invalid setoption format should fail
-        assert!(EngineCommand::parse("setoption").is_none());
+        assert!(EngineCommand::parse("setoption").is_err());
     }
 
     #[test]

@@ -1,8 +1,5 @@
-use strum::EnumCount;
-use thiserror::Error;
-
 use crate::core::{Bitboard, File, Move, PackedScore, Piece, PieceType, Rank, Side, Square};
-
+use anyhow::{Result, bail};
 use zobrist_table::*;
 mod attacks;
 mod do_move;
@@ -14,7 +11,7 @@ mod zobrist_table;
 /// Represents search state parameters that must be saved on a stack,
 /// allowing incremental undo_move restorations.
 #[derive(Clone, Copy, Debug)]
-pub struct StateInfo {
+struct StateInfo {
     /// The last move played to reach this state.
     pub last_move: Option<Move>,
     /// The piece captured during this move, or `None` if it was quiet.
@@ -30,7 +27,7 @@ pub struct StateInfo {
     /// perspective)
     pub score: PackedScore,
     /// Precalculated incremental game phase
-    pub phase: i32,
+    pub phase: u8,
     /// Checker pieces checking the King of the side to move.
     pub checkers: Bitboard,
     /// Pinned pieces (blockers) for both sides' kings.
@@ -52,29 +49,23 @@ pub struct StateInfo {
 pub struct Position {
     /// Flat 90-square array mapping square index (0 to 89) to the Piece
     /// occupying it.
-    board: [Option<Piece>; Square::COUNT],
+    board: [Option<Piece>; Square::COUNT], // 1 * 90 = 90 bytes
     /// Precomputed bitboards showing piece placements grouped by `PieceType`.
-    bitboard_by_type: [Bitboard; PieceType::COUNT],
+    bitboard_by_type: [Bitboard; PieceType::COUNT], // 7 * 16 = 112 bytes
     /// Precomputed bitboards showing piece placements grouped by `Color`.
-    bitboard_by_color: [Bitboard; Side::COUNT],
+    bitboard_by_color: [Bitboard; Side::COUNT], // 2 * 16 = 32 bytes
     /// Active count of each piece category on the board.
-    piece_count: [u8; Piece::COUNT],
+    piece_count: [u8; Piece::COUNT], // 15 bytes
     /// Current state of position
-    state: StateInfo,
+    state: StateInfo, // 224 bytes
     /// Stack tracking previous move parameter histories for undoing moves.
-    history: Vec<StateInfo>,
+    history: Vec<StateInfo>, // ptr (8) + size (8) + cap(8) = 24 bytes
     /// Total moves played in the game so far (Red = 0, Black = 1, Red's
     /// next = 2, etc.).
-    game_ply: u16,
+    game_ply: u16, // 2 bytes
     /// Palace coordinates of both players' Generals (Kings) for faster check
     /// detection.
-    king_squares: [Square; Side::COUNT],
-}
-
-#[derive(Error, Debug)]
-#[error("Failed to set position: {msg}")]
-pub struct PositionSetError {
-    msg: String,
+    king_squares: [Square; Side::COUNT], // 2 bytes
 }
 
 impl Default for Position {
@@ -85,7 +76,8 @@ impl Default for Position {
 
 impl Position {
     /// Standard Xiangqi starting position in FEN notation.
-    pub const START_FEN: &str = "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
+    pub(crate) const START_FEN: &str =
+        "rheakaehr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RHEAKAEHR w";
 
     /// Initializes the position to the standard starting position by default.
     pub fn new() -> Self {
@@ -99,40 +91,46 @@ impl Position {
 
     /// Get the Zobrish Hash of the current position
     #[inline]
-    pub fn zobrist_hash(&self) -> u64 {
+    pub fn hash(&self) -> u64 {
         self.state.zobrist
     }
 
     /// Get the current side to make a move
     #[inline]
     pub fn side_to_move(&self) -> Side {
-        Side::from_repr(self.game_ply as u8 & 1).unwrap()
+        unsafe { std::mem::transmute(self.game_ply as u8 & 1) }
     }
 
     /// Get the piece currently at [`square`]
     #[inline]
     pub fn piece_at(&self, square: Square) -> Option<Piece> {
-        self.board[square as usize]
+        self.board[square]
     }
 
     /// Get the number of [`piece`] currently in the board
     #[inline]
     pub fn piece_count(&self, piece: Piece) -> u8 {
-        self.piece_count[piece as usize]
+        self.piece_count[piece]
+    }
+
+    #[inline]
+    pub fn piece_type_count(&self, piece_type: PieceType) -> u8 {
+        self.piece_count(piece_type.to_piece(Side::Red))
+            + self.piece_count(piece_type.to_piece(Side::Black))
     }
 
     /// Get the bitboard of the [`piece_type`], which represents the pieces of
     /// that type currently on the board
     #[inline]
     pub fn bitboard_by_type(&self, piece_type: PieceType) -> Bitboard {
-        self.bitboard_by_type[piece_type as usize]
+        self.bitboard_by_type[piece_type]
     }
 
     /// Get the bitboard of the side [`color`], which represents the pieces
     /// owned by [`color`] currently on the board
     #[inline]
     pub fn bitboard_by_color(&self, color: Side) -> Bitboard {
-        self.bitboard_by_color[color as usize]
+        self.bitboard_by_color[color]
     }
 
     #[inline]
@@ -148,7 +146,7 @@ impl Position {
     /// Checks whether or not [`square`] is empty (have no piece on it)
     #[inline]
     pub fn is_empty(&self, square: Square) -> bool {
-        self.board[square as usize].is_none()
+        self.board[square].is_none()
     }
 
     /// Checks whether or not [`mv`] is a capture move.
@@ -166,12 +164,14 @@ impl Position {
     /// Get the square where the king of side [`color`] is currently at
     #[inline]
     pub fn king_square(&self, color: Side) -> Square {
-        self.king_squares[color as usize]
+        self.king_squares[color]
     }
 
     /// Checks if the given player's King is currently in check.
+    ///
+    /// Mainly used for tests.
     #[inline]
-    pub fn is_in_check(&self, color: Side) -> bool {
+    pub fn is_side_in_check(&self, color: Side) -> bool {
         if color == self.side_to_move() {
             self.state.in_check
         } else {
@@ -179,15 +179,14 @@ impl Position {
         }
     }
 
-    /// Returns the piece captured by the last move, or `None` if the last
-    /// move was quiet or no moves have been played.
+    /// Checks if the player to move is currently in check.
     #[inline]
-    pub fn last_captured_piece(&self) -> Option<Piece> {
-        self.history.last().and_then(|s| s.captured_piece)
+    pub fn is_in_check(&self) -> bool {
+        self.state.in_check
     }
 
     /// Parses and initializes the position state from a standard FEN string.
-    pub fn from_fen(fen: &str) -> Result<Self, PositionSetError> {
+    pub fn from_fen(fen: &str) -> Result<Self> {
         let mut pos = Position {
             board: [None; Square::COUNT],
             bitboard_by_type: [Bitboard::new(); PieceType::COUNT],
@@ -215,22 +214,18 @@ impl Position {
 
         let tokens: Vec<&str> = fen.split_whitespace().collect();
         if tokens.is_empty() {
-            return Err(PositionSetError {
-                msg: "Empty FEN".to_string(),
-            });
+            bail!("Empty fen");
         }
 
         // 1. Parse piece placement ranks (10 ranks, separated by '/')
         let ranks: Vec<&str> = tokens[0].split('/').collect();
         if ranks.len() != 10 {
-            return Err(PositionSetError {
-                msg: format!("Expected 10 ranks, got {}", ranks.len()),
-            });
+            bail!("Invalid number of ranks, expected 10, got {}", ranks.len());
         }
 
-        for rank_idx in 0..10 {
-            let rank = Rank::from_repr(9 - rank_idx).unwrap();
-            let rank_str = ranks[rank_idx as usize];
+        for rank in Rank::all().rev() {
+            let rank_idx = rank as usize;
+            let rank_str = ranks[9 - rank_idx];
             let mut file_idx = 0u8;
 
             for c in rank_str.chars() {
@@ -239,26 +234,24 @@ impl Position {
                     file_idx += empty_squares;
                 } else {
                     if file_idx >= 9 {
-                        return Err(PositionSetError {
-                            msg: "File index out of bounds".to_string(),
-                        });
+                        bail!("File index out of bounds in rank {}", rank_idx);
                     }
-                    let file = File::from_repr(file_idx).unwrap();
+                    let file = unsafe { File::from_repr_unchecked(file_idx) };
                     let square = Square::from_file_rank(file, rank);
                     if let Some(piece) = Self::piece_from_char(c) {
                         pos.put_piece(square, Some(piece));
                     } else {
-                        return Err(PositionSetError {
-                            msg: format!("Unknown piece character: {}", c),
-                        });
+                        bail!("Unknown piece character {}", c);
                     }
                     file_idx += 1;
                 }
             }
             if file_idx != 9 {
-                return Err(PositionSetError {
-                    msg: format!("Invalid rank width: expected 9 files, got {}", file_idx),
-                });
+                bail!(
+                    "Invalid number of files for rank {}, expected 9, got {}",
+                    rank_idx,
+                    file_idx
+                );
             }
         }
 
@@ -268,9 +261,7 @@ impl Position {
                 "w" => Side::Red,
                 "b" => Side::Black,
                 _ => {
-                    return Err(PositionSetError {
-                        msg: format!("Invalid side to move: {}", tokens[1]),
-                    });
+                    bail!("Invalid side to move: {}", tokens[1]);
                 }
             }
         } else {
@@ -294,7 +285,7 @@ impl Position {
         pos.game_ply = (fullmove.saturating_sub(1) * 2) + (side_to_move as u16);
 
         pos.state.sixtymove_clock = rule60;
-        pos.state.score = pos.compute_tapered_evaluation_scores();
+        pos.state.score = pos.tapered_score_from_scratch();
         pos.state.phase = pos.calculate_board_phase();
         pos.set_check_info();
 
@@ -304,13 +295,11 @@ impl Position {
     /// Prints a human-readable ASCII representation of the board state.
     pub fn print_board(&self) {
         println!("  +---------------------------+");
-        for rank_idx in (0..10).rev() {
-            print!("{} |", rank_idx);
-            for file_idx in 0..9 {
-                let file = File::from_repr(file_idx).unwrap();
-                let rank = Rank::from_repr(rank_idx).unwrap();
+        for rank in Rank::all().rev() {
+            print!("{} |", rank as usize);
+            for file in File::all() {
                 let square = Square::from_file_rank(file, rank);
-                let piece_char = match self.board[square as usize] {
+                let piece_char = match self.board[square] {
                     Some(Piece::RedRook) => 'R',
                     Some(Piece::RedKnight) => 'H',
                     Some(Piece::RedBishop) => 'E',
@@ -416,7 +405,7 @@ mod tests {
             for &m in &moves {
                 let actual = pos.gives_check(m);
                 pos.do_move(m);
-                let expected = pos.is_in_check(pos.side_to_move());
+                let expected = pos.is_side_in_check(pos.side_to_move());
                 if actual != expected {
                     let us = pos.side_to_move();
                     let them = us.opposite();
@@ -428,11 +417,11 @@ mod tests {
                     println!("Occupied bitboard:\n{}", pos.bitboard_occupied());
                     println!(
                         "Rook check squares:\n{}",
-                        pos.state.check_squares[PieceType::Rook as usize]
+                        pos.state.check_squares[PieceType::Rook]
                     );
                     println!(
                         "Cannon check squares:\n{}",
-                        pos.state.check_squares[PieceType::Cannon as usize]
+                        pos.state.check_squares[PieceType::Cannon]
                     );
                     pos.undo_move(m);
                     pos.print_board();
@@ -498,7 +487,7 @@ mod tests {
             let us = pos.side_to_move();
             let mut temp_pos = pos.clone();
             temp_pos.do_move(m);
-            let expected_legal = !temp_pos.is_in_check(us);
+            let expected_legal = !temp_pos.is_side_in_check(us);
 
             if actual_legal != expected_legal {
                 println!("LEGALITY MISMATCH!");
@@ -515,7 +504,7 @@ mod tests {
 
             if actual_legal {
                 let actual_check = pos.gives_check(m);
-                let expected_check = temp_pos.is_in_check(temp_pos.side_to_move());
+                let expected_check = temp_pos.is_side_in_check(temp_pos.side_to_move());
 
                 if actual_check != expected_check {
                     println!("GIVES_CHECK MISMATCH!");
@@ -605,7 +594,7 @@ mod tests {
     #[test]
     fn test_null_moves() {
         let mut pos = Position::new();
-        let initial_hash = pos.zobrist_hash();
+        let initial_hash = pos.hash();
         let initial_side = pos.side_to_move();
         let initial_ply = pos.game_ply;
 
@@ -621,7 +610,7 @@ mod tests {
 
         // Make null move
         pos.do_null_move();
-        assert_ne!(pos.zobrist_hash(), initial_hash);
+        assert_ne!(pos.hash(), initial_hash);
         assert_eq!(pos.side_to_move(), initial_side);
         assert_eq!(pos.game_ply, initial_ply + 2);
         assert_eq!(pos.state.plies_since_null, 0);
@@ -632,7 +621,7 @@ mod tests {
 
         // Undo normal move
         pos.undo_move(w_move);
-        assert_eq!(pos.zobrist_hash(), initial_hash);
+        assert_eq!(pos.hash(), initial_hash);
         assert_eq!(pos.side_to_move(), initial_side);
         assert_eq!(pos.game_ply, initial_ply);
         assert_eq!(pos.state.plies_since_null, 0);

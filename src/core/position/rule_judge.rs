@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::core::{
     Bitboard, Move, MoveGenType, MoveList, Piece, PieceType, Score, Side, Square, cannon_captures,
     generate_moves, knight_attacks, pawn_attacks, rook_attacks, score,
@@ -8,48 +6,45 @@ use crate::core::{
 impl super::Position {
     /// Calculates the chase information for a given color, returning a 16-bit
     /// mask of chased pieces.
-    pub fn chased(&mut self, mover: Side, id_board: &[u8; Square::COUNT]) -> u16 {
+    fn chased(&mut self, mover: Side, id_board: &[u8; Square::COUNT]) -> u16 {
         let mut chase = 0u16;
         let opponent = mover.opposite();
-        let occupied = self.bitboard_by_color[Side::Red as usize]
-            | self.bitboard_by_color[Side::Black as usize];
+        let occupied = self.bitboard_occupied();
 
         // 1. Target pieces that can be chased (excluding King):
         // Rooks, Cannons, Knights, Advisors, Bishops of the opponent,
         // and crossed-river Pawns of the opponent.
-        let mut targets_mask = self.bitboard_by_type[PieceType::Rook as usize]
-            | self.bitboard_by_type[PieceType::Cannon as usize]
-            | self.bitboard_by_type[PieceType::Knight as usize]
-            | self.bitboard_by_type[PieceType::Advisor as usize]
-            | self.bitboard_by_type[PieceType::Bishop as usize];
+        let mut targets_mask = self.bitboard_by_type[PieceType::Rook]
+            | self.bitboard_by_type[PieceType::Cannon]
+            | self.bitboard_by_type[PieceType::Knight]
+            | self.bitboard_by_type[PieceType::Advisor]
+            | self.bitboard_by_type[PieceType::Bishop];
 
         // Add crossed-river pawns of the opponent
-        let opp_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
-            & self.bitboard_by_color[opponent as usize];
+        let opp_pawns = self.bitboard_by_type[PieceType::Pawn] & self.bitboard_by_color[opponent];
         let opp_side_mask = Bitboard::side(mover); // The river-crossed zone is mover's side!
         targets_mask |= opp_pawns & opp_side_mask;
 
         // Filter targets to only include the opponent's pieces
-        let targets = targets_mask & self.bitboard_by_color[opponent as usize];
+        let targets = targets_mask & self.bitboard_by_color[opponent];
 
         // 2. Chasing attackers:
         // Rooks, Cannons, Knights, and crossed-river Pawns of the mover.
-        let mut attackers_mask = self.bitboard_by_type[PieceType::Rook as usize]
-            | self.bitboard_by_type[PieceType::Cannon as usize]
-            | self.bitboard_by_type[PieceType::Knight as usize];
+        let mut attackers_mask = self.bitboard_by_type[PieceType::Rook]
+            | self.bitboard_by_type[PieceType::Cannon]
+            | self.bitboard_by_type[PieceType::Knight];
 
-        let my_pawns = self.bitboard_by_type[PieceType::Pawn as usize]
-            & self.bitboard_by_color[mover as usize];
+        let my_pawns = self.bitboard_by_type[PieceType::Pawn] & self.bitboard_by_color[mover];
         let my_side_mask = Bitboard::side(opponent); // river-crossed zone is opponent's side!
         attackers_mask |= my_pawns & my_side_mask;
 
         // Filter attackers to only include mover's pieces
-        let mut attackers = attackers_mask & self.bitboard_by_color[mover as usize];
+        let mut attackers = attackers_mask & self.bitboard_by_color[mover];
 
         // 3. Scan all attackers to see if they attack any target
         while let Some(from) = attackers.pop_lsb() {
-            let piece = self.board[from as usize]
-                .expect("Attacker bitboard has no piece at the given square");
+            let piece =
+                self.board[from].expect("Attacker bitboard has no piece at the given square");
             let ptype = piece.piece_type();
 
             // Generate attacks from `from`
@@ -68,7 +63,7 @@ impl super::Position {
                 // Verify if the move is legal (meaning the king of mover is not in check after
                 // the move)
                 if self.legal(Move::new(from, to)) {
-                    let target_piece = self.board[to as usize]
+                    let target_piece = self.board[to]
                         .expect("Attack square must have a piece since it's in targets_mask");
                     let target_ptype = target_piece.piece_type();
 
@@ -80,7 +75,7 @@ impl super::Position {
                     if target_ptype == PieceType::Rook
                         && (ptype == PieceType::Knight || ptype == PieceType::Cannon)
                     {
-                        chase |= 1 << id_board[to as usize];
+                        chase |= 1 << id_board[to];
                         continue;
                     }
 
@@ -89,24 +84,23 @@ impl super::Position {
                     let saved_ply = self.game_ply;
 
                     // Play move:
-                    self.board[from as usize] = None;
-                    self.board[to as usize] = Some(piece);
+                    self.board[from] = None;
+                    self.board[to] = Some(piece);
 
                     // Update bitboards
-                    self.bitboard_by_color[mover as usize].clear_bit(from);
-                    self.bitboard_by_color[mover as usize].set_bit(to);
-                    self.bitboard_by_color[opponent as usize].clear_bit(to);
+                    self.bitboard_by_color[mover].clear_bit(from);
+                    self.bitboard_by_color[mover].set_bit(to);
+                    self.bitboard_by_color[opponent].clear_bit(to);
 
-                    self.bitboard_by_type[ptype as usize].clear_bit(from);
-                    self.bitboard_by_type[ptype as usize].set_bit(to);
-                    self.bitboard_by_type[target_ptype as usize].clear_bit(to);
+                    self.bitboard_by_type[ptype].clear_bit(from);
+                    self.bitboard_by_type[ptype].set_bit(to);
+                    self.bitboard_by_type[target_ptype].clear_bit(to);
 
                     // We temporarily toggle side_to_move to opponent
                     self.game_ply ^= 1;
 
                     // Now see if any of the opponent's pieces can legally recapture at `to`
-                    let recaptured_occupied = self.bitboard_by_color[Side::Red as usize]
-                        | self.bitboard_by_color[Side::Black as usize];
+                    let recaptured_occupied = self.bitboard_occupied();
 
                     let mut recapturers = self.checkers_to(to, recaptured_occupied, opponent);
                     while let Some(s) = recapturers.pop_lsb() {
@@ -117,16 +111,16 @@ impl super::Position {
                     }
 
                     // Restore board and bitboards:
-                    self.board[from as usize] = Some(piece);
-                    self.board[to as usize] = Some(target_piece);
+                    self.board[from] = Some(piece);
+                    self.board[to] = Some(target_piece);
 
-                    self.bitboard_by_color[mover as usize].set_bit(from);
-                    self.bitboard_by_color[mover as usize].clear_bit(to);
-                    self.bitboard_by_color[opponent as usize].set_bit(to);
+                    self.bitboard_by_color[mover].set_bit(from);
+                    self.bitboard_by_color[mover].clear_bit(to);
+                    self.bitboard_by_color[opponent].set_bit(to);
 
-                    self.bitboard_by_type[ptype as usize].set_bit(from);
-                    self.bitboard_by_type[ptype as usize].clear_bit(to);
-                    self.bitboard_by_type[target_ptype as usize].set_bit(to);
+                    self.bitboard_by_type[ptype].set_bit(from);
+                    self.bitboard_by_type[ptype].clear_bit(to);
+                    self.bitboard_by_type[target_ptype].set_bit(to);
 
                     self.game_ply = saved_ply;
 
@@ -140,10 +134,10 @@ impl super::Position {
                             self.game_ply = saved_ply;
 
                             if !can_opp_capture_back {
-                                chase |= 1 << id_board[to as usize];
+                                chase |= 1 << id_board[to];
                             }
                         } else {
-                            chase |= 1 << id_board[to as usize];
+                            chase |= 1 << id_board[to];
                         }
                     }
                 }
@@ -155,7 +149,7 @@ impl super::Position {
 
     /// Detects chases from state st - d to state st on a rollback clone of
     /// self.
-    pub fn detect_chases(&mut self, d: usize, ply: u8) -> Score {
+    fn detect_chases(&mut self, d: usize, ply: u8) -> Score {
         let n = self.history.len();
         if n < d {
             return score::ZERO; // Draw
@@ -165,14 +159,13 @@ impl super::Position {
         let mut white_id = 0;
         let mut black_id = 0;
         let mut id_board = [0u8; Square::COUNT];
-        for sq_idx in 0..Square::COUNT {
-            let sq = Square::from_repr(sq_idx as u8).unwrap();
-            if let Some(piece) = self.board[sq as usize] {
+        for sq in Square::all() {
+            if let Some(piece) = self.board[sq] {
                 if piece.color() == Side::Red {
-                    id_board[sq as usize] = white_id;
+                    id_board[sq] = white_id;
                     white_id += 1;
                 } else {
-                    id_board[sq as usize] = black_id;
+                    id_board[sq] = black_id;
                     black_id += 1;
                 }
             }
@@ -189,9 +182,9 @@ impl super::Position {
                 return score::DRAW; // Draw
             }
 
-            let opposing_chase_mask = chase[self.side_to_move().opposite() as usize];
+            let opposing_chase_mask = chase[self.side_to_move().opposite()];
             if opposing_chase_mask == 0 {
-                let our_chase_mask = chase[self.side_to_move() as usize];
+                let our_chase_mask = chase[self.side_to_move()];
                 if our_chase_mask == 0 {
                     break;
                 }
@@ -212,12 +205,12 @@ impl super::Position {
                 self.undo_move(m);
                 let before = self.chased(self.side_to_move(), &id_board);
 
-                chase[self.side_to_move() as usize] &= after & !before;
+                chase[self.side_to_move()] &= after & !before;
             }
         }
 
-        let us_chasing = chase[us as usize] != 0;
-        let them_chasing = chase[opponent as usize] != 0;
+        let us_chasing = chase[us] != 0;
+        let them_chasing = chase[opponent] != 0;
 
         if us_chasing && them_chasing {
             score::DRAW // Mutual chase -> draw
@@ -235,7 +228,7 @@ impl super::Position {
     /// chasing).
     ///
     /// This function is based on Pikafish's implementation
-    pub fn rule_judge(&mut self, ply: u8) -> Option<Score> {
+    pub(crate) fn rule_judge(&mut self, ply: u8) -> Option<Score> {
         // 1. 60-Move Rule (120 Plies since last pawn advance or capture)
         let rule60 = self.state.sixtymove_clock;
         const RULE60_PLIES_THRESHOLD: u16 = 120;
@@ -348,8 +341,9 @@ impl super::Position {
 
                 // Scan all intermediate plies in the loop (from `n - i` to `n - 1`)
                 for j in (n - i)..n {
-                    let player_who_moved =
-                        Side::from_repr((self.game_ply - (n - j) as u16) as u8 & 1).unwrap();
+                    let player_who_moved = unsafe {
+                        Side::from_repr_unchecked((self.game_ply - (n - j) as u16) as u8 & 1)
+                    };
                     let state_after = if j + 1 < n {
                         &self.history[j + 1]
                     } else {

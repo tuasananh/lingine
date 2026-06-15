@@ -234,14 +234,14 @@ mod tests {
 
         // 1. Red checks
         pos.do_move(r_check1);
-        assert!(pos.is_in_check(Side::Black));
+        assert!(pos.is_side_in_check(Side::Black));
 
         // 2. Black evades
         pos.do_move(k_move1);
 
         // 3. Red checks again
         pos.do_move(r_check2);
-        assert!(pos.is_in_check(Side::Black));
+        assert!(pos.is_side_in_check(Side::Black));
 
         // 4. Black moves King back to D9
         pos.do_move(k_move2);
@@ -252,7 +252,7 @@ mod tests {
         // Now Black turn to move. Red just gave the repeating check on all turns in
         // the loop.
         assert_eq!(pos.rule_judge(5), Some(score::mate_in(5)));
-        assert!(pos.is_in_check(Side::Black));
+        assert!(pos.is_side_in_check(Side::Black));
 
         // Black should win because Red is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)

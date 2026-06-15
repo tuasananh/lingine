@@ -46,7 +46,7 @@ impl super::Searcher<'_> {
         // save the King.
         //
         // See: https://www.chessprogramming.org/Check_Extensions
-        if self.pos.is_in_check(self.pos.side_to_move()) {
+        if self.pos.is_in_check() {
             depth += 1;
         }
 
@@ -59,10 +59,7 @@ impl super::Searcher<'_> {
         self.update_analytics(ply);
 
         let mut is_singular = false;
-        let tt_value = self
-            .shared
-            .transposition_table
-            .probe(self.pos.zobrist_hash(), ply);
+        let tt_value = self.shared.transposition_table.probe(self.pos.hash(), ply);
         if let Some(value) = &tt_value {
             if !PV && value.is_cutoff(alpha, beta, depth) {
                 return value.score;
@@ -74,9 +71,7 @@ impl super::Searcher<'_> {
             is_singular = self.singular_extension(depth, ply, &ctx, value);
         };
 
-        let us = self.pos.side_to_move();
-
-        let in_check = self.pos.is_in_check(us);
+        let in_check = self.pos.is_in_check();
 
         if !ROOT && !PV && !in_check {
             let eval = tt_value.map_or_else(|| self.pos.evaluate(), |x| x.score);
@@ -163,7 +158,7 @@ impl super::Searcher<'_> {
 
         let bound = Bound::with_score(best_score, alpha_orig, beta);
         self.shared.transposition_table.store(
-            self.pos.zobrist_hash(),
+            self.pos.hash(),
             ply,
             tt_value!(best_score, best_move, bound, depth),
         );

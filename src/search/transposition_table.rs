@@ -1,11 +1,9 @@
 use std::num::NonZeroU8;
 
-use strum::FromRepr;
-
 use crate::core::{Move, Score, score};
 
 /// Identifies the type of bounds for a Transposition Table evaluation score.
-#[derive(PartialEq, Eq, Debug, FromRepr)]
+#[derive(PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Bound {
     /// Score is exact/precise.
