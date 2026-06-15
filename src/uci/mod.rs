@@ -27,8 +27,12 @@ fn spawn_listener(is_running: Arc<RunningStatus>) -> Receiver<EngineCommand> {
                 break;
             }
 
-            let Some(command) = EngineCommand::parse(&command_str) else {
-                continue;
+            let command = match EngineCommand::parse(&command_str) {
+                Ok(ok) => ok,
+                Err(err) => {
+                    eprintln!("error: {err}");
+                    continue;
+                }
             };
 
             match command {

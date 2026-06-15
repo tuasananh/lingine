@@ -13,7 +13,7 @@ use crate::core::{
 /// 10-bit integer. Splits across two u64 halves to stay within 64-bit
 /// multiply range, using a magic multiplier to compress 5 spaced bits each.
 #[inline]
-pub const fn gather_file_bits(bits: u128, f: usize) -> usize {
+const fn gather_file_bits(bits: u128, f: usize) -> usize {
     let occ = bits >> f;
     const STEP_MASK: u64 = 0x10_0804_0201;
     const MAGIC_MULTIPLIER: u64 = 0x1010101010;
@@ -25,49 +25,49 @@ pub const fn gather_file_bits(bits: u128, f: usize) -> usize {
 /// Returns squares the King can move to from `square` (1-step orthogonal,
 /// palace-confined). Does not filter friendly pieces.
 #[inline]
-pub fn king_attacks(square: Square) -> Bitboard {
+pub(crate) const fn king_attacks(square: Square) -> Bitboard {
     KING_ATTACKS[square as usize]
 }
 
 /// Returns squares the Advisor can move to from `square` (1-step diagonal,
 /// palace-confined). Does not filter friendly pieces.
 #[inline]
-pub fn advisor_attacks(square: Square) -> Bitboard {
+pub(crate) const fn advisor_attacks(square: Square) -> Bitboard {
     ADVISOR_ATTACKS[square as usize]
 }
 
 /// Returns squares the Bishop can move to from `square` given `occupied`.
 /// Blocked if the intervening eye square is occupied.
 #[inline]
-pub fn bishop_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+pub(crate) const fn bishop_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     BISHOP_MAGICS[square as usize].attack(occupied)
 }
 
 /// Returns squares the Knight can move to from `square` given `occupied`.
 /// Blocked if the adjacent leg square in the movement direction is occupied.
 #[inline]
-pub fn knight_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+pub const fn knight_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     KNIGHT_MAGICS[square as usize].attack(occupied)
 }
 
 /// Returns squares the Pawn at `square` can move to, given its `side`.
 /// Forward-only before crossing the river; adds sideways moves after.
 #[inline]
-pub fn pawn_attacks(square: Square, side: Side) -> Bitboard {
+pub(crate) const fn pawn_attacks(square: Square, side: Side) -> Bitboard {
     PAWN_ATTACKS[side as usize][square as usize]
 }
 
 /// Returns squares from which a Pawn of `side` could attack `square`.
 /// The reverse of `pawn_attacks`; used for check detection.
 #[inline]
-pub fn pawn_attacks_to(square: Square, side: Side) -> Bitboard {
+pub(crate) const fn pawn_attacks_to(square: Square, side: Side) -> Bitboard {
     PAWN_ATTACKS_TO[side as usize][square as usize]
 }
 
 /// Returns squares from which a Knight could attack `square` given `occupied`.
 /// The reverse of `knight_attacks`; used for check detection.
 #[inline]
-pub fn knight_attacks_to(square: Square, occupied: Bitboard) -> Bitboard {
+pub(crate) const fn knight_attacks_to(square: Square, occupied: Bitboard) -> Bitboard {
     KNIGHT_TO_MAGICS[square as usize].attack(occupied)
 }
 
@@ -107,14 +107,14 @@ pub const fn rook_attacks(sq: Square, occ: Bitboard) -> Bitboard {
 /// file. Quiet moves are not included — use `rook_attacks` for those.
 /// Does not filter friendly pieces.
 #[inline]
-pub fn cannon_captures(sq: Square, occ: Bitboard) -> Bitboard {
+pub const fn cannon_captures(sq: Square, occ: Bitboard) -> Bitboard {
     sliding_attacks::<false>(sq, occ)
 }
 
 /// Returns the full cannon attacks ray: all squares behind exactly one screen,
 /// up to and including the second piece.
 #[inline]
-pub const fn cannon_beyond_attacks(square: Square, occupied: Bitboard) -> Bitboard {
+pub(crate) const fn cannon_beyond_attacks(square: Square, occupied: Bitboard) -> Bitboard {
     let idx = square as usize;
     let f = idx % 9;
     let r = idx / 9;
@@ -130,21 +130,21 @@ pub const fn cannon_beyond_attacks(square: Square, occupied: Bitboard) -> Bitboa
 /// on the same rank or file, plus `to` itself. For a knight move, includes
 /// `to` plus the leg square.
 #[inline]
-pub fn squares_between(from: Square, to: Square) -> Bitboard {
+pub(crate) const fn squares_between(from: Square, to: Square) -> Bitboard {
     SQUARES_BETWEEN[from as usize][to as usize]
 }
 
 /// Returns a bitboard containing the squares from `to` extending away from
 /// `from` to the edge of the board, along the same rank or file.
 #[inline]
-pub fn squares_beyond(from: Square, to: Square) -> Bitboard {
+pub(crate) const fn squares_beyond(from: Square, to: Square) -> Bitboard {
     SQUARES_BEYOND[from as usize][to as usize]
 }
 
 /// Returns a bitboard containing the squares that `from` and `to`
 /// make a line
 #[inline]
-pub fn squares_in_line(from: Square, to: Square) -> Bitboard {
+pub(crate) const fn squares_in_line(from: Square, to: Square) -> Bitboard {
     SQUARES_IN_LINE[from as usize][to as usize]
 }
 

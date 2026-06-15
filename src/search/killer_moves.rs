@@ -11,12 +11,14 @@ pub struct KillerMoves {
 }
 
 impl KillerMoves {
+    #[inline]
     pub fn new() -> Self {
         Self {
             table: [[None; MOVE_COUNT_PER_PLY]; MAX_PLY],
         }
     }
 
+    #[inline]
     pub fn update(&mut self, mv: Move, ply: u8) {
         let ply_index = ply as usize;
 
@@ -26,12 +28,14 @@ impl KillerMoves {
         }
     }
 
+    #[inline]
     pub fn contains(&self, mv: Move, ply: u8) -> bool {
         self.table[ply as usize].contains(&Some(mv))
     }
 }
 
 impl Default for KillerMoves {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }

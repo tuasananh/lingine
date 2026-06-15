@@ -4,7 +4,7 @@ impl Position {
     /// Maps standard algebraic piece FEN notation characters to their Piece
     /// enums.
     #[inline]
-    pub fn piece_from_char(c: char) -> Option<Piece> {
+    pub(super) fn piece_from_char(c: char) -> Option<Piece> {
         match c {
             'R' => Some(Piece::RedRook),
             'H' | 'N' => Some(Piece::RedKnight),

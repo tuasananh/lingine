@@ -8,7 +8,7 @@ use crate::core::{Move, PieceType, Position, Side};
 
 /// The maximum number of pseudo-legal moves in any given Xiangqi position
 /// (typically <= 120).
-pub const MAX_MOVES: usize = 128;
+const MAX_MOVES: usize = 128;
 
 /// A stack-allocated array vector that holds up to `MAX_MOVES` without heap
 /// allocation.
@@ -367,23 +367,21 @@ mod tests {
 
     fn assert_positions_equal(a: &mut Position, b: &mut Position) {
         use crate::core::types::{Piece, PieceType, Side};
-        use strum::IntoEnumIterator;
         assert_eq!(a.side_to_move(), b.side_to_move());
-        assert_eq!(a.zobrist_hash(), b.zobrist_hash());
-        for sq_val in 0..90 {
-            let sq = Square::from_repr(sq_val).unwrap();
+        assert_eq!(a.hash(), b.hash());
+        for sq in Square::all() {
             assert_eq!(a.piece_at(sq), b.piece_at(sq));
             assert_eq!(a.is_empty(sq), b.is_empty(sq));
         }
         for color in [Side::Red, Side::Black] {
             assert_eq!(a.king_square(color), b.king_square(color));
-            assert_eq!(a.is_in_check(color), b.is_in_check(color));
+            assert_eq!(a.is_side_in_check(color), b.is_side_in_check(color));
             assert_eq!(a.bitboard_by_color(color), b.bitboard_by_color(color));
         }
-        for pt in PieceType::iter() {
+        for pt in PieceType::all() {
             assert_eq!(a.bitboard_by_type(pt), b.bitboard_by_type(pt));
         }
-        for piece in Piece::iter() {
+        for piece in Piece::all() {
             assert_eq!(a.piece_count(piece), b.piece_count(piece));
         }
         assert_eq!(a.rule_judge(0), b.rule_judge(0));

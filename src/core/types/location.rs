@@ -1,25 +1,53 @@
-use strum::{EnumCount, EnumIter, FromRepr};
+use crate::core::types::{impl_from_repr, impl_index};
 
 /// Represents the 10 ranks (horizontal rows) of a Xiangqi board, from R0 to R9.
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Rank {
     R0, R1, R2, R3, R4, R5, R6, R7, R8, R9,
 }
 
+impl_from_repr!(Rank);
+
+impl Rank {
+    pub const COUNT: usize = Rank::R9 as usize + 1;
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        (Self::R0 as u8..=Self::R9 as u8).map(|x| unsafe { std::mem::transmute(x) })
+    }
+
+    pub const fn mirrored(&self) -> Self {
+        unsafe { std::mem::transmute(Self::COUNT as u8 - 1 - (*self as u8)) }
+    }
+}
+
 /// Represents the 9 files (vertical columns) of a Xiangqi board, from FA to FI (corresponds to 'a' to 'i').
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum File {
     FA, FB, FC, FD, FE, FF, FG, FH, FI,
 }
 
+impl_from_repr!(File);
+
+impl File {
+    pub const COUNT: usize = File::FI as usize + 1;
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        (Self::FA as u8..=Self::FI as u8).map(|x| unsafe { std::mem::transmute(x) })
+    }
+
+    pub const fn mirrored(&self) -> Self {
+        unsafe { std::mem::transmute(Self::COUNT as u8 - 1 - (*self as u8)) }
+    }
+}
+
 /// Represents the 90 coordinate squares on the $9 \times 10$ Xiangqi board.
 /// Enumerated in rank-major order from A0 (0) to I9 (89).
 #[rustfmt::skip]
-#[derive(FromRepr, EnumCount, EnumIter, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Square {
     A0, B0, C0, D0, E0, F0, G0, H0, I0,
@@ -34,7 +62,20 @@ pub enum Square {
     A9, B9, C9, D9, E9, F9, G9, H9, I9,
 }
 
+impl_index!(Square);
+impl_from_repr!(Square);
+
 impl Square {
+    pub const COUNT: usize = Square::I9 as usize + 1;
+
+    pub fn all() -> impl DoubleEndedIterator<Item = Self> {
+        (Self::A0 as u8..=Self::I9 as u8).map(|x| unsafe { std::mem::transmute(x) })
+    }
+
+    pub const fn mirrored(&self) -> Self {
+        Self::from_file_rank(self.file().mirrored(), self.rank().mirrored())
+    }
+
     /// Constructs a `Square` from its corresponding `File` and `Rank`.
     /// Maps using `rank_index * 9 + file_index` because each rank spans 9
     /// vertical files.
@@ -43,19 +84,19 @@ impl Square {
         let file_index = file as u8;
         let rank_index = rank as u8;
         let square_index = rank_index * 9 + file_index;
-        Self::from_repr(square_index).unwrap()
+        unsafe { std::mem::transmute(square_index) }
     }
 
     /// Extracts the vertical column (`File`) of the square.
     #[inline]
     pub const fn file(&self) -> File {
-        File::from_repr((*self as u8) % 9).unwrap()
+        unsafe { std::mem::transmute((*self as u8) % 9) }
     }
 
     /// Extracts the horizontal row (`Rank`) of the square.
     #[inline]
     pub const fn rank(&self) -> Rank {
-        Rank::from_repr((*self as u8) / 9).unwrap()
+        unsafe { std::mem::transmute((*self as u8) / 9) }
     }
 }
 

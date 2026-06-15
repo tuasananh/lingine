@@ -19,7 +19,7 @@ impl Position {
         let from = m.from();
         let to = m.to();
         let moved_piece =
-            self.board[from as usize].expect("No piece at the source square for legality check");
+            self.board[from].expect("No piece at the source square for legality check");
         let pt = moved_piece.piece_type();
 
         let occupied = (self.bitboard_occupied() ^ Bitboard::from(from)) | Bitboard::from(to);
@@ -35,7 +35,7 @@ impl Position {
             // A non-king move is legal if the piece is not pinned (blocker) OR:
             // - it is not a Cannon, or it is a Cannon but not a capture move
             // - and the move is aligned with the King
-            if !self.state.blockers_for_king[us as usize].contains(from)
+            if !self.state.blockers_for_king[us].contains(from)
                 || ((pt != PieceType::Cannon || !self.is_capture(m))
                     && self.aligned(from, to, self.king_square(us)))
             {
@@ -56,15 +56,14 @@ impl Position {
         let them = us.opposite();
         let from = m.from();
         let to = m.to();
-        let moved_piece =
-            self.board[from as usize].expect("No piece at the source square for gives_check");
+        let moved_piece = self.board[from].expect("No piece at the source square for gives_check");
         let pt = moved_piece.piece_type();
         let ksq = self.king_square(them);
 
         // Direct check?
         if pt == PieceType::Cannon
             // The space between the cannon and the king is empty
-            && self.state.check_squares[PieceType::Rook as usize].contains(from)
+            && self.state.check_squares[PieceType::Rook].contains(from)
             // The movement is aligned in the same rank or file
             && self.aligned(from, to, ksq)
         {
@@ -73,7 +72,7 @@ impl Position {
             if self.is_capture(m) && squares_beyond(ksq, from).contains(to) {
                 return true;
             }
-        } else if self.state.check_squares[pt as usize].contains(to) {
+        } else if self.state.check_squares[pt].contains(to) {
             return true;
         }
 
@@ -86,7 +85,7 @@ impl Position {
         //     because we can
         //   have something like C .. B1 .. B2 .. K -> B1 captures B2 and then we have a
         // check!
-        if self.state.blockers_for_king[them as usize].contains(from)
+        if self.state.blockers_for_king[them].contains(from)
             && (!self.aligned(from, to, ksq) || self.is_capture(m))
         {
             return true;
@@ -98,9 +97,9 @@ impl Position {
     /// Checks whether a [`square`] is currently being attacked by [`attacker`]
     #[inline]
     pub fn is_square_attacked(&self, square: Square, attacker: Side) -> bool {
-        let occupied = self.bitboard_by_color[Side::Red as usize]
-            | self.bitboard_by_color[Side::Black as usize];
-        !self.checkers_to(square, occupied, attacker).is_empty()
+        !self
+            .checkers_to(square, self.bitboard_occupied(), attacker)
+            .is_empty()
     }
 
     /// Identifies all opponent pieces of `attacker` color that attack the

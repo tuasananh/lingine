@@ -1,5 +1,4 @@
 use crate::core::{Bitboard, File, Rank};
-use strum::EnumCount;
 
 /// Horizontal rank attack masks for Rooks and Cannons, indexed by the square's
 /// file position (0–8) and a 9-bit rank occupancy (0–511).
@@ -7,7 +6,7 @@ use strum::EnumCount;
 /// The 9-bit occupancy encodes which of the 9 squares on the same rank are
 /// occupied (bit i = square at file i).
 #[derive(Clone, Copy)]
-pub struct RankEntry {
+pub(in crate::core::movegen) struct RankEntry {
     /// Rook slides: all reachable squares left/right, stopping at (and
     /// including) the first blocker on each side.
     pub rook_slides: [u16; 1 << File::COUNT],
@@ -27,7 +26,7 @@ pub struct RankEntry {
 /// Analogous to [`RankEntry`] but for the vertical axis. The 10-bit occupancy
 /// encodes which of the 10 squares on the same file are occupied.
 #[derive(Clone, Copy)]
-pub struct FileEntry {
+pub(in crate::core::movegen) struct FileEntry {
     /// Rook slides along the file, stopping at the first blocker each way.
     pub rook_slides: [u16; 1 << Rank::COUNT],
     /// Cannon captures along the file (over exactly one screen).
@@ -38,7 +37,7 @@ pub struct FileEntry {
 
 /// One entry in the magic lookup table for a leaper piece on a single square.
 #[derive(Clone, Copy)]
-pub struct Magic<const SIZE: usize> {
+pub(in crate::core::movegen) struct Magic<const SIZE: usize> {
     /// Bitmask of squares that affect this piece's mobility from this square
     /// (blocking squares only — not the piece's own square or destinations).
     pub mask: u128,

@@ -1,9 +1,7 @@
 use std::fmt::Display;
 
-use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
-use strum::EnumCount;
-
 use crate::core::types::{File, Rank, Side, Square};
+use derive_more::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 /// Bitboard representation of the 9x10 Xiangqi board.
 ///
@@ -103,7 +101,7 @@ impl Bitboard {
         } else {
             let lsb = self.0.trailing_zeros() as u8;
             self.0 &= self.0 - 1; // Clears the lowest set bit
-            Square::from_repr(lsb)
+            Some(unsafe { Square::from_repr_unchecked(lsb) })
         }
     }
 
@@ -217,10 +215,8 @@ impl Display for Bitboard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut result = String::from("+---+---+---+---+---+---+---+---+---+\n");
 
-        for rank in (0..Rank::COUNT as u8).rev() {
-            for file in 0..File::COUNT as u8 {
-                let r = Rank::from_repr(rank).unwrap();
-                let f = File::from_repr(file).unwrap();
+        for r in Rank::all().rev() {
+            for f in File::all() {
                 let square = Square::from_file_rank(f, r);
 
                 result.push_str(if self.is_occupied(square) {
@@ -231,7 +227,7 @@ impl Display for Bitboard {
             }
 
             result.push_str("| ");
-            result.push_str(&rank.to_string());
+            result.push_str(&(r as u8).to_string());
             result.push_str("\n+---+---+---+---+---+---+---+---+---+\n");
         }
         result.push_str("  a   b   c   d   e   f   g   h   i\n");

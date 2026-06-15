@@ -1,114 +1,77 @@
-mod piece_square_table;
-pub use piece_square_table::*;
+mod defender_bonus;
+mod eval_params;
+mod mobility_tables;
+mod piece_material_value;
+mod piece_square_tables;
+use defender_bonus::*;
+pub use eval_params::*;
+use mobility_tables::*;
+pub(crate) use piece_material_value::*;
+pub(crate) use piece_square_tables::*;
 
-use crate::core::{PackedScore, Piece, Position, Score, Square};
+use crate::core::{PackedScore, PieceType, Position, Score, Square};
+
+macro_rules! packed {
+    ($( ($x:expr, $y:expr) ),* $(,)?) => {
+        [$(PackedScore::new($x, $y)),*]
+    };
+
+    ($x:expr, $y:expr) => {
+        PackedScore::new($x, $y)
+    };
+}
+
+pub(in crate::eval) use packed;
 
 // Phase Constants (32-Point Model)
-pub const PHASE_ROOK: i32 = 2; // Chariot
-pub const PHASE_CANNON: i32 = 2; // Cannon
-pub const PHASE_KNIGHT: i32 = 2; // Horse
-pub const PHASE_ADVISOR: i32 = 1; // Advisor
-pub const PHASE_BISHOP: i32 = 1; // Elephant
-pub const PHASE_PAWN: i32 = 0; // Pawn
-pub const PHASE_KING: i32 = 0; // King
+pub const PHASE_ROOK: u8 = 2; // Chariot
+pub const PHASE_CANNON: u8 = 2; // Cannon
+pub const PHASE_KNIGHT: u8 = 2; // Horse
+pub const PHASE_ADVISOR: u8 = 1; // Advisor
+pub const PHASE_BISHOP: u8 = 1; // Elephant
+pub const PHASE_PAWN: u8 = 0; // Pawn
+pub const PHASE_KING: u8 = 0; // King
 
-pub const MAX_PHASE: i32 =
+pub const MAX_PHASE: u8 =
     (PHASE_ROOK * 2 + PHASE_CANNON * 2 + PHASE_KNIGHT * 2 + PHASE_ADVISOR * 2 + PHASE_BISHOP * 2)
         * 2; // 32
 
 /// Blends Middlegame and Endgame scores based on the current game phase.
 /// Performs signed round-to-nearest integer division.
 #[inline]
-pub fn get_tapered_score(score: PackedScore, current_phase: Score) -> Score {
-    let phase = current_phase.clamp(0, MAX_PHASE);
-    let sum = score.mg * phase + score.eg * (MAX_PHASE - phase);
+fn get_tapered_score(score: PackedScore, current_phase: u8) -> Score {
+    const MAX_PHASE_SCORE: Score = MAX_PHASE as Score;
+    let phase = current_phase.clamp(0, MAX_PHASE) as Score;
+    let sum = score.mg * phase as Score + score.eg * (MAX_PHASE_SCORE - phase) as Score;
 
     if sum >= 0 {
-        (sum + MAX_PHASE / 2) / MAX_PHASE
+        (sum + MAX_PHASE_SCORE / 2) / MAX_PHASE_SCORE
     } else {
-        (sum - MAX_PHASE / 2) / MAX_PHASE
+        (sum - MAX_PHASE_SCORE / 2) / MAX_PHASE_SCORE
     }
-}
-
-/// Helper to calculate the current phase from raw u128 bitboards.
-#[inline]
-pub const fn calculate_phase_from_raw(
-    rooks: u128,
-    cannons: u128,
-    knights: u128,
-    advisors: u128,
-    bishops: u128,
-) -> i32 {
-    let rook_count = rooks.count_ones() as i32;
-    let cannon_count = cannons.count_ones() as i32;
-    let knight_count = knights.count_ones() as i32;
-    let advisor_count = advisors.count_ones() as i32;
-    let bishop_count = bishops.count_ones() as i32;
-
-    rook_count * PHASE_ROOK
-        + cannon_count * PHASE_CANNON
-        + knight_count * PHASE_KNIGHT
-        + advisor_count * PHASE_ADVISOR
-        + bishop_count * PHASE_BISHOP
 }
 
 /// Helper to calculate the current phase using the engine's Bitboard wrappers.
 #[inline]
-pub fn calculate_phase(
-    rooks: crate::core::Bitboard,
-    cannons: crate::core::Bitboard,
-    knights: crate::core::Bitboard,
-    advisors: crate::core::Bitboard,
-    bishops: crate::core::Bitboard,
-) -> i32 {
-    calculate_phase_from_raw(
-        rooks.raw(),
-        cannons.raw(),
-        knights.raw(),
-        advisors.raw(),
-        bishops.raw(),
-    )
+pub fn calculate_phase(pos: &Position) -> u8 {
+    pos.piece_type_count(PieceType::Rook) * PHASE_ROOK
+        + pos.piece_type_count(PieceType::Cannon) * PHASE_CANNON
+        + pos.piece_type_count(PieceType::Knight) * PHASE_KNIGHT
+        + pos.piece_type_count(PieceType::Advisor) * PHASE_ADVISOR
+        + pos.piece_type_count(PieceType::Bishop) * PHASE_BISHOP
 }
 
 /// Gets the phase weight of a specific piece type.
 #[inline]
-pub const fn piece_phase_weight(pt: crate::core::PieceType) -> i32 {
+pub const fn piece_phase_weight(pt: PieceType) -> u8 {
     match pt {
-        crate::core::PieceType::Rook => PHASE_ROOK,
-        crate::core::PieceType::Cannon => PHASE_CANNON,
-        crate::core::PieceType::Knight => PHASE_KNIGHT,
-        crate::core::PieceType::Advisor => PHASE_ADVISOR,
-        crate::core::PieceType::Bishop => PHASE_BISHOP,
-        crate::core::PieceType::Pawn => PHASE_PAWN,
-        crate::core::PieceType::King => PHASE_KING,
-    }
-}
-
-/// Returns a piece's base material value in Middlegame and Endgame, dynamically
-/// adjusting Pawn values based on whether they have crossed the river.
-#[inline]
-pub const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedScore {
-    match piece {
-        Piece::RedRook | Piece::BlackRook => PackedScore::new(600, 600),
-        Piece::RedCannon | Piece::BlackCannon => PackedScore::new(285, 240),
-        Piece::RedKnight | Piece::BlackKnight => PackedScore::new(270, 290),
-        Piece::RedBishop | Piece::BlackBishop => PackedScore::new(120, 120),
-        Piece::RedAdvisor | Piece::BlackAdvisor => PackedScore::new(110, 110),
-        Piece::RedPawn => {
-            if sq.rank() as u8 >= 5 {
-                PackedScore::new(70, 150) // Crossed river
-            } else {
-                PackedScore::new(30, 30) // Uncrossed
-            }
-        }
-        Piece::BlackPawn => {
-            if sq.rank() as u8 <= 4 {
-                PackedScore::new(70, 150) // Crossed river
-            } else {
-                PackedScore::new(30, 30) // Uncrossed
-            }
-        }
-        Piece::RedKing | Piece::BlackKing => PackedScore::ZERO,
+        PieceType::Rook => PHASE_ROOK,
+        PieceType::Cannon => PHASE_CANNON,
+        PieceType::Knight => PHASE_KNIGHT,
+        PieceType::Advisor => PHASE_ADVISOR,
+        PieceType::Bishop => PHASE_BISHOP,
+        PieceType::Pawn => PHASE_PAWN,
+        PieceType::King => PHASE_KING,
     }
 }
 
@@ -117,14 +80,53 @@ pub const fn piece_material_value_tapered(piece: Piece, sq: Square) -> PackedSco
 /// enabled, otherwise uses static evaluation.
 #[inline]
 pub fn evaluate(pos: &Position) -> Score {
-    pos.tapered_score()
+    let base_score = pos.score();
+    let mobility_score = compute_mobility_score(pos);
+    let defender_score = compute_defender_bonus(pos);
+    get_tapered_score(base_score + mobility_score + defender_score, pos.phase())
+}
+
+#[inline]
+pub fn tapered_score_from_scratch(pos: &Position) -> PackedScore {
+    let mut score = PackedScore::ZERO;
+    for sq in Square::all() {
+        if let Some(piece) = pos.piece_at(sq) {
+            let color = piece.color();
+            let val = piece_material_value_tapered(piece, sq);
+            let pst = piece_square_table_value_tapered(piece.piece_type(), color, sq);
+            let piece_total = val + pst;
+            score += color.signum() * piece_total;
+        }
+    }
+    score
+}
+
+pub fn evaluate_with_params(pos: &Position, params: &EvalParams) -> Score {
+    let mut base_score = PackedScore::ZERO;
+    let mut phase = 0;
+
+    for sq in Square::all() {
+        if let Some(piece) = pos.piece_at(sq) {
+            let color = piece.color();
+            let val = piece_material_value_tapered_with_params(piece, sq, params);
+            let pst =
+                piece_square_table_value_tapered_with_params(piece.piece_type(), color, sq, params);
+            base_score += color.signum() * (val + pst);
+            phase += piece_phase_weight(piece.piece_type());
+        }
+    }
+
+    let mobility_score = compute_mobility_score_with_params(pos, params);
+    let defender_score = compute_defender_bonus_with_params(pos, params);
+
+    get_tapered_score(base_score + mobility_score + defender_score, phase)
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
         core::{MoveGenType, MoveList, Position, generate_moves, score},
-        eval::evaluate,
+        eval::{evaluate, tapered_score_from_scratch},
     };
 
     #[test]
@@ -162,7 +164,7 @@ mod tests {
                     pos.do_move(m);
 
                     // Compute scores & phase from scratch
-                    let expected = pos.compute_tapered_evaluation_scores();
+                    let expected = tapered_score_from_scratch(&pos);
                     let expected_phase = pos.calculate_board_phase();
 
                     // Assert incremental score matches full board scan

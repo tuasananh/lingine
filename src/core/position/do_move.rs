@@ -1,5 +1,3 @@
-use strum::EnumCount;
-
 use crate::{
     core::{
         Bitboard, Move, Piece, PieceType, Position, Side, Square, cannon_beyond_attacks,
@@ -13,30 +11,29 @@ impl Position {
     /// bitboards, King Palace trackers, and XORing its random signature
     /// into the Zobrist hash.
     #[inline]
-    pub fn put_piece(&mut self, square: Square, piece: Option<Piece>) {
-        let square_idx = square as usize;
+    pub(super) fn put_piece(&mut self, square: Square, piece: Option<Piece>) {
         // Clear the old piece
-        if let Some(piece) = self.board[square_idx] {
+        if let Some(piece) = self.board[square] {
             let pt = piece.piece_type();
-            let color_idx = piece.color() as usize;
-            self.bitboard_by_type[pt as usize].clear_bit(square);
-            self.bitboard_by_color[color_idx].clear_bit(square);
-            self.piece_count[piece as usize] -= 1;
-            self.state.zobrist ^= ZOBRIST.pieces[piece as usize][square as usize];
+            let color = piece.color();
+            self.bitboard_by_type[pt].clear_bit(square);
+            self.bitboard_by_color[color].clear_bit(square);
+            self.piece_count[piece] -= 1;
+            self.state.zobrist ^= ZOBRIST.pieces[piece][square];
         }
-        self.board[square as usize] = piece;
+        self.board[square] = piece;
         if let Some(piece) = piece {
             let pt = piece.piece_type();
-            let color_idx = piece.color() as usize;
-            self.bitboard_by_type[pt as usize].set_bit(square);
-            self.bitboard_by_color[color_idx].set_bit(square);
-            self.piece_count[piece as usize] += 1;
+            let color = piece.color();
+            self.bitboard_by_type[pt].set_bit(square);
+            self.bitboard_by_color[color].set_bit(square);
+            self.piece_count[piece] += 1;
 
             if pt == PieceType::King {
-                self.king_squares[color_idx] = square;
+                self.king_squares[color] = square;
             }
 
-            self.state.zobrist ^= ZOBRIST.pieces[piece as usize][square as usize];
+            self.state.zobrist ^= ZOBRIST.pieces[piece][square];
         }
     }
 
@@ -51,9 +48,8 @@ impl Position {
 
         let from = m.from();
         let to = m.to();
-        let piece =
-            self.board[from as usize].expect("Cannot do_move with no piece at the source square");
-        let captured = self.board[to as usize];
+        let piece = self.board[from].expect("Cannot do_move with no piece at the source square");
+        let captured = self.board[to];
 
         let from_score = piece_material_value_tapered(piece, from)
             + piece_square_table_value_tapered(piece.piece_type(), piece.color(), from);
@@ -94,8 +90,8 @@ impl Position {
     pub fn undo_move(&mut self, m: Move) {
         let from = m.from();
         let to = m.to();
-        let piece = self.board[to as usize]
-            .expect("Cannot undo_move with no piece at the destination square");
+        let piece =
+            self.board[to].expect("Cannot undo_move with no piece at the destination square");
 
         self.put_piece(to, self.state.captured_piece);
         self.put_piece(from, Some(piece));
@@ -149,8 +145,8 @@ impl Position {
         let us = c;
         let them = c.opposite();
 
-        self.state.blockers_for_king[us as usize] = Bitboard::new();
-        self.state.pinners[them as usize] = Bitboard::new();
+        self.state.blockers_for_king[us] = Bitboard::new();
+        self.state.pinners[them] = Bitboard::new();
 
         let occupied = self.bitboard_occupied();
         let opponent_sliders = self.bitboard_of(them, PieceType::Rook)
@@ -169,8 +165,7 @@ impl Position {
         let occupancy = occupied ^ (snipers & !self.bitboard_of(them, PieceType::Cannon));
 
         while let Some(sniper_sq) = snipers.pop_lsb() {
-            let is_cannon =
-                self.board[sniper_sq as usize].unwrap().piece_type() == PieceType::Cannon;
+            let is_cannon = self.board[sniper_sq].unwrap().piece_type() == PieceType::Cannon;
             let b = squares_between(ksq, sniper_sq)
                 & if is_cannon {
                     occupied ^ Bitboard::from(sniper_sq)
@@ -179,9 +174,9 @@ impl Position {
                 };
             let count = b.count_ones();
             if (!is_cannon && count == 1) || (is_cannon && count == 2) {
-                self.state.blockers_for_king[us as usize] |= b;
+                self.state.blockers_for_king[us] |= b;
                 if !(b & self.bitboard_by_color(us)).is_empty() {
-                    self.state.pinners[them as usize].set_bit(sniper_sq);
+                    self.state.pinners[them].set_bit(sniper_sq);
                 }
             }
         }
@@ -209,18 +204,18 @@ impl Position {
                 & self.bitboard_of(them, PieceType::Cannon))
             .is_empty();
 
-        self.state.check_squares[PieceType::Pawn as usize] = pawn_attacks_to(ksq, us);
-        self.state.check_squares[PieceType::Knight as usize] = knight_attacks_to(ksq, occupied);
-        self.state.check_squares[PieceType::Cannon as usize] = cannon_beyond_attacks(ksq, occupied);
-        self.state.check_squares[PieceType::Rook as usize] = rook_attacks(ksq, occupied);
+        self.state.check_squares[PieceType::Pawn] = pawn_attacks_to(ksq, us);
+        self.state.check_squares[PieceType::Knight] = knight_attacks_to(ksq, occupied);
+        self.state.check_squares[PieceType::Cannon] = cannon_beyond_attacks(ksq, occupied);
+        self.state.check_squares[PieceType::Rook] = rook_attacks(ksq, occupied);
 
-        self.state.check_squares[PieceType::King as usize] = Bitboard::new();
-        self.state.check_squares[PieceType::Advisor as usize] = Bitboard::new();
-        self.state.check_squares[PieceType::Bishop as usize] = Bitboard::new();
+        self.state.check_squares[PieceType::King] = Bitboard::new();
+        self.state.check_squares[PieceType::Advisor] = Bitboard::new();
+        self.state.check_squares[PieceType::Bishop] = Bitboard::new();
 
         // hollow cannons
-        let mut hollow_cannons = self.state.check_squares[PieceType::Rook as usize]
-            & self.bitboard_of(us, PieceType::Cannon);
+        let mut hollow_cannons =
+            self.state.check_squares[PieceType::Rook] & self.bitboard_of(us, PieceType::Cannon);
         if !hollow_cannons.is_empty() {
             let mut hollow_cannon_discover = Bitboard::new();
             while let Some(cannon_sq) = hollow_cannons.pop_lsb() {

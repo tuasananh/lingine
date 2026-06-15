@@ -1,11 +1,10 @@
 use crate::core::{File, Rank, Square};
-use strum::EnumCount;
 
 const RANK_STRIDE: i8 = File::COUNT as i8;
 
 /// Returns the bitmask of valid destinations from `from_sq` for a piece that
 /// steps in `dirs` and must stay within the same palace half.
-pub(crate) const fn palace_step_attacks(from_sq: Square, dirs: &[(i8, i8); 4]) -> u128 {
+pub(super) const fn palace_step_attacks(from_sq: Square, dirs: &[(i8, i8); 4]) -> u128 {
     let f = from_sq.file() as i8;
     let r = from_sq.rank() as i8;
 
@@ -40,7 +39,7 @@ pub(crate) const fn palace_step_attacks(from_sq: Square, dirs: &[(i8, i8); 4]) -
 /// Red, -1 = down for Black). After crossing the river (`promoted == true`) it
 /// also attacks the two sideways squares on its current rank.
 #[inline(always)]
-pub(crate) const fn pawn_attacks_from(f: i8, r: i8, forward_dr: i8, promoted: bool) -> u128 {
+pub(super) const fn pawn_attacks_from(f: i8, r: i8, forward_dr: i8, promoted: bool) -> u128 {
     let mut mask = 0u128;
     // Forward square (always present if on board).
     let nr = r + forward_dr;
@@ -62,7 +61,7 @@ pub(crate) const fn pawn_attacks_from(f: i8, r: i8, forward_dr: i8, promoted: bo
 /// Rook ray: slides outward from `pos` in both directions, stopping *at* the
 /// first occupied square (which can be captured, so it is included in the
 /// mask).
-pub(crate) const fn rook_ray(pos: i8, len: i8, occ: u32) -> u32 {
+pub(super) const fn rook_ray(pos: i8, len: i8, occ: u32) -> u32 {
     let mut mask = 0u32;
     // Slide left (toward square 0).
     let mut i = pos - 1;
@@ -88,7 +87,7 @@ pub(crate) const fn rook_ray(pos: i8, len: i8, occ: u32) -> u32 {
 /// Cannon capture ray: locates the first occupied square on each side (the
 /// "screen"), then sets the bit of the *second* occupied square beyond it (the
 /// capture target). Empty squares and the screen itself are NOT included.
-pub(crate) const fn cannon_ray(pos: i8, len: i8, occ: u32) -> u32 {
+pub(super) const fn cannon_ray(pos: i8, len: i8, occ: u32) -> u32 {
     let mut mask = 0u32;
 
     // Left side.
@@ -128,7 +127,7 @@ pub(crate) const fn cannon_ray(pos: i8, len: i8, occ: u32) -> u32 {
 /// x-rays once a screen is present.
 ///
 /// Contrast with [`cannon_ray`] which only marks the capture target square.
-pub(crate) const fn cannon_beyond_attack(pos: i8, len: i8, occ: u32) -> u32 {
+pub(super) const fn cannon_beyond_attack(pos: i8, len: i8, occ: u32) -> u32 {
     let mut mask = 0u32;
 
     // Left side.
@@ -169,7 +168,7 @@ pub(crate) const fn cannon_beyond_attack(pos: i8, len: i8, occ: u32) -> u32 {
 
 /// xorshift128 PRNG — used during magic search to generate random candidates.
 /// Returns a new pseudo-random value and updates `state` in place.
-pub(crate) const fn xorshift128(state: &mut u128) -> u128 {
+pub(super) const fn xorshift128(state: &mut u128) -> u128 {
     let mut x = *state;
     x ^= x << 13;
     x ^= x >> 7;
@@ -181,7 +180,7 @@ pub(crate) const fn xorshift128(state: &mut u128) -> u128 {
 /// Returns a sparse (few set bits) random value by ANDing three xorshift
 /// outputs together. Sparse values tend to make better magic multipliers
 /// because they concentrate the relevant bits more tightly.
-pub(crate) const fn sparse_rand(state: &mut u128) -> u128 {
+pub(super) const fn sparse_rand(state: &mut u128) -> u128 {
     xorshift128(state) & xorshift128(state) & xorshift128(state)
 }
 
@@ -193,7 +192,7 @@ pub(crate) const fn sparse_rand(state: &mut u128) -> u128 {
 ///
 /// `LEGS` lists the four possible leg directions. For each unblocked leg, the
 /// two possible landing squares in `TARGETS` are added to the attack mask.
-pub(crate) const fn knight_attacks(from_sq: Square, occ: u128) -> u128 {
+pub(super) const fn knight_attacks(from_sq: Square, occ: u128) -> u128 {
     let r = from_sq.rank() as i8;
     let f = from_sq.file() as i8;
     // One step in each cardinal direction — the knight's "leg".
@@ -239,7 +238,7 @@ pub(crate) const fn knight_attacks(from_sq: Square, occ: u128) -> u128 {
 /// A bishop moves exactly two squares diagonally. The intermediate "elbow"
 /// square must be empty. Bishops are also confined to their own half of the
 /// board (same side of the river as the source square).
-pub(crate) const fn bishop_attacks(from_sq: Square, occ: u128) -> u128 {
+pub(super) const fn bishop_attacks(from_sq: Square, occ: u128) -> u128 {
     let r = from_sq.rank() as i8;
     let f = from_sq.file() as i8;
     const DIRS: [(i8, i8); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
@@ -281,7 +280,7 @@ pub(crate) const fn bishop_attacks(from_sq: Square, occ: u128) -> u128 {
 ///     direction is determined by whether `odr`/`odf` is large (|2|) or small
 ///     (|1|).
 ///   - If that leg square is empty, the origin is a valid attacker.
-pub(crate) const fn knight_to_attacks(sq: Square, occ: u128) -> u128 {
+pub(super) const fn knight_to_attacks(sq: Square, occ: u128) -> u128 {
     let r = sq.rank() as i8;
     let f = sq.file() as i8;
     // All eight squares that could be a knight origin relative to `sq`.

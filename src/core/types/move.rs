@@ -3,7 +3,7 @@ use std::{fmt::Display, num::NonZeroU16};
 use crate::core::Square;
 
 /// Represents the score of a move, typically used in move ordering heuristics.
-pub type MoveScore = i32;
+pub(crate) type MoveScore = i32;
 
 /// A compact 16-bit move representation designed for performance:
 ///
@@ -39,13 +39,13 @@ impl Move {
     /// bits.
     #[inline]
     pub const fn from(&self) -> Square {
-        Square::from_repr(((self.0.get() >> 7) & 0x7F) as u8).unwrap()
+        unsafe { std::mem::transmute(((self.0.get() >> 7) & 0x7F) as u8) }
     }
 
     /// Extracts the target square index by masking the lower 7 bits.
     #[inline]
     pub const fn to(&self) -> Square {
-        Square::from_repr((self.0.get() & 0x7F) as u8).unwrap()
+        unsafe { std::mem::transmute((self.0.get() & 0x7F) as u8) }
     }
 
     /// Converts the move into its UCI string format

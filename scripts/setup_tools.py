@@ -21,7 +21,7 @@ def main():
     print("\n[2/4] Downloading Sylvan-CLI (Tournament Coordinator)...")
     sylvan_tar = "tools/sylvan.tar.gz"
     download_file(
-        "https://github.com/tuasananh/Sylvan/releases/download/v1.1.1/sylvan.tar.gz",
+        "https://github.com/tuasananh/Sylvan/releases/latest/download/sylvan.tar.gz",
         sylvan_tar,
     )
     print("Extracting Sylvan-CLI...")
