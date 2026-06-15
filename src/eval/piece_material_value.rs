@@ -58,11 +58,11 @@ pub(in crate::eval) fn piece_material_value_tapered_with_params(
 pub(in crate::eval) struct PieceMaterialValue;
 
 impl PieceMaterialValue {
-    pub const ROOK: PackedScore = packed!(940, 990);
-    pub const ADVISOR: PackedScore = packed!(162, 162);
-    pub const CANNON: PackedScore = packed!(489, 438);
-    pub const PAWN: PackedScore = packed!(90, 135);
-    pub const KNIGHT: PackedScore = packed!(432, 485);
-    pub const BISHOP: PackedScore = packed!(162, 161);
-    pub const PAWN_CROSSED: PackedScore = packed!(160, 260);
+    pub const ROOK: PackedScore = packed!(960, 1009);
+    pub const ADVISOR: PackedScore = packed!(178, 150);
+    pub const CANNON: PackedScore = packed!(507, 443);
+    pub const PAWN: PackedScore = packed!(77, 137);
+    pub const KNIGHT: PackedScore = packed!(450, 482);
+    pub const BISHOP: PackedScore = packed!(160, 145);
+    pub const PAWN_CROSSED: PackedScore = packed!(141, 241);
 }
