@@ -36,7 +36,7 @@ def main():
 
     # Define starting anchors for each file to locate the exact place to replace.
     anchors = {
-        "src/eval/defender_bonus.rs": "pub const ADVISOR_COUNT_BONUS",
+        "src/eval/defender_bonus.rs": "pub(in crate::eval) const ADVISOR_COUNT_BONUS",
         "src/eval/piece_material_value.rs": "pub(in crate::eval) struct PieceMaterialValue;",
         "src/eval/mobility_tables.rs": "pub(in crate::eval) const KNIGHT_MOBILITY_BONUS",
         "src/eval/piece_square_tables.rs": "pub(in crate::eval) const PIECE_SQUARE_TABLE_KING_TAPERED"
