@@ -107,6 +107,8 @@ impl super::Searcher<'_> {
     /// At higher depths (>= 12 plies), NMP performs a "Verification Search" to
     /// prevent pruning deep mating threats or tactical surprises. NMP is
     /// disabled recursively during verification by setting `nmp_min_ply`.
+    ///
+    /// See: https://www.chessprogramming.org/Null_Move_Pruning
     #[inline]
     pub(super) fn null_move_pruning(
         &mut self,
@@ -193,6 +195,29 @@ impl super::Searcher<'_> {
             }
         }
 
+        None
+    }
+
+    /// If our position is so incredibly good, we can be pretty sure
+    /// that the opponent will not let this happen anyway, so we just don't
+    /// waste time searching anymore
+    ///
+    /// See: https://www.chessprogramming.org/Reverse_Futility_Pruning
+    #[inline]
+    pub(super) fn reverse_futility_pruning(
+        &self,
+        depth: i8,
+        beta: Score,
+        eval: Score,
+        improving: bool,
+    ) -> Option<i32> {
+        const RFP_DEPTH_THRESHOLD: i8 = 8;
+        const RFP_MARGIN_MULTIPLIER: Score = 100;
+        if depth < RFP_DEPTH_THRESHOLD
+            && eval - RFP_MARGIN_MULTIPLIER * (depth as Score - i32::from(improving)) > beta
+        {
+            return Some(eval);
+        }
         None
     }
 }

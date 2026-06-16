@@ -72,9 +72,15 @@ impl super::Searcher<'_> {
         };
 
         let in_check = self.pos.is_in_check();
+        let eval = tt_value.map_or_else(|| self.pos.evaluate(), |x| x.score);
+        self.eval_stack[ply as usize] = eval;
+        let improving = !in_check && ply > 1 && eval > self.eval_stack[ply as usize - 2];
 
         if !ROOT && !PV && !in_check {
-            let eval = tt_value.map_or_else(|| self.pos.evaluate(), |x| x.score);
+            if let Some(score) = self.reverse_futility_pruning(depth, beta, eval, improving) {
+                return score;
+            }
+
             if let Some(score) = self.null_move_pruning(depth, ply, beta, eval, ctx) {
                 return score;
             }
