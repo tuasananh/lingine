@@ -111,6 +111,7 @@ impl super::Searcher<'_> {
         // prioritized first, killers, and history
         self.sort_moves(&mut moves, best_move, ply);
         let mut moves_played = 0;
+        let mut quiets_count = 0;
 
         for m in moves {
             if let Some(excluded) = ctx.excluded_move
@@ -119,13 +120,24 @@ impl super::Searcher<'_> {
                 continue;
             }
 
-            if !ROOT && !PV && !in_check {
-                if self.futility_pruning(m, depth, alpha, eval) {
-                    continue;
-                }
-            }
+            let is_quiet = self.pos.is_quiet(m);
+            let gives_check = self.pos.gives_check(m);
 
-            let reductions = self.calculate_reductions::<PV>(m, moves_played, depth, ply);
+            let reductions = if !in_check && is_quiet && !gives_check {
+                if !ROOT && !PV && moves_played > 0 {
+                    if self.late_move_pruning(depth, quiets_count, improving) {
+                        break;
+                    }
+
+                    if self.futility_pruning(depth, alpha, eval) {
+                        continue;
+                    }
+                }
+
+                self.calculate_reductions::<PV>(m, moves_played, depth, ply)
+            } else {
+                0
+            };
 
             self.pos.do_move(m);
             let score = if moves_played == 0 {
@@ -141,6 +153,9 @@ impl super::Searcher<'_> {
             };
             self.pos.undo_move(m);
             moves_played += 1;
+            if is_quiet {
+                quiets_count += 1;
+            }
 
             if !self.shared.keep_running.get() {
                 return score::ZERO;
