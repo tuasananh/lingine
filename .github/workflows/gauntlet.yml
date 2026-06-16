@@ -216,11 +216,15 @@ jobs:
       # ── 10. GitHub Job Summary ────────────────────────────────────────────
       - name: Write to GitHub Job Summary
         if: always() && steps.summary.outputs.report_path != ''
-        run: cat "${{ steps.summary.outputs.report_path }}" >> "$GITHUB_STEP_SUMMARY"
+        run:
+          cat "${{ steps.summary.outputs.report_path }}" >>
+          "$GITHUB_STEP_SUMMARY"
 
       # ── 11. PR comment ────────────────────────────────────────────────────
       - name: Post report as PR comment
-        if: github.event_name == 'pull_request' && steps.summary.outputs.report_path != ''
+        if:
+          github.event_name == 'pull_request' &&
+          steps.summary.outputs.report_path != ''
         uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: gauntlet-eval

@@ -1,0 +1,116 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+% Language and font encoding
+\usepackage{fontspec}
+\usepackage[vietnamese]{babel}
+
+% Margins and geometry
+\usepackage[top=2.5cm, bottom=2.5cm, left=3.5cm, right=2.0cm]{geometry}
+
+% Math packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+
+% Graphics and diagrams
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc}
+
+% Tables and formatting
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{float}
+
+% Header and footer
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small IT3160 - Nhóm 03 - Lingine: Thiết kế và triển khai}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Section formatting
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\centering}{\chaptername\ \thechapter}{10pt}{\Huge}
+\titleformat{\section}
+  {\normalfont\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}{\thesubsection}{1em}{}
+
+% Listings configuration for Rust and C++
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinelanguage{Rust}{
+  keywords={const, fn, let, mut, pub, struct, impl, match, use, mod, trait, type, enum, where, for, in, if, else, return, while, loop, break, continue, unsafe, true, false, Option, Some, None, Result, Ok, Err, Self, self},
+  ndkeywords={u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, str, String, Vec, Bitboard, Position, StateInfo, Move, Square, Side, Piece, PieceType, PackedScore, Score},
+  sensitive=true,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  string=[b]\",
+  morestring=[b]'
+}
+
+\lstset{
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{blue}\bfseries,
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,
+  breaklines=true,
+  captionpos=b,
+  keepspaces=true,
+  numbers=left,
+  numbersep=5pt,
+  showspaces=false,
+  showstringspaces=false,
+  showtabs=false,
+  tabsize=4
+}
+
+% Hyperref setup
+\usepackage{xurl}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=magenta,      
+    urlcolor=blue,
+    pdftitle={Bao cao Do an Mon hoc Tri tue Nhan tao - Lingine},
+    pdfpagemode=FullScreen,
+}
+
+\emergencystretch=1.5em
+
+\begin{document}
+
+% Title Page
+\include{title}
+
+% Table of Contents
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+
+% Chapters
+\include{chap1}
+\include{chap2}
+\include{chap3}
+\include{chap4}
+\include{chap5}
+\include{chap6}
+\include{refs}
+
+\end{document}

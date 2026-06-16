@@ -1,0 +1,63 @@
+\chapter{Tổng quan đề tài}
+
+\section{Đặt vấn đề}
+
+Từ thuở sơ khai của ngành Khoa học Máy tính, việc thiết kế các hệ thống trò chơi trí tuệ nhân tạo (AI) luôn là một trong những bài toán chuẩn mực nhằm đo lường khả năng tính toán và suy luận của máy móc. Trong khi Cờ vua được coi là ``ruồi giấm'' của AI phương Tây, thì Cờ tướng (Xiangqi) lại là trò chơi có chiều sâu văn hóa và lịch sử lâu đời, được hàng trăm triệu người yêu thích tại khu vực Đông Á, đặc biệt là Trung Quốc và Việt Nam. 
+
+Việc thiết kế và triển khai một động cơ cờ tướng tự động (Xiangqi Engine) đòi hỏi giải quyết các thách thức kỹ thuật lớn hơn rất nhiều so với cờ vua thông thường:
+\begin{itemize}
+    \item \textbf{Kích thước bàn cờ lớn hơn:} Bàn cờ tướng có kích thước $10 \times 9 = 90$ ô (so với $8 \times 8 = 64$ ô của cờ vua).
+    \item \textbf{Luật di chuyển đặc thù:} Sự hiện diện của Sông (hạn chế đường đi của Tượng và tăng cường sức mạnh của Tốt khi qua sông), Cung tướng (hạn chế phạm vi hoạt động của Sĩ và Tướng).
+    \item \textbf{Cơ chế cản quân phức tạp:} Quân Mã bị cản chân mã (hobbling), quân Tượng bị cản mắt tượng (blocking). Cơ chế này đòi hỏi thuật toán sinh nước đi phải xử lý các điều kiện biên động thay vì chỉ quét các tia tĩnh.
+    \item \textbf{Luật lộ mặt Tướng:} Hai Tướng không được đối mặt trực tiếp trên cùng một cột dọc mà không có quân cờ nào che chắn ở giữa. Luật này tạo ra mối liên kết động rất mạnh giữa vị trí của hai vị Tướng trên toàn bộ cột dọc.
+\end{itemize}
+
+Chính vì những lý do này, việc tự tay xây dựng một động cơ cờ tướng hiệu năng cao từ con số 0 là cơ hội tuyệt vời để nghiên cứu sâu sắc các kỹ thuật lập trình hệ thống cấp thấp, tối ưu hóa thao tác bit trên CPU, cũng như triển khai các thuật toán tìm kiếm đối kháng hiện đại. Dự án của chúng tôi mang tên \textbf{Lingine} -- một Xiangqi Engine hiệu năng cao được viết bằng ngôn ngữ lập trình hệ thống Rust hiện đại.
+
+\section{Phát biểu bài toán}
+
+\subsection{Yêu cầu đầu vào và đầu ra}
+
+Lingine được thiết kế như một hệ thống xử lý độc lập hoạt động dưới dạng dòng lệnh, tuân thủ nghiêm ngặt giao thức truyền thông chuẩn UCI (Universal Chess Interface) đã được mở rộng dành riêng cho cờ tướng:
+\begin{itemize}
+    \item \textbf{Đầu vào (Input):}
+    \begin{itemize}
+        \item \textit{Trạng thái bàn cờ hiện tại:} Được biểu diễn dưới dạng chuỗi FEN (Forsyth-Edwards Notation) mô tả vị trí các quân cờ, lượt đi tiếp theo, số nước đi quiet để tính luật 60 nước, số nước đi tổng cộng; hoặc chuỗi các nước đi lịch sử tính từ vị trí mặc định khởi đầu (\texttt{startpos moves ...}).
+        \item \textit{Các ràng buộc thời gian suy nghĩ:} Thời gian còn lại của hai bên tính bằng mili-giây (\texttt{wtime}, \texttt{btime}), thời gian tích lũy cộng thêm sau mỗi nước đi (\texttt{winc}, \texttt{binc}), hoặc giới hạn độ sâu tìm kiếm cố định (\texttt{depth}) hay số nút tối đa (\texttt{nodes}).
+        \item \textit{Các cấu hình tham số:} Kích thước bộ nhớ đệm bảng băm (\texttt{Hash}), số luồng tính toán (\texttt{Threads}).
+    \end{itemize}
+    \item \textbf{Đầu ra (Output):}
+    \begin{itemize}
+        \item \textit{Nước đi tốt nhất tìm được:} Chuỗi ký tự biểu diễn nước đi tối ưu (ví dụ: \texttt{bestmove h2e2} thể hiện quân ở ô h2 di chuyển đến ô e2) kèm theo nước đi dự tính tiếp theo của đối thủ để phục vụ tính năng ponder (\texttt{ponder ...}).
+        \item \textit{Thông tin phân tích thời gian thực:} Được in ra luồng Standard Output định kỳ gồm độ sâu tìm kiếm (\texttt{depth}), điểm số đánh giá (\texttt{score cp} hoặc \texttt{score mate}), số nút đã duyệt (\texttt{nodes}), tốc độ duyệt (\texttt{nps}), thời gian đã dùng (\texttt{time}), và biến thể chính -- dãy nước đi tốt nhất dự tính (\texttt{pv}).
+    \end{itemize}
+\end{itemize}
+
+\subsection{Yêu cầu hệ thống}
+
+Để đảm bảo động cơ có khả năng thi đấu thực tế và mang lại trải nghiệm phân tích tốt nhất, hệ thống cần đáp ứng ba tiêu chuẩn vận hành:
+\begin{enumerate}
+    \item \textbf{Tính chính xác tuyệt đối:} Mọi nước đi sinh ra phải tuyệt đối hợp lệ theo luật cờ tướng quốc tế và luật cờ tướng Việt Nam. Động cơ phải phát hiện chính xác các tình huống chiếu tướng, cản quân, chiếu bí, và các lỗi lặp nước đi hoặc chiếu dai (perpetual checks).
+    \item \textbf{Độ trễ thấp và phản hồi thời gian thực:} Hệ thống phải có cơ chế quản lý thời gian cực kỳ thông minh (Time Manager) để phân bổ thời gian hợp lý, đưa ra nước đi tốt nhất trước khi hết giờ và phản ứng tức thì khi nhận được lệnh dừng (\texttt{stop}) từ người dùng.
+    \item \textbf{Hiệu suất tìm kiếm vượt trội:} Tận dụng tối đa sức mạnh phần cứng thông qua việc tối ưu mã nguồn Rust, đạt tốc độ duyệt hàng triệu nút trên giây (NPS) nhằm tìm kiếm sâu hơn trong cùng một khoảng thời gian giới hạn.
+\end{enumerate}
+
+\section{Tổng quan về hệ thống Engine cờ tướng}
+
+Một động cơ cờ tướng hiện đại luôn được tổ chức theo kiến trúc ba thành phần cốt lõi tương tác chặt chẽ:
+\begin{enumerate}
+    \item \textbf{Biểu diễn trạng thái (Board Representation):} Chịu trách nhiệm lưu trữ cấu trúc bàn cờ, vị trí quân, lịch sử ván đấu để hỗ trợ thực hiện nước đi (\texttt{do\_move}) và hoàn tác nước đi (\texttt{undo\_move}) với chi phí thời gian $O(1)$.
+    \item \textbf{Bộ sinh nước đi (Move Generator):} Chịu trách nhiệm liệt kê toàn bộ các nước đi giả hợp lệ (pseudo-legal moves) và lọc ra các nước đi hợp lệ (legal moves) tại vị trí hiện tại. Đây là phần lõi tính toán được gọi hàng triệu lần mỗi giây, yêu cầu tối ưu hóa cực đoan.
+    \item \textbf{Bộ tìm kiếm và đánh giá (Search \& Evaluation):} Áp dụng giải thuật duyệt cây đối kháng (Negamax/Alpha-Beta) để tìm nước đi tối ưu. Tại các nút lá của cây tìm kiếm, hàm đánh giá (Evaluation Function) ước lượng điểm số thế cờ dựa trên lợi thế vật chất và vị trí của hai bên.
+\end{enumerate}
+
+\section{Cách tiếp cận của nhóm chúng tôi}
+
+Trong dự án này, nhóm phát triển lựa chọn hướng tiếp cận kết hợp giữa các cấu trúc dữ liệu tiên tiến và các thuật toán tìm kiếm tối ưu hóa hiệu năng cao:
+\begin{itemize}
+    \item \textbf{Ngôn ngữ lập trình Rust:} Rust mang lại hiệu năng tối đa của ngôn ngữ biên dịch trực tiếp ra mã máy (như C/C++) mà không gặp các lỗi bảo mật bộ nhớ nguy hiểm (dangling pointers, data races). Trình biên dịch Rust áp dụng các tối ưu hóa mạnh mẽ tại thời điểm biên dịch, giúp nâng cao đáng kể tốc độ thực thi của động cơ.
+    \item \textbf{Cấu trúc dữ liệu Bitboard 128-bit:} Khác với các engine truyền thống sử dụng mảng 2 chiều 90 ô gây chậm trễ khi truy xuất, chúng tôi sử dụng cấu trúc Bitboard lưu trữ trong biến nguyên 128-bit để đại diện cho bàn cờ tướng $10 \times 9$. Các phép toán logic bit (AND, OR, XOR, SHIFT) giúp tính toán các luồng tấn công và nước đi của toàn bộ bàn cờ cùng lúc chỉ với vài chu kỳ CPU.
+    \item \textbf{Magic Bitboards cho quân cản (Bishop, Knight, KnightTo):} Áp dụng kỹ thuật nhân số ma thuật (Magic Multiplication) 128-bit để tra bảng nhanh các nước đi bị chặn của Tượng và Mã, thay vì phải chạy vòng lặp kiểm tra từng ô cản.
+    \item \textbf{Hàm đánh giá Tapered Score tinh chỉnh bằng Texel Tuning:} Chúng tôi phân tách điểm số đánh giá thành hai pha: khai/trung cuộc (Middlegame) và tàn cuộc (Endgame), sau đó nội suy tuyến tính theo pha ván cờ. Toàn bộ trọng số quân cờ và bảng vị trí (PST) được huấn luyện tự động bằng phương pháp Texel Tuning trên tập dữ liệu hàng triệu thế cờ.
+    \item \textbf{Chiến lược tìm kiếm Negamax tối ưu nâng cao:} Kết hợp tìm kiếm biến thể chính (PVS), cửa sổ kỳ vọng (Aspiration Windows), bảng chuyển vị (Transposition Table), và hàng loạt kỹ thuật tỉa nhánh hiện đại (NMP, LMR, Singular Extensions) để giảm thiểu tối đa số lượng nút cần duyệt mà vẫn giữ nguyên độ sâu chiến thuật.
+\end{itemize}
