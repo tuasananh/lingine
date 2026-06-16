@@ -805,7 +805,7 @@ def parse_cli_value(arg):
     """Parses hex, binary, or decimal values safely."""
     # Clean input
     arg = arg.strip().replace("_", "").replace("u128", "")
-    
+
     if arg.lower().startswith("0x"):
         return int(arg, 16)
     elif arg.lower().startswith("0b"):
@@ -827,7 +827,7 @@ def parse_cli_value(arg):
 def print_ascii_board(val):
     """Renders a colored ASCII bitboard representation to the console."""
     is_tty = sys.stdout.isatty()
-    
+
     # ANSI escape colors
     GREEN = "\033[1;32m" if is_tty else ""
     RED = "\033[31m" if is_tty else ""
@@ -843,10 +843,10 @@ def print_ascii_board(val):
         for f in range(9):
             idx = r * 9 + f
             bit_set = (val & (1 << idx)) != 0
-            
+
             # Palace square check
             is_palace = (r <= 2 or r >= 7) and (3 <= f <= 5)
-            
+
             if bit_set:
                 char = f"{GREEN} X {RESET}"
             elif is_palace:
@@ -861,6 +861,7 @@ def print_ascii_board(val):
 
 class VisualizerHandler(http.server.BaseHTTPRequestHandler):
     """Serves the interactive web UI page."""
+
     def log_message(self, format, *args):
         # Prevent spamming the terminal with GET log requests
         pass
@@ -887,11 +888,11 @@ def start_server():
             break
         except OSError:
             port += 1
-            
+
     if not server:
         print("Error: Could not bind to any port between 8080 and 8090.")
         sys.exit(1)
-        
+
     url = f"http://localhost:{port}/"
     print(f"Started Web UI server at {url}")
     print("Opening your web browser automatically...")
@@ -901,7 +902,7 @@ def start_server():
     def open_browser():
         time.sleep(0.5)
         webbrowser.open(url)
-        
+
     threading.Thread(target=open_browser, daemon=True).start()
 
     try:
@@ -919,12 +920,12 @@ def main():
         if arg in ("-h", "--help", "help"):
             print(__doc__)
             sys.exit(0)
-            
+
         val = parse_cli_value(arg)
         if val is None:
             print(f"Error: Could not parse input value '{arg}' as an integer.")
             sys.exit(1)
-            
+
         print_ascii_board(val)
     else:
         # Web GUI Mode

@@ -75,7 +75,7 @@ def main():
 
     concurrency = utils.get_optimal_concurrency(args.concurrency)
 
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  -> Total Games:  {args.games}")
     print(f"  -> Concurrency:  {concurrency}")
     print(f"  -> Time Control: {args.tc}")
@@ -128,7 +128,9 @@ def main():
     print("\nLaunching match tournament using sylvan-cli...")
     try:
         subprocess.run(cli_args, check=True)
-        print(f"\nGame generation completed successfully! Output saved to: {args.pgnout}")
+        print(
+            f"\nGame generation completed successfully! Output saved to: {args.pgnout}"
+        )
     except subprocess.CalledProcessError as e:
         print(f"\nError running game generation. Exit code: {e.returncode}")
         sys.exit(1)

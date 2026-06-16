@@ -540,7 +540,7 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     writeln!(s, "// Tapered bonuses for having 0, 1, or 2 Advisors").unwrap();
     writeln!(
         s,
-        "pub const ADVISOR_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
+        "pub(in crate::eval) const ADVISOR_COUNT_BONUS: [PackedScore; 3] =\n    packed![({}, {}), ({}, {}), ({}, {})];",
         params.advisor_count_bonus[0].mg,
         params.advisor_count_bonus[0].eg,
         params.advisor_count_bonus[1].mg,
@@ -557,7 +557,7 @@ fn format_optimized_parameters(params: &EvalParams) -> String {
     .unwrap();
     writeln!(
         s,
-        "pub const BISHOP_COUNT_BONUS: [PackedScore; 3] = packed![({}, {}), ({}, {}), ({}, {})];",
+        "pub(in crate::eval) const BISHOP_COUNT_BONUS: [PackedScore; 3] =\n    packed![({}, {}), ({}, {}), ({}, {})];",
         params.bishop_count_bonus[0].mg,
         params.bishop_count_bonus[0].eg,
         params.bishop_count_bonus[1].mg,
