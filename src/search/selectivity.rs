@@ -220,4 +220,20 @@ impl super::Searcher<'_> {
         }
         None
     }
+
+    /// If our position is so incredibly garbage that even with the possible increase
+    /// in eval from this quiet move still is not past alpha, we don't bother to search
+    /// anymore.
+    ///
+    /// See: https://www.chessprogramming.org/Futility_Pruning
+    #[inline]
+    pub(super) fn futility_pruning(&self, mv: Move, depth: i8, alpha: Score, eval: Score) -> bool {
+        const FP_DEPTH_THRESHOLD: i8 = 4;
+        const FP_MARGIN_MULTIPLIER: Score = 100;
+        const FP_FIXED_MARGIN: Score = 50;
+        depth <= FP_DEPTH_THRESHOLD
+            && eval + FP_MARGIN_MULTIPLIER * depth as Score + FP_FIXED_MARGIN < alpha
+            && self.pos.is_quiet(mv)
+            && !self.pos.gives_check(mv)
+    }
 }

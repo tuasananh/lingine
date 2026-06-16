@@ -119,6 +119,12 @@ impl super::Searcher<'_> {
                 continue;
             }
 
+            if !ROOT && !PV && !in_check {
+                if self.futility_pruning(m, depth, alpha, eval) {
+                    continue;
+                }
+            }
+
             let reductions = self.calculate_reductions::<PV>(m, moves_played, depth, ply);
 
             self.pos.do_move(m);
