@@ -218,9 +218,9 @@ impl super::Searcher<'_> {
         None
     }
 
-    /// If our position is so incredibly garbage that even with the possible increase
-    /// in eval from this quiet move still is not past alpha, we don't bother to search
-    /// anymore.
+    /// If our position is so incredibly garbage that even with the possible
+    /// increase in eval from this quiet move still is not past alpha, we
+    /// don't bother to search anymore.
     ///
     /// See: https://www.chessprogramming.org/Futility_Pruning
     #[inline]
@@ -232,8 +232,9 @@ impl super::Searcher<'_> {
             && eval + FP_MARGIN_MULTIPLIER * depth as Score + FP_FIXED_MARGIN < alpha
     }
 
-    /// If we have searched so many quiet moves and the position is not improving,
-    /// we assume that the late moves will also be garbage, and just skip them.
+    /// If we have searched so many quiet moves and the position is not
+    /// improving, we assume that the late moves will also be garbage, and
+    /// just skip them.
     ///
     /// See: https://www.chessprogramming.org/Futility_Pruning#Move_Count_Based_Pruning #[inline]
     pub(super) fn late_move_pruning(&self, depth: i8, quiets_count: u16, improving: bool) -> bool {
