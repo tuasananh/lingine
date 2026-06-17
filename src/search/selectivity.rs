@@ -62,23 +62,20 @@ impl super::Searcher<'_> {
     pub(super) fn calculate_reductions<const PV: bool>(
         &self,
         mv: Move,
-        moves_played: u8,
+        moves_played: u16,
         depth: i8,
         ply: u8,
     ) -> i8 {
         // The idea is that for later moves, they will probably be less promising,
         // thus we reduce the depth that we search for this move.
-        const LMR_MOVES_PLAYED_THRESHOLD: u8 = 2;
+        const LMR_MOVES_PLAYED_THRESHOLD: u16 = 2;
         const LMR_DEPTH_THRESHOLD: i8 = 3;
         const LMR_BASE: f32 = 0.75;
         const LMR_DIVISOR: f32 = 2.3;
         const LMR_HISTORY_DIVISOR: i32 = 20000;
         if moves_played >= LMR_MOVES_PLAYED_THRESHOLD
             && depth >= LMR_DEPTH_THRESHOLD
-            && self.pos.is_quiet(mv)
-            && !self.pos.is_in_check()
             && !self.killer_moves.contains(mv, ply)
-            && !self.pos.gives_check(mv)
         {
             let mut reductions = (LMR_BASE
                 + f32::from(moves_played).ln() * f32::from(depth).ln() / LMR_DIVISOR)
@@ -107,6 +104,8 @@ impl super::Searcher<'_> {
     /// At higher depths (>= 12 plies), NMP performs a "Verification Search" to
     /// prevent pruning deep mating threats or tactical surprises. NMP is
     /// disabled recursively during verification by setting `nmp_min_ply`.
+    ///
+    /// See: https://www.chessprogramming.org/Null_Move_Pruning
     #[inline]
     pub(super) fn null_move_pruning(
         &mut self,
@@ -194,5 +193,54 @@ impl super::Searcher<'_> {
         }
 
         None
+    }
+
+    /// If our position is so incredibly good, we can be pretty sure
+    /// that the opponent will not let this happen anyway, so we just don't
+    /// waste time searching anymore
+    ///
+    /// See: https://www.chessprogramming.org/Reverse_Futility_Pruning
+    #[inline]
+    pub(super) fn reverse_futility_pruning(
+        &self,
+        depth: i8,
+        beta: Score,
+        eval: Score,
+        improving: bool,
+    ) -> Option<i32> {
+        const RFP_DEPTH_THRESHOLD: i8 = 8;
+        const RFP_MARGIN_MULTIPLIER: Score = 100;
+        if depth < RFP_DEPTH_THRESHOLD
+            && eval - RFP_MARGIN_MULTIPLIER * (depth as Score - i32::from(improving)) > beta
+        {
+            return Some(eval);
+        }
+        None
+    }
+
+    /// If our position is so incredibly garbage that even with the possible
+    /// increase in eval from this quiet move still is not past alpha, we
+    /// don't bother to search anymore.
+    ///
+    /// See: https://www.chessprogramming.org/Futility_Pruning
+    #[inline]
+    pub(super) fn futility_pruning(&self, depth: i8, alpha: Score, eval: Score) -> bool {
+        const FP_DEPTH_THRESHOLD: i8 = 4;
+        const FP_MARGIN_MULTIPLIER: Score = 100;
+        const FP_FIXED_MARGIN: Score = 50;
+        depth <= FP_DEPTH_THRESHOLD
+            && eval + FP_MARGIN_MULTIPLIER * depth as Score + FP_FIXED_MARGIN < alpha
+    }
+
+    /// If we have searched so many quiet moves and the position is not
+    /// improving, we assume that the late moves will also be garbage, and
+    /// just skip them.
+    ///
+    /// See: https://www.chessprogramming.org/Futility_Pruning#Move_Count_Based_Pruning #[inline]
+    pub(super) fn late_move_pruning(&self, depth: i8, quiets_count: u16, improving: bool) -> bool {
+        const LMP_DEPTH_THRESHOLD: i8 = 3;
+        const LMP_BASE: u16 = 8;
+        depth <= LMP_DEPTH_THRESHOLD
+            && quiets_count > depth as u16 * depth as u16 / (1 + (!improving) as u16) + LMP_BASE
     }
 }
