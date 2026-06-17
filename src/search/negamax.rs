@@ -71,6 +71,16 @@ impl super::Searcher<'_> {
             is_singular = self.singular_extension(depth, ply, &ctx, value);
         };
 
+        // If this is the first time we search this position, it is likely
+        // a bad position that we might have pruned, we reduce the depth to
+        // not waste time.
+        //
+        // See: https://www.chessprogramming.org/Internal_Iterative_Reductions
+        const IIR_DEPTH_THRESHOLD: i8 = 4;
+        if tt_value.is_none() && depth >= IIR_DEPTH_THRESHOLD {
+            depth -= 1;
+        }
+
         let in_check = self.pos.is_in_check();
         let eval = tt_value.map_or_else(|| self.pos.evaluate(), |x| x.score);
         self.eval_stack[ply as usize] = eval;
