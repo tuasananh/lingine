@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::core::{Move, Piece, PieceType, Position};
+use crate::core::{Move, Piece, PieceType, Position, Score};
 use crate::search::pv_search::PrincipalVariationTable;
 use crate::uci::RunningStatus;
 
@@ -65,26 +65,13 @@ pub struct Searcher<'a> {
     /// Minimum ply for Null Move Pruning to prevent recursive pruning during
     /// verification searches
     nmp_min_ply: u8,
+    /// The evaluation records.
+    eval_stack: [Score; MAX_PLY],
 }
 
 impl<'a> Searcher<'a> {
-    /// Starts the iterative deepening search loop
-    ///
-    /// Returns the best move found.
-    pub fn start_search(
-        pos: Position,
-        time_manager: TimeManager,
-        shared: SharedContext,
-    ) -> Option<Move> {
-        eprintln!("info: starting search");
-        // Decay history table to make sure old moves do not accumulate indefinitely and
-        // overshadow newer moves.
-        shared.history_moves.decay();
-
-        let is_running = shared.keep_running.clone();
-        shared.transposition_table.increment_age();
-
-        let search = Searcher {
+    pub fn new(pos: Position, time_manager: TimeManager, shared: SharedContext<'a>) -> Self {
+        Searcher {
             pos,
             nodes: 0,
             time_manager,
@@ -94,7 +81,27 @@ impl<'a> Searcher<'a> {
             current_root_depth: 0,
             pv_table: PrincipalVariationTable::new(),
             nmp_min_ply: 0,
-        };
+            eval_stack: [0; MAX_PLY],
+        }
+    }
+
+    /// Starts the iterative deepening search loop
+    ///
+    /// Returns the best move found.
+    pub fn start_search(
+        pos: Position,
+        time_manager: TimeManager,
+        shared: SharedContext<'a>,
+    ) -> Option<Move> {
+        eprintln!("info: starting search");
+        // Decay history table to make sure old moves do not accumulate indefinitely and
+        // overshadow newer moves.
+        shared.history_moves.decay();
+
+        let is_running = shared.keep_running.clone();
+        shared.transposition_table.increment_age();
+
+        let search = Self::new(pos, time_manager, shared);
 
         is_running.set(true);
         let answer = search.iterative_deepening();
@@ -187,24 +194,17 @@ mod tests {
 
         // Call negamax with depth=1, we should get 0 (draw)
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = KillerMoves::new();
         let mut history_moves = HistoryMoves::default();
         let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
-        let mut ctx = Searcher {
-            pos: pos.clone(),
-            nodes: 0,
+        let mut ctx = Searcher::new(
+            pos.clone(),
             time_manager,
-            killer_moves: killers,
-            pv_table: PrincipalVariationTable::new(),
-            max_ply: 0,
-            shared: SharedContext {
+            SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
                 transposition_table: &mut transposition_table,
                 history_moves: &mut history_moves,
             },
-            current_root_depth: 0,
-            nmp_min_ply: 0,
-        };
+        );
         ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false, false>(
             1,
@@ -257,24 +257,17 @@ mod tests {
         // Black should win because Red is perpetually checking!
         // negamax should return a win score (MATE_VALUE - ply)
         let mut transposition_table = TranspositionTable::new(1);
-        let killers = KillerMoves::new();
         let mut history_moves = HistoryMoves::default();
         let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
-        let mut ctx = Searcher {
-            pv_table: PrincipalVariationTable::new(),
-            pos,
-            nodes: 0,
+        let mut ctx = Searcher::new(
+            pos.clone(),
             time_manager,
-            killer_moves: killers,
-            max_ply: 0,
-            shared: SharedContext {
+            SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
                 transposition_table: &mut transposition_table,
                 history_moves: &mut history_moves,
             },
-            current_root_depth: 0,
-            nmp_min_ply: 0,
-        };
+        );
         ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false, false>(
             1,
@@ -290,24 +283,17 @@ mod tests {
     fn test_null_move_pruning() {
         let pos = Position::new(); // starting position
         let mut transposition_table = TranspositionTable::new(16);
-        let killers = KillerMoves::new();
         let mut history_moves = HistoryMoves::default();
         let time_manager = TimeManager::new(&GoParameters::default(), Side::Red);
-        let mut ctx = Searcher {
-            pv_table: PrincipalVariationTable::new(),
-            pos: pos.clone(),
-            nodes: 0,
+        let mut ctx = Searcher::new(
+            pos.clone(),
             time_manager,
-            killer_moves: killers,
-            max_ply: 0,
-            shared: SharedContext {
+            SharedContext {
                 keep_running: Arc::new(RunningStatus::default()),
                 transposition_table: &mut transposition_table,
                 history_moves: &mut history_moves,
             },
-            current_root_depth: 0,
-            nmp_min_ply: 0,
-        };
+        );
         ctx.shared.keep_running.set(true);
         let score = ctx.negamax::<false, false>(
             5,

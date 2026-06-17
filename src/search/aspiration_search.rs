@@ -19,8 +19,16 @@ impl super::Searcher<'_> {
         let mut alpha = (score - delta).max(-score::INFINITY);
         let mut beta = (score + delta).min(score::INFINITY);
 
+        let mut consecutive_fail_high = 0;
+
         loop {
-            let score = self.negamax::<true, true>(depth, 0, alpha, beta, SearchContext::default());
+            // For consecutive fail highs, we do not need to search the full depth
+            // since we know the position is quite good already, so we do a reduced
+            // search to find out the score much quicker. But in fail lows, we need
+            // to search full depth since we might be in a critical position.
+            let search_depth = (depth - consecutive_fail_high).max(1);
+            let score =
+                self.negamax::<true, true>(search_depth, 0, alpha, beta, SearchContext::default());
 
             if !self.shared.keep_running.get() {
                 return score::ZERO;
@@ -30,10 +38,12 @@ impl super::Searcher<'_> {
                 // Fail low: score worse or equal to alpha. Widen alpha.
                 alpha = (alpha - delta).max(-score::INFINITY);
                 beta = score + delta;
+                consecutive_fail_high = 0;
             } else if score >= beta {
                 // Fail high: score better or equal to beta. Widen beta.
                 beta = (beta + delta).min(score::INFINITY);
                 alpha = score - delta;
+                consecutive_fail_high += 1;
             } else {
                 return score;
             }
