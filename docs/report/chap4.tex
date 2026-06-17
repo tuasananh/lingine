@@ -8,56 +8,122 @@
 
 \subsection{Cơ chế sinh nước đi bằng Magic Bitboards}
 
-Cờ tướng có ba loại quân di chuyển bị cản (blocking) bởi các quân khác trên bàn cờ:
+Trong Cờ tướng, Tượng và Mã là hai loại quân có cơ chế di chuyển phức tạp vì chúng có thể bị cản (bị chặn) bởi các quân khác trên bàn cờ:
 \begin{itemize}
-    \item \textbf{Tượng (Elephant):} Đi chéo 2 ô, bị cản nếu ô chéo ở giữa (mắt tượng) có quân đứng. Tượng cũng bị giới hạn không được qua sông.
-    \item \textbf{Mã (Horse):} Đi theo hình chữ nhật $2 \times 1$ (hoặc đi thẳng 1 ô rồi đi chéo 1 ô), bị cản nếu ô thẳng kế bên (chân mã) có quân đứng.
-    \item \textbf{Mã ngược (KnightTo):} Được sử dụng để tìm kiếm các quân Mã đối phương đang tấn công ô cờ hiện tại nhằm hỗ trợ phát hiện chiếu tướng.
+    \item \textbf{Tượng (Elephant):} Đi chéo 2 ô. Quân Tượng sẽ bị cản nếu ô ở giữa (mắt tượng) có quân đứng. Ngoài ra, Tượng bị giới hạn không được phép qua sông.
+    \item \textbf{Mã (Horse):} Đi thẳng 1 ô rồi chéo 1 ô (tạo thành hình chữ nhật $2 \times 1$). Quân Mã bị cản nếu ô thẳng kế bên (chân mã) có quân chặn.
+    \item \textbf{Mã ngược (KnightTo):} Một khái niệm ảo được sử dụng trong engine để tìm ngược xem có quân Mã nào của đối phương đang tấn công ô cờ hiện tại hay không, hỗ trợ phát hiện chiếu tướng cực kỳ nhanh chóng.
 \end{itemize}
 
-Để sinh nước đi nhanh cho Tượng và Mã mà không cần dùng các câu lệnh rẽ nhánh điều kiện (\texttt{if-else}) gây nghẽn đường truyền chỉ thị (branch misprediction) của CPU, Lingine áp dụng kỹ thuật \textbf{Magic Bitboards 128-bit}. Ý tưởng cốt lõi là ánh xạ trạng thái chiếm đóng của các ô cản quân (Occupied) thành một chỉ số mảng duy nhất thông qua phép nhân ma thuật:
-\[ \text{Index} = \frac{(\text{Occupied} \ \& \ \text{Mask}) \times \text{Magic}}{\text{2}^{128 - \text{bits}}} \]
+\noindent\textbf{Ví dụ:}
+
+Hãy tưởng tượng quân Mã của bạn đang đứng ở giữa bàn cờ. Nó có tối đa 8 nước đi tiềm năng. Tuy nhiên, 8 nước đi này phụ thuộc hoàn toàn vào 4 ô ``chân mã'' xung quanh nó (trên, dưới, trái, phải). Mỗi ô chân mã có thể ở trạng thái trống (0) hoặc đang bị chiếm đóng (1).
+
+Như vậy, đối với quân Mã, ta có $2^4 = 16$ trạng thái cản quân khác nhau. Thay vì viết 16 trường hợp \texttt{if-else} hoặc dùng vòng lặp sẽ làm CPU chậm lại do hiện tượng dự đoán sai nhánh (branch misprediction), chúng ta cần một cách tiếp cận toán học để lấy ra nước đi ngay lập tức.
+
+Để sinh nước đi nhanh cho Tượng và Mã mà không cần rẽ nhánh, Lingine áp dụng kỹ thuật \textbf{Magic Bitboards 128-bit}. Kỹ thuật này hoạt động như một hàm băm hoàn hảo: nó gom trạng thái của các ô cản trên bàn cờ và ``biến hóa'' chúng thành một chỉ số duy nhất để tra cứu trực tiếp từ một mảng đã tính sẵn.
+
+Công thức toán học cốt lõi:
+\[ \text{Index} = \frac{(\text{Occupied} \ \& \ \text{Mask}) \times \text{Magic}}{2^{128 - \text{bits}}} \]
 
 Trong đó:
 \begin{itemize}
-    \item \textbf{Mask} là mặt nạ bit chứa vị trí của các ô cản khả dĩ đối với quân cờ tại ô hiện tại (ví dụ: đối với quân Mã, mặt nạ chứa 4 ô chân mã xung quanh).
-    \item \textbf{Magic} là số ma thuật 128-bit được tìm kiếm trước để đảm bảo không xảy ra va chạm chỉ số giữa các trạng thái chiếm đóng khác nhau.
-    \item \textbf{bits} là số bit của chỉ số mảng (ví dụ: với tối đa 4 ô cản, bảng tra cứu chỉ cần kích thước $2^4 = 16$ phần tử).
+    \item \textbf{Occupied:} Bitboard 128-bit chứa trạng thái hiện tại của toàn bộ bàn cờ (ô có quân là 1, ô trống là 0).
+    \item \textbf{Mask (Mặt nạ):} Bitboard dùng để ``lọc'' ra vị trí các ô cản khả dĩ. Ví dụ, với quân Mã đang xét, mặt nạ sẽ che đi toàn bộ bàn cờ và chỉ giữ lại đúng 4 bit tại 4 ô chân mã.
+    \item \textbf{Magic (Số ma thuật):} Một số 128-bit được hệ thống tìm kiếm từ trước. Phép nhân với số ma thuật này có tác dụng đẩy các bit đang phân tán về một cụm trên cùng của số 128-bit mà không gây ra va chạm (trùng lặp chỉ số).
+    \item \textbf{bits:} Số lượng bit cần thiết để tạo mảng tra cứu. Với Mã có 4 ô cản, ta dùng 4 bit, tương ứng kích thước mảng là $2^4 = 16$ phần tử.
 \end{itemize}
 
-Cấu trúc tra bảng Magic được định nghĩa trong \texttt{src\slash core\slash movegen\slash tables\slash types.rs}:
+Sơ đồ dưới đây minh họa cách phép nhân ma thuật gom 4 bit chân mã (\texttt{A, B, C, D}) đang nằm rải rác trên bàn cờ $9 \times 10$ (90 bit) lên vị trí cao nhất của thanh ghi 128-bit, trước khi dịch phải để tạo thành mảng chỉ số từ $0$ đến $15$:
 
-\begin{lstlisting}[language=Rust, caption=Cấu trúc Magic Bitboard trong Lingine]
+\begin{table}[htbp]
+    \centering
+    \small % Thu nhỏ font chữ một chút để tránh tràn lề
+    \setlength{\tabcolsep}{4pt} % Chỉnh khoảng cách giữa các cột
+    \begin{tabular}{cccccc}
+        \textbf{Occupied \& Mask} & & \textbf{Số ma thuật 128-bit} & & \textbf{Chỉ số ánh xạ} & \\
+        \textit{Quân Mã (10 $\times$ 9)} & & & & \textit{4 bit cao nhất chứa [A B C D]} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{[A B C D] . . . .} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . . A . . . .} & & \texttt{. . . một số. . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . D x C . . .} & $\times$ & \texttt{. bit ma thuật. .} & $=$ & \texttt{. . . bit rác . .} &  \\
+        \texttt{. . . . B . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+        \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & & \texttt{. . . . . . . . .} & \\
+    \end{tabular}
+    \caption{Quá trình ánh xạ bit bằng phép nhân Magic Bitboard cho quân Mã}
+\end{table}
+
+\subsubsection{Cấu trúc và Thực thi trong Lingine}
+
+Cấu trúc tra bảng Magic được định nghĩa gọn gàng trong tệp \url{src/core/movegen/tables/types.rs}:
+
+\begin{lstlisting}[language=Rust, caption={Cấu trúc Magic Bitboard trong Lingine}, label={lst:magic_bitboard}]
+/// One entry in the magic lookup table for a leaper piece on a single square.
+#[derive(Clone, Copy)]
 pub(in crate::core::movegen) struct Magic<const SIZE: usize> {
+    /// Bitmask of squares that affect this piece's mobility from this square
+    /// (blocking squares only — not the piece's own square or destinations).
     pub mask: u128,
+    /// Magic multiplier chosen so that `(occ & mask) * magic >> SHIFT` maps
+    /// each distinct subset of `mask` to a unique index into `attacks`.
     pub magic: u128,
+    /// Precomputed attack bitboard for each possible occupancy subset.
     pub attacks: [Bitboard; SIZE],
 }
 
 impl<const SIZE: usize> Magic<SIZE> {
+    /// Number of bits to shift after multiplication to obtain the table index.
+    /// `SIZE` must be a power of two; `SHIFT = 128 - log2(SIZE)`.
     const SHIFT: u32 = 128 - SIZE.trailing_zeros();
 
+    /// Look up the attack bitboard for the given board occupancy.
     #[inline]
     pub const fn attack(&self, occupied: Bitboard) -> Bitboard {
-        let occ = occupied.raw() & self.mask;
-        let idx = (occ.wrapping_mul(self.magic) >> Self::SHIFT) as usize;
-        self.attacks[idx]
+        // 1. Keep only the squares relevant to this piece's mobility.
+        // 2. Multiply by the magic to scatter those bits into the high bits.
+        // 3. Shift to a small index and return the precomputed attack set.
+        let idx = (occupied.raw() & self.mask).wrapping_mul(self.magic) >> Self::SHIFT;
+        self.attacks[idx as usize]
     }
 }
 \end{lstlisting}
 
-Việc truy vấn nước đi khả dĩ của quân Mã hay Tượng giờ đây chỉ tốn đúng một phép nhân nguyên 128-bit và một phép dịch bit:
+Nhờ cơ chế này, thay vì phải chạy vòng lặp hay kiểm tra điều kiện phức tạp, việc truy vấn toàn bộ các nước đi khả dĩ của một quân Tượng hoặc Mã giờ đây được thu gọn lại thành \textbf{một phép nhân nguyên 128-bit và một phép dịch bit}.
+
+Ví dụ, để lấy nước đi của Tượng và loại bỏ các ô có quân nhà (\texttt{us\_pieces}), đoạn mã sẽ vô cùng ngắn gọn và tối ưu hiệu suất:
 \begin{lstlisting}[language=Rust]
 let attacks = BISHOP_MAGICS[from_sq].attack(occupied) & !us_pieces;
 \end{lstlisting}
 
 \subsection{Sinh nước đi cho Xe và Pháo}
 
-Quân Xe và Pháo là hai quân cờ di chuyển trượt dọc/ngang (Sliders). Xe đi và ăn quân trên đường thẳng dừng tại quân cản đầu tiên. Pháo di chuyển không ăn quân giống Xe, nhưng khi ăn quân phải nhảy qua đúng một quân cờ khác (ngòi pháo).
+Quân Xe và Pháo là hai quân cờ có tầm hoạt động rộng, di chuyển theo đường thẳng (dọc hoặc ngang). Tuy nhiên, cơ chế ăn quân của chúng có sự khác biệt cốt lõi, làm cho việc sinh nước đi cho Pháo phức tạp hơn nhiều so với Xe:
+\begin{itemize}
+    \item \textbf{Quân Xe:} Di chuyển và ăn quân dọc theo đường thẳng, bị chặn lại ngay tại quân cờ đầu tiên gặp phải trên đường đi.
+    \item \textbf{Quân Pháo:} Di chuyển đến các ô trống giống hệt như Xe, nhưng để ăn quân của đối phương, Pháo bắt buộc phải nhảy qua đúng một quân cờ khác (được gọi là ``ngòi pháo'').
+\end{itemize}
 
-Để tính toán các đường tấn công này, Lingine chia bàn cờ thành các hàng ngang (Rank) và cột dọc (File). Trạng thái chiếm đóng của một hàng (9 ô) được trích xuất trực tiếp thành một số nguyên 9-bit, cột dọc (10 ô) được nén thành số nguyên 10-bit thông qua hàm nhân nén \texttt{gather\_file\_bits}. Sau đó, động cơ tra cứu trực tiếp vào các bảng tĩnh tiền phân tích \texttt{RANK\_TABLE} và \texttt{FILE\_TABLE} để lấy ngay đường đi của Xe và Pháo:
+Để tối ưu hóa tốc độ tính toán và tránh việc phải dùng các vòng lặp kiểm tra từng ô một (\textit{ray-casting}) vốn tốn nhiều tài nguyên, Lingine áp dụng kỹ thuật \textbf{tra cứu bảng tĩnh}. Bàn cờ tướng tiêu chuẩn có kích thước 9 cột dọc (\textit{File}) và 10 hàng ngang (\textit{Rank}). Dựa vào đặc điểm này, engine số hóa toàn bộ trạng thái chiếm đóng của các đường đi thành các chuỗi bit:
+\begin{itemize}
+    \item Một hàng ngang (9 ô) được biểu diễn trực tiếp bằng một số nguyên 9-bit.
+    \item Một cột dọc (10 ô) được nén thành một số nguyên 10-bit.
+\end{itemize}
 
-\begin{lstlisting}[language=Rust, caption=Hàm trích xuất trạng thái cột dọc trong Lingine]
+\subsubsection{Trích xuất trạng thái cột dọc}
+
+Trong biểu diễn bàn cờ bằng mảng bit một chiều (sử dụng số nguyên lớn như 128-bit), các ô trên cùng một cột dọc không nằm liền kề nhau mà nằm cách nhau 9 bit. Để có thể dùng trạng thái của cột làm chỉ số cho việc tra cứu, hệ thống cần gom 10 bit nằm cách quãng này lại thành một chuỗi 10-bit liền kề.
+
+Hàm \texttt{gather\_file\_bits} thực hiện nhiệm vụ nén dữ liệu này bằng kỹ thuật nhân ma thuật:
+
+\begin{lstlisting}[language=Rust, caption={Hàm trích xuất trạng thái cột dọc trong Lingine}, label={lst:gather_file_bits}]
+/// Packers the 10 file bits (every 9th bit starting at `f`) into a contiguous
+/// 10-bit integer. Splits across two u64 halves to stay within 64-bit
+/// multiply range, using a magic multiplier to compress 5 spaced bits each.
+#[inline]
 const fn gather_file_bits(bits: u128, f: usize) -> usize {
     let occ = bits >> f;
     const STEP_MASK: u64 = 0x10_0804_0201;
@@ -68,9 +134,29 @@ const fn gather_file_bits(bits: u128, f: usize) -> usize {
 }
 \end{lstlisting}
 
-Cơ chế này loại bỏ hoàn toàn các vòng lặp quét tia truyền thống, tăng tốc độ sinh nước đi trượt lên gấp nhiều lần.
+\textbf{Phân tích chi tiết thuật toán nén:}
+\begin{enumerate}
+    \item \textbf{Dịch bit:} Lệnh \texttt{bits >> f} dịch toàn bộ mảng bit của bàn cờ để đưa bit thấp nhất của cột \texttt{f} về vị trí số 0.
+    \item \textbf{Chia nhỏ dữ liệu để xử lý:} Vì khoảng cách giữa bit đầu và bit cuối của một cột là 90 bit (vượt quá dung lượng của một số nguyên 64-bit thông thường), Lingine tách quá trình nén thành hai nửa: nửa thấp (\texttt{low}) xử lý 5 ô dưới và nửa cao (\texttt{high}) xử lý 5 ô trên.
+    \item \textbf{Lọc và Nhân Ma Thuật:}
+    \begin{itemize}
+        \item \texttt{STEP\_MASK} đóng vai trò như một bộ lọc, chỉ giữ lại đúng các bit thuộc cột hiện tại và xóa bỏ mọi bit của các cột khác.
+        \item \texttt{MAGIC\_MULTIPLIER} là một hằng số được tính toán kỹ lưỡng. Khi nhân giá trị đã lọc với hằng số này, các bit rời rạc sẽ bị dịch chuyển và dồn lên nhau sao cho chúng tập trung thành một cụm liền kề ở các bit cao nhất của kết quả.
+    \end{itemize}
+    \item \textbf{Dịch ngược và Gộp:} Kết quả được dịch lùi lại (\texttt{>> 36}) và sử dụng toán tử OR bitwise (\texttt{|}) để ghép 5 bit của nửa thấp với 5 bit của nửa cao. Kết quả cuối cùng trả về một số nguyên 10-bit hoàn chỉnh (có giá trị từ 0 đến 1023).
+\end{enumerate}
 
-\section{Hàm đánh giá thế cờ (Evaluation Function)}
+\subsubsection{Tra cứu đường đi siêu tốc}
+
+Sau khi trích xuất thành công số nguyên 9-bit (cho hàng ngang) hoặc 10-bit (cho cột dọc) đại diện cho vị trí các quân cờ cản đường, số nguyên này sẽ được sử dụng trực tiếp làm chỉ mục. Engine chỉ cần truy cập vào hai mảng tĩnh đã được khởi tạo sẵn từ trước:
+\begin{itemize}
+    \item \texttt{RANK\_TABLE[trạng\_thái\_9\_bit][vị\_trí\_hiện\_tại]}
+    \item \texttt{FILE\_TABLE[trạng\_thái\_10\_bit][vị\_trí\_hiện\_tại]}
+\end{itemize}
+
+Hai bảng này chứa tất cả các kịch bản di chuyển hợp lệ của Xe và Pháo (bao gồm cả nước đi trống và nước ăn quân) tương ứng với mọi cách sắp xếp quân cản có thể xảy ra. Nhờ cơ chế này, Lingine loại bỏ hoàn toàn các vòng lặp dò tìm từng ô truyền thống. Độ phức tạp tính toán của mỗi nước đi trượt được giảm xuống chỉ còn $O(1)$, giúp tăng tốc độ sinh nước đi lên gấp nhiều lần.
+
+\section{Hàm đánh giá thế cờ}
 
 Hàm đánh giá chịu trách nhiệm lượng hóa ưu thế của thế cờ hiện tại từ góc nhìn của bên Đỏ dưới dạng một số nguyên:
 
@@ -80,75 +166,11 @@ Hàm đánh giá chịu trách nhiệm lượng hóa ưu thế của thế cờ 
 
 Trong đó:
 \begin{itemize}
-    \item \textbf{BaseScore} là tổng chênh lệch điểm số quân cờ cơ bản (Material) và vị trí (Piece-Square Tables -- PST) của hai bên.
+    \item \textbf{BaseScore} là tổng chênh lệch điểm số quân cờ cơ bản (Material) và vị trí (Piece-Square Tables) của hai bên.
     \item \textbf{MobilityScore} thưởng điểm cho bên có các quân Xe, Pháo, Mã hoạt động tự do và cơ động cao.
     \item \textbf{DefenderScore} thưởng điểm cho hệ thống Sĩ, Tượng che chở bảo vệ Tướng và bảo vệ lẫn nhau.
     \item \textbf{TaperedScore} thực hiện pha trộn động điểm số Trung cuộc và Tàn cuộc.
 \end{itemize}
-
-\subsubsection{Điểm cơ động (Mobility Score)}
-
-Điểm cơ động đo lường số lượng ô cờ hợp lệ mà các quân chiến đấu chủ lực gồm Xe, Pháo, Mã có thể đi hoặc tấn công. Một quân cờ bị kẹt (không có nước đi) sẽ có điểm cơ động âm (phạt), ngược lại quân cờ hoạt động tự do kiểm soát nhiều ô sẽ được thưởng điểm cao.
-
-Công thức tính điểm cơ động toàn cục:
-\[ \text{MobilityScore} = \text{Mobility}_{\text{Red}} - \text{Mobility}_{\text{Black}} \]
-
-Với điểm cơ động của một bên được tính bằng:
-\[ \text{Mobility}_{\text{Side}} = \sum_{p \in \text{Knights}} M_{\text{Knight}}(\text{count}(p)) + \sum_{p \in \text{Rooks}} M_{\text{Rook}}(\text{count}(p)) + \sum_{p \in \text{Cannons}} M_{\text{Cannon}}(\text{count}(p)) \]
-
-Trong đó $\text{count}(p)$ đại diện cho số lượng nước đi khả dĩ của quân cờ $p$ (không đi vào ô chứa quân đồng minh):
-\begin{itemize}
-    \item \textbf{Quân Mã (Knight):} Số lượng nước đi khả dĩ dao động từ 0 đến 8. Mảng thưởng cơ động gồm 9 phần tử:
-    \[ M_{\text{Knight}} = [(-36, -79), (-42, 11), (-29, 15), (-19, 44), (-5, 35), (-7, 55), (1, 52), (4, 56), (8, 81)] \]
-    \item \textbf{Quân Xe (Rook):} Số lượng nước đi khả dĩ dao động từ 0 đến 17. Mảng thưởng cơ động gồm 18 phần tử:
-    \[ M_{\text{Rook}} = [(-107, -166), (-29, -90), (-34, -65), \dots, (2, 107), (16, 55), (-3, 103), (-1, 99)] \]
-    \item \textbf{Quân Pháo (Cannon):} Nước đi cơ động của Pháo gồm các ô đi quiet (giống Xe nhưng không có quân cản) và các ô ăn quân (nhảy qua đúng một quân làm ngòi để ăn quân đối phương). Số lượng nước đi dao động từ 0 đến 17. Mảng thưởng cơ động gồm 18 phần tử:
-    \[ M_{\text{Cannon}} = [(-24, 26), (-11, -131), (-27, 85), \dots, (13, 85), (30, 79), (9, 77)] \]
-\end{itemize}
-
-\subsubsection{Điểm thưởng hệ thống bảo vệ (Defender Score)}
-
-Trong cờ tướng, hệ thống Sĩ (Advisor) và Tượng (Bishop/Elephant) đóng vai trò lá chắn phòng thủ tuyệt đối bảo vệ Tướng. Lingine đánh giá sức mạnh phòng thủ dựa trên số lượng Sĩ và Tượng đang hoạt động của mỗi bên:
-\[ \text{DefenderScore} = D_{\text{Red}} - D_{\text{Black}} \]
-\[ D_{\text{Side}} = \text{Bonus}_{\text{Advisor}}(\text{count}(\text{Advisor})) + \text{Bonus}_{\text{Bishop}}(\text{count}(\text{Bishop})) \]
-
-Trọng số thưởng (tapered score) được tối ưu hóa như sau:
-\begin{itemize}
-    \item \textbf{Thưởng theo số lượng Sĩ (Advisors):}
-    \begin{itemize}
-        \item Có 0 Sĩ: phạt \texttt{(-70, -42)} (Trung cuộc phạt -70, Tàn cuộc phạt -42).
-        \item Có 1 Sĩ: \texttt{(31, -1)} (Có Sĩ bảo vệ trung cuộc rất quan trọng).
-        \item Có 2 Sĩ: \texttt{(22, 39)} (Sĩ liên kết bền vững thưởng tàn cuộc cao).
-    \end{itemize}
-    \item \textbf{Thưởng theo số lượng Tượng (Bishops):}
-    \begin{itemize}
-        \item Có 0 Tượng: phạt \texttt{(-10, -53)}.
-        \item Có 1 Tượng: \texttt{(7, 8)}.
-        \item Có 2 Tượng: \texttt{(23, 46)}.
-    \end{itemize}
-\end{itemize}
-
-\subsection{Các tham số trọng số vật chất (Material Values)}
-
-Giá trị cơ bản của các quân cờ được chia làm hai pha: Trung cuộc (Middlegame -- MG) khi còn nhiều quân trên bàn cờ, ưu tiên tấn công; và Tàn cuộc (Endgame -- EG) khi quân cờ thưa dần, ưu tiên bảo vệ và phong cấp Tốt.
-
-\begin{table}[h]
-    \centering
-    \begin{tabular}{lcc}
-        \toprule
-        \textbf{Quân cờ (Piece)} & \textbf{Trung cuộc (MG)} & \textbf{Tàn cuộc (EG)} \\
-        \midrule
-        Xe (Rook) & 630 & 1202 \\
-        Pháo (Cannon) & 361 & 514 \\
-        Mã (Knight) & 269 & 600 \\
-        Sĩ (Advisor) & 107 & 180 \\
-        Tượng (Bishop) & 105 & 165 \\
-        Tốt chưa qua sông (Pawn) & 37 & 148 \\
-        Tốt đã qua sông (Pawn crossed) & 80 & 247 \\
-        \bottomrule
-    \end{tabular}
-    \caption{Trọng số vật chất của các quân cờ trong Lingine}
-\end{table}
 
 \subsection{Nội suy pha ván cờ (Tapered Evaluation)}
 
@@ -160,71 +182,394 @@ Với quy ước trọng số pha: Xe = 2, Pháo = 2, Mã = 2, Sĩ = 1, Tượng
 
 \subsection{Tinh chỉnh tự động bằng Texel Tuning}
 
-Toàn bộ hệ thống trọng số quân cờ cùng hàng trăm chỉ số trong bảng vị trí (PST) của Lingine không được thiết lập bằng tay theo cảm tính, mà được huấn luyện tự động thông qua giải thuật tối ưu hóa hồi quy logistic **Texel Tuning**.
+Toàn bộ hệ thống trọng số tĩnh của Lingine, bao gồm giá trị cốt lõi của các quân cờ, hàng trăm chỉ số nội suy trong bảng vị trí, điểm thưởng cơ động và hệ số phòng thủ, không được thiết lập thủ công bằng tay theo cảm tính. Thay vào đó, chúng được huấn luyện tự động thông qua giải thuật tối ưu hóa hồi quy logistic toán học mang tên \textbf{Texel Tuning}. Phương pháp này biến bài toán tinh chỉnh cơ chế đánh giá cờ thành một bài toán học máy giám sát (\textit{Supervised Learning}), nơi hệ thống tự học từ hàng triệu thế cờ thực tế.
 
-Mục tiêu là tìm bộ tham số $\vec{\theta}$ sao cho hàm mất mát (Loss Function) trên tập dữ liệu $N$ ván đấu thực nghiệm là nhỏ nhất:
-\[ L(\vec{\theta}) = \sum_{i=1}^{N} \left( R_i - \sigma(E(S_i, \vec{\theta})) \right)^2 \]
+\subsubsection{Cơ chế sinh và xử lý dữ liệu huấn luyện}
+
+Hiệu năng và độ chính xác của thuật toán Texel Tuning phụ thuộc vào chất lượng của tập dữ liệu huấn luyện. Để xây dựng một tập dữ liệu khổng lồ vừa đảm bảo tính chuẩn mực chiến thuật, vừa bao phủ được các không gian trạng thái đa dạng, công cụ sinh dữ liệu của Lingine tổng hợp từ hai nguồn cốt lõi:
+
+\begin{itemize}
+    \item \textbf{Biên bản ván đấu của các Đại sư (Masters Games):} Nguồn dữ liệu này được trích xuất từ các kỳ đài, giải đấu chuyên nghiệp đỉnh cao của con người. Ưu điểm của dữ liệu đại sư là cung cấp các cấu trúc hệ thống khai cuộc cực kỳ bài bản, các hình thế trung cuộc phức tạp và chiến lược điều quân có chiều sâu tuệ giác cao.
+    \item \textbf{Dữ liệu tự đấu từ Fairy-Stockfish (Fairy-Stockfish Games):} Vì dữ liệu của con người có giới hạn và thường thiếu các thế cờ tàn cuộc hoặc các sai lầm ngẫu nhiên, Lingine sử dụng engine \textit{Fairy-Stockfish} (biến thể tối ưu của Stockfish dành cho cờ tướng) để chạy chế độ tự đấu. Quá trình này áp dụng kỹ thuật xáo trộn ngẫu nhiên một số nước đi đầu kết hợp với việc giới hạn độ sâu tính toán để kích thích sinh ra hàng triệu hình thế độc lạ, mô phỏng lại toàn bộ các kịch bản sơ hở có thể xảy ra trên bàn cờ.
+\end{itemize}
+
+\textbf{Quy trình tiền xử lý và lọc nhiễu:}
+
+Sau khi thu thập, tập dữ liệu thô phải đi qua một bộ lọc nghiêm ngặt trước khi tinh chỉnh:
+
+\begin{enumerate}
+    \item \textbf{Loại bỏ thế cờ chiến thuật quá mức:} Thuật toán loại bỏ toàn bộ các thế cờ đang bị chiếu tướng hoặc các vị trí có nước bắt quân trực tiếp. Điều này đảm bảo Texel Tuning chỉ tập trung tối ưu hóa hàm đánh giá tĩnh thay vì bị nhiễu bởi các đòn phối hợp tính toán sâu.
+    \item \textbf{Gán nhãn đồng bộ góc nhìn:} Kết quả chung cuộc của ván đấu được chuyển đổi chính xác về góc nhìn của bên chuẩn bị thực hiện nước đi tại thế cờ đó. Nếu bên đi trước giành chiến thắng cuối cùng, giá trị $R_i$ được gán là $1.0$, hòa là $0.5$, và thất bại là $0.0$, tạo tiền đề cho hàm kích hoạt Sigmoid hội tụ chính xác tuyệt đối.
+\end{enumerate}
+
+Tổng cộng, với $40\,711$ ván đấu từ các Đại sư, và $100\,000$ ván đấu từ Fairy-Stockfish, bộ dữ liệu cuối cùng có được $4\,783\,928$ thế cờ với đầy đủ label.
+
+\subsubsection{Cơ sở toán học và Hàm mất mát}
+
+Mục tiêu cốt lõi của Texel Tuning là tìm ra một bộ tham số tối ưu $\vec{\theta}$ chứa cả hai thành phần Trung cuộc (\textit{Middle Game - MG}) và Tàn cuộc (\textit{End Game - EG}) sao cho hàm sai số bình phương trung bình (\textit{Mean Squared Error - MSE}) trên tập dữ liệu gồm $N$ trạng thái bàn cờ đạt giá trị nhỏ nhất:
+
+\begin{equation}
+\text{MSE}(\vec{\theta}) = \frac{1}{N} \sum_{i=1}^{N} \left( R_i - \sigma\left(E(S_i, \vec{\theta})\right) \right)^2
+\end{equation}
 
 Trong đó:
 \begin{itemize}
-    \item $R_i \in \{1, 0.5, 0\}$ là kết quả ván đấu thực tế của thế cờ thứ $i$ (1: Thắng, 0.5: Hòa, 0: Thua).
-    \item $E(S_i, \vec{\theta})$ là điểm số đánh giá tĩnh của thế cờ $S_i$ dựa trên bộ tham số $\vec{\theta}$.
-    \item $\sigma(x) = \frac{1}{1 + 10^{-K \cdot x / 400}}$ là hàm kích hoạt Sigmoid chuyển đổi điểm số cờ sang xác suất chiến thắng dự tính, với $K$ là hệ số tỷ lệ tối ưu.
+    \item $R_i \in \{1.0, 0.5, 0.0\}$ là kết quả thực tế của ván đấu chứa thế cờ thứ $i$ (tương ứng với các trạng thái Thắng, Hòa, Thua dưới góc nhìn của bên đi trước).
+    \item $E(S_i, \vec{\theta})$ là hàm đánh giá tĩnh thế cờ $S_i$ bằng bộ tham số $\vec{\theta}$. Giá trị này được tính toán dựa trên kỹ thuật nội suy theo pha bàn cờ (\textit{Tapered Evaluation}):
+    \begin{equation}
+    E(S_i, \vec{\theta}) = \frac{\text{Score}_{\text{MG}} \times \text{Phase} + \text{Score}_{\text{EG}} \times (32 - \text{Phase})}{32}
+    \end{equation}
+    \item $\sigma(x)$ là hàm kích hoạt Sigmoid có nhiệm vụ ánh xạ điểm số cờ thuần túy (vốn là một số nguyên không giới hạn) sang một không gian xác suất $[0, 1]$ đại diện cho cơ hội chiến thắng dự kiến:
+    \begin{equation}
+    \sigma(x) = \frac{1}{1 + 10^{-\frac{K \cdot x}{400}}}
+    \end{equation}
 \end{itemize}
 
-Bộ tối ưu hóa thực hiện leo đồi (Hill Climbing) cập nhật các tham số trọng số MG và EG tuần tự giúp nâng sức mạnh của hàm đánh giá vượt trội so với các tham số tĩnh thông thường.
+Hệ số tỷ lệ $K$ đóng vai trò co giãn đồ thị hàm số nhằm đảm bảo mối tương quan tuyến tính giữa điểm số của engine và tỷ lệ thắng thực tế. Trong Lingine, $K$ không phải là một hằng số cố định mà được tối ưu hóa động ở mỗi chu kỳ huấn luyện bằng cách sử dụng thuật toán tìm kiếm tam phân (\textit{Ternary Search}) để tìm kiếm nhanh chóng vùng chứa sai số thấp nhất.
 
-\section{Chiến lược tìm kiếm (Search Strategy)}
+\subsubsection{Thực tế triển khai và Kết quả huấn luyện}
 
-Lingine triển khai cấu trúc tìm kiếm đối kháng dựa trên thuật toán cốt lõi Negamax tích hợp cửa sổ kỳ vọng và tìm kiếm biến thể chính.
+Trong thực tế triển khai, công cụ huấn luyện của Lingine đã tối ưu hóa toàn diện bài toán hiệu năng thông qua việc kết hợp cấu trúc dữ liệu và xử lý song song. Nhờ việc trích xuất trạng thái bàn cờ dưới dạng \textbf{Đặc trưng thưa (\textit{Sparse Features})}, bài toán tính toán ma trận khổng lồ được thu gọn đáng kể. Dựa trên không gian đặc trưng này, bộ \textbf{tối ưu hóa Adam} có thể thực hiện tính toán đạo hàm riêng và cập nhật đồng thời hàng ngàn trọng số tĩnh để tối thiểu hóa hàm mất mát.
 
-\subsection{Tìm kiếm biến thể chính (PVS -- Principal Variation Search)}
+Để tận dụng tối đa sức mạnh phần cứng, toàn bộ quá trình quét tập dữ liệu để tính toán sai số và tích lũy đạo hàm được phân bổ thực thi song song trên kiến trúc đa luồng của CPU. Cơ chế này cho phép hệ thống xử lý hàng triệu thế cờ trong mỗi vòng lặp và hội tụ cực kỳ nhanh chóng về điểm tối ưu toàn cục mà không gặp hiện tượng nghẽn cổ chai.
 
-PVS hoạt động dựa trên giả định rằng nếu ta đã tìm thấy một nước đi tốt đầu tiên (nước đi biến thể chính PV) với điểm số tương ứng, các nước đi tiếp theo thường sẽ không tốt bằng và chỉ cần duyệt nhanh để chứng minh chúng kém hơn.
+Về mặt chi phí tài nguyên tính toán, toàn bộ vòng đời huấn luyện được chia làm hai giai đoạn chính với khối lượng công việc cụ thể như sau:
+\begin{itemize}
+    \item \textbf{Giai đoạn sinh dữ liệu:} Quá trình chạy tự đấu, trích xuất dữ liệu Đại sư, lọc nhiễu và gán nhãn hàng triệu thế cờ EPD tiêu tốn khoảng \textbf{28 giờ CPU}.
+    \item \textbf{Giai đoạn tinh chỉnh:} Quá trình chạy thuật toán Adam để lặp và tối ưu hóa bộ trọng số mất khoảng \textbf{5 giờ CPU} thực thi liên tục cho đến khi thuật toán đạt ngưỡng hội tụ.
+\end{itemize}
 
-Do đó, với nước đi đầu tiên, ta tìm kiếm với cửa sổ đầy đủ $[-\beta, -\alpha]$. Với các nước đi sau đó, ta thực hiện tìm kiếm nhanh với cửa sổ Null (Null Window Search) dạng $[-\alpha - 1, -\alpha]$. Chỉ khi tìm kiếm nhanh này thất bại (nước đi sau tốt hơn kỳ vọng), ta mới thực hiện tìm kiếm lại đầy đủ với cửa sổ rộng.
+Hiệu quả của giải thuật được minh chứng bằng sự sụt giảm rõ rệt của hàm mất mát (MSE) và sự tự hiệu chỉnh của hệ số tỷ lệ $K$. Kết quả đo lường ghi nhận sự khác biệt lớn giữa bộ tham số khởi tạo (chưa tinh chỉnh) và bộ tham số hoàn thiện được tổng hợp chi tiết trong Bảng~\ref{tab:texel_results}.
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{lcc}
+        \hline
+        \textbf{Trạng thái} & \textbf{Hệ số tỷ lệ $K$} & \textbf{Sai số toàn phương trung bình (MSE)} \\ \hline
+        Khởi tạo & $0.233339$ & $0.0620215701$ \\ 
+        Hội tụ     & $0.549194$ & $0.0550919271$ \\ \hline
+    \end{tabular}
+    \caption{So sánh hệ số tỷ lệ $K$ và sai số MSE trước và sau khi tinh chỉnh}
+    \label{tab:texel_results}
+\end{table}
+
+Sự sụt giảm hơn $11\%$ của chỉ số MSE trên một tập dữ liệu thử nghiệm khổng lồ là một bước nhảy vọt về độ chính xác.
+
+Để kiểm chứng sức mạnh thực tế của bộ trọng số mới sau khi được tối ưu hóa bằng Texel Tuning, một giải đấu kiểm thử gồm 1000 ván đấu đã được tổ chức khép kín. Giải đấu diễn ra giữa phiên bản Lingine 1.8.0 (được trang bị bộ tham số vừa hội tụ) và phiên bản tiền nhiệm Lingine 1.7.0 (sử dụng bộ tham số gốc cấu hình thủ công).
+
+Kết quả thực chiến cho thấy sự vượt trội hoàn toàn của hệ thống đánh giá mới. Chi tiết các chỉ số thống kê được trình bày trong Bảng~\ref{tab:engine_comparison}, Lingine 1.8.0 đạt tỷ lệ thắng áp đảo với điểm số $79.7\%$. Đặc biệt, sức mạnh tổng thể của engine gia tăng tới \textbf{+237.6 Elo} so với phiên bản trước, đi kèm với Chỉ số tin cậy vượt trội (\textit{Likelihood of Superiority - LOS}) đạt mức tuyệt đối $100.0\%$. 
+
+Thành quả này minh chứng rõ ràng cho sức mạnh của Machine Learning trong việc thay thế hoàn toàn các đánh giá cảm tính của con người, giúp động cơ cờ nâng tầm chiến thuật một cách đột phá.
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{lcc}
+        \hline
+        \textbf{Chỉ số đo lường} & \textbf{Lingine 1.8.0} & \textbf{Lingine 1.7.0} \\ \hline
+        Thắng & 719 & 125 \\ 
+        Hòa & 156 & 156 \\ 
+        Thua & 125 & 719 \\ 
+        Tổng điểm & $797.0 / 1000$ ($79.7\%$) & $203.0 / 1000$ ($20.3\%$) \\ 
+        Chênh lệch Elo & $\mathbf{+237.6}$ & $-237.6$ \\ 
+        Sai số chuẩn & $\pm 11.9$ & — \\ 
+        Khoảng tin cậy 95\% & $[214.3, 260.9]$ & — \\ 
+        Khả năng vượt trội & $100.0\%$ & — \\ 
+        Tỷ lệ hòa & $15.6\%$ & — \\ \hline
+    \end{tabular}
+    \caption{So sánh sức mạnh giữa Lingine 1.8.0 và Lingine 1.7.0 qua 1000 ván đấu}
+    \label{tab:engine_comparison}
+\end{table}
+
+\subsection{Công thức chi tiết từng thành phần đánh giá}
+
+\subsubsection{Các tham số trọng số vật chất (Material Values)}
+
+Trong Lingine, giá trị cơ bản của các quân cờ không phải là một hằng số cố định mà được chia làm hai pha đánh giá riêng biệt để phản ánh đúng tầm quan trọng chiến thuật của chúng tại từng thời điểm: pha Trung cuộc (\textit{Middlegame -- MG}) khi bàn cờ còn đông quân, cấu trúc phức tạp; và pha Tàn cuộc (\textit{Endgame -- EG}) khi quân cờ thưa thớt, tập trung vào việc di chuyển Tướng và các ưu thế nhỏ như phong cấp Tốt.
+
+Sau quá trình tối ưu hóa tự động bằng Texel Tuning, bộ trọng số vật chất cốt lõi của Lingine đã được máy học tái định chuẩn. Kết quả tinh chỉnh cho thấy sự thay đổi lớn về cách engine đánh giá sức mạnh quân cờ, chi tiết được trình bày trong Bảng~\ref{tab:material_values}.
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Quân cờ (Piece Type)} & \textbf{Trung cuộc (MG)} & \textbf{Tàn cuộc (EG)} \\
+        \midrule
+        Xe & 1344 & 611 \\
+        Pháo & 644 & 225 \\
+        Mã & 593 & 271 \\
+        Sĩ & 186 & 119 \\
+        Tượng & 179 & 108 \\
+        Tốt chưa qua sông & 85 & 87 \\
+        Tốt đã qua sông & 186 & 118 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Trọng số vật chất của các quân cờ trong Lingine sau Texel Tuning}
+    \label{tab:material_values}
+\end{table}
+
+Có thể thấy, thay vì thiết lập thủ công, thuật toán đã tự động gán điểm Trung cuộc cao hơn đáng kể so với Tàn cuộc cho các quân tấn công chủ lực (Xe, Pháo, Mã). Điều này phản ánh thực tế rằng sức mạnh phối hợp và khả năng tạo đột biến của các quân này trong giai đoạn đầu trận mang lại lợi thế quyết định hơn nhiều so với khi chúng bị đơn lẻ ở cuối ván cờ. Tốt sau khi qua sông (\textit{Pawn Crossed}) cũng chứng kiến sức mạnh gia tăng đột biến, ngang ngửa với giá trị phòng thủ của một quân Sĩ.
+
+\subsubsection{Bảng vị trí quân cờ (Piece-Square Tables)}
+
+Bên cạnh giá trị vật chất cốt lõi, sức mạnh thực tế của một quân cờ còn phụ thuộc rất lớn vào tọa độ của nó trên bàn cờ. Ví dụ: Mã đứng ở tâm bàn cờ (Mã giao) sẽ có sức ảnh hưởng vượt trội so với Mã kẹt ở góc; Tướng nằm ở tuyến đáy an toàn hơn khi bị ép trồi lên lầu 3. Để lượng hóa yếu tố không gian này, Lingine sử dụng \textbf{Bảng vị trí quân cờ}.
+
+Mỗi loại quân cờ (Tướng, Sĩ, Tượng, Mã, Xe, Pháo, Tốt) đều sở hữu một bảng PST riêng biệt. Vì bàn cờ tướng tiêu chuẩn có kích thước $9 \times 10$, mỗi bảng PST về mặt logic sẽ chứa 90 giá trị tương ứng với 90 ô tọa độ. Điểm PST của một phe được tính bằng tổng điểm vị trí của tất cả các quân cờ thuộc phe đó đang tồn tại trên bàn.
+
+Để tối ưu hóa không gian lưu trữ và tăng tốc độ hội tụ cho thuật toán Texel Tuning, Lingine áp dụng hai kỹ thuật cốt lõi trong việc tổ chức PST:
+
+\begin{enumerate}
+    \item \textbf{Tính đối xứng dọc:} Bàn cờ tướng có tính đối xứng gương qua trục dọc trung tâm (cột số 4 - cột Tướng). Một quân cờ đứng ở mép trái (cột 0) sẽ có giá trị chiến thuật tương đương khi đứng ở mép phải (cột 8). Do đó, thay vì phải tối ưu độc lập 90 tham số cho mỗi quân, hệ thống chỉ lưu trữ và tinh chỉnh $10 \times 5 = 50$ tham số độc lập (từ cột 0 đến cột 4). Các tọa độ nằm ở nửa phải bàn cờ sẽ được ánh xạ ngược lại nửa trái tương ứng khi truy xuất.
+    \item \textbf{Góc nhìn tương đối:} Các bảng PST được định nghĩa hoàn toàn dưới góc nhìn của phe Đỏ (quân đi từ dưới lên trên). Khi tính toán điểm cho phe Đen, tọa độ của quân Đen sẽ được lật ngược (\textit{mirrored}) về mặt hàng ngang để sử dụng chung cấu trúc bảng với phe Đỏ, loại bỏ sự dư thừa dữ liệu.
+\end{enumerate}
+
+Tương tự như giá trị vật chất, để phản ánh sự thay đổi tính chất chiến thuật qua các giai đoạn ván đấu, toàn bộ các bảng PST của Lingine đều là nội suy pha. Mỗi ô tọa độ không chỉ chứa một con số duy nhất mà chứa một cấu trúc bao gồm một cặp điểm \textit{(Trung cuộc, Tàn cuộc)}. 
+
+Với 7 loại quân cờ và 50 thông số độc lập cho mỗi quân, hệ thống PST đóng góp tổng cộng $7 \times 50 \times 2 = 700$ trọng số vào hàm đánh giá. Toàn bộ 700 trọng số vị trí này đã được giải thuật Adam Optimizer liên tục tính toán đạo hàm và tự động điều chỉnh đến độ chính xác cao nhất thông qua hàng triệu thế cờ, giúp Lingine sở hữu khả năng cảm nhận vị trí sắc bén ngang tầm các đại sư con người.
+
+\subsubsection{Điểm cơ động (Mobility Score)}
+
+Điểm cơ động là đại lượng đánh giá mức độ kiểm soát không gian và khả năng triển khai linh hoạt của các quân chiến đấu chủ lực (Xe, Pháo, Mã). Về mặt chiến thuật, một quân cờ bị kẹt, thiếu không gian di chuyển sẽ bị hệ thống trừ điểm (phạt), ngược lại, một quân cờ hoạt động tự do, kiểm soát được nhiều giao điểm chiến lược sẽ nhận được điểm thưởng tương xứng.
+
+Công thức tính chênh lệch điểm cơ động toàn cục giữa hai phe được biểu diễn như sau:
+\begin{equation}
+\text{MobilityScore} = \text{Mobility}_{\text{Red}} - \text{Mobility}_{\text{Black}}
+\end{equation}
+
+Với điểm cơ động tổng hợp của từng phe được tính bằng cách cộng dồn điểm số của tất cả các quân Xe, Pháo, Mã đang hiện diện trên bàn cờ:
+\begin{align*}
+  \text{Mobility}_{\text{Side}}  = & {} \sum_{p \in \text{Knights}} M_{\text{Knight}}(\text{count}(p)) \\
+& + \sum_{p \in \text{Rooks}} M_{\text{Rook}}(\text{count}(p)) \\
+& + \sum_{p \in \text{Cannons}} M_{\text{Cannon}}(\text{count}(p))
+\end{align*}
+
+Trong đó, $\text{count}(p)$ là hàm đếm số lượng nước đi khả dĩ (\textit{pseudo-legal moves}) của quân cờ $p$ tại thời điểm hiện tại, loại trừ các nước đi chồng lấp lên ô đang bị chiếm đóng bởi quân đồng minh.
+
+Để loại bỏ chi phí tính toán các hàm đánh giá phi tuyến trong quá trình tìm kiếm sâu, Lingine thiết kế các hàm $M(\text{count})$ dưới dạng mảng tra cứu tĩnh một chiều. Mỗi phần tử trong mảng là một cấu trúc điểm gộp \textit{(Trung cuộc, Tàn cuộc)} tương thích với cơ chế nội suy pha. Các mảng này là kết quả trực tiếp được trích xuất từ giải thuật Texel Tuning, phản ánh chính xác giá trị thực tế của từng mức độ tự do:
+
+\begin{itemize}
+    \item \textbf{Mã} ($M_{\text{Knight}}$, từ 0 đến 8 nước): $(38, -172)$, $(52, -110)$, $(63, -91)$, $(79, -82)$, $(89, -87)$, $(98, -81)$, $(105, -94)$, $(117, -96)$, $(128, -102)$.
+    
+    \item \textbf{Xe} ($M_{\text{Rook}}$, từ 0 đến 17 nước): $(7, -57)$, $(181, -180)$, $(194, -237)$, $(208, -229)$, $(222, -227)$, $(238, -220)$, $(243, -215)$, $(241, -180)$, $(250, -182)$, $(257, -182)$, $(262, -189)$, $(271, -198)$, $(277, -198)$, $(277, -195)$, $(278, -218)$, $(284, -242)$, $(274, -235)$, $(265, -235)$.
+    
+    \item \textbf{Pháo} ($M_{\text{Cannon}}$, từ 0 đến 17 nước): $(42, -108)$, $(68, -56)$, $(69, -39)$, $(86, -53)$, $(92, -53)$, $(103, -58)$, $(107, -52)$, $(101, -42)$, $(104, -50)$, $(108, -49)$, $(109, -44)$, $(114, -51)$, $(122, -58)$, $(125, -54)$, $(123, -57)$, $(142, -69)$, $(154, -80)$, $(164, -82)$.
+\end{itemize}
+
+\subsubsection{Điểm thưởng hệ thống bảo vệ (Defender Score)}
+
+Trong cờ tướng, hệ thống Sĩ và Tượng đóng vai trò lá chắn phòng thủ tuyệt đối bảo vệ Tướng. Lingine đánh giá sức mạnh phòng thủ dựa trên số lượng Sĩ và Tượng đang hoạt động của mỗi bên.
+
+Công thức tính điểm phòng vệ toàn cục:
+\[ \text{DefenderScore} = D_{\text{Red}} - D_{\text{Black}} \]
+
+Với điểm phòng vệ của một bên được tính bằng:
+\[ D_{\text{Side}} = \text{Bonus}_{\text{Advisor}}(\text{count}(\text{Advisor})) + \text{Bonus}_{\text{Elephant}}(\text{count}(\text{Elephant})) \]
+
+Trong đó, hàm $\text{count} \in \{0, 1, 2\}$ trả về số lượng quân phòng ngự tương ứng còn sót lại trên bàn cờ. Để phản ánh đúng tầm quan trọng của hệ thống phòng ngự qua từng giai đoạn, các hệ số $\text{Bonus}$ được lưu trữ dưới dạng cặp điểm số \textit{(Trung cuộc, Tàn cuộc)} phục vụ cho cơ chế nội suy pha (\textit{Tapered Evaluation}):
+
+\begin{itemize}
+    \item \textbf{Sĩ:} 
+    Hệ số lần lượt cho trường hợp còn 0 Sĩ, 1 Sĩ và đủ 2 Sĩ là: $(-32, 42)$, $(44, 20)$ và $(24, -19)$.
+    
+    \item \textbf{Tượng:} 
+    Hệ số lần lượt cho trường hợp còn 0 Tượng, 1 Tượng và đủ 2 Tượng là: $(-17, 48)$, $(13, 19)$ và $(45, -30)$.
+\end{itemize}
+
+Các giá trị thưởng/phạt có vẻ ngược trực giác (ví dụ: mất sạch Sĩ lại được cộng điểm Tàn cuộc) hoàn toàn không phải do thiết lập thủ công, mà là kết quả cân bằng phi tuyến tính tối ưu nhất do thuật toán Texel Tuning tự động tính toán ra dựa trên hàng triệu thế cờ.
+
+\section{Chiến lược tìm kiếm}
+
+Lingine triển khai cấu trúc tìm kiếm đối kháng dựa trên thuật toán cốt lõi Fail-Soft Alpha-Beta Negamax. Nhằm tối đa hóa độ sâu tìm kiếm trong giới hạn thời gian thực, engine kết hợp hàng loạt các kỹ thuật tự động mở rộng không gian duyệt tại các điểm nóng chiến thuật và cắt tỉa mạnh tay ở các nhánh kém hiệu quả.
+
+\subsection{Thuật toán Alpha-Beta và Phân loại nút mạng}
+
+Cốt lõi của tìm kiếm đối kháng trong Lingine là thuật toán \textbf{Negamax} kết hợp cắt tỉa \textbf{Alpha-Beta}. Negamax là một dạng rút gọn của thuật toán Minimax, tận dụng tính chất toán học của trò chơi zero-sum: tối đa hóa lợi thế của mình chính là tối thiểu hóa lợi thế của đối thủ ($\max(a, b) = -\min(-a, -b)$). 
+
+Để tối ưu hóa, thuật toán duy trì một ``cửa sổ kỳ vọng'' $[\alpha, \beta]$, trong đó:
+\begin{itemize}
+    \item $\alpha$ (Alpha): Điểm số an toàn tối thiểu mà phe ta đã nắm chắc.
+    \item $\beta$ (Beta): Điểm số tối đa mà đối phương có thể cho phép phe ta đạt được.
+\end{itemize}
+Trong quá trình duyệt cây, nếu tại bất kỳ thời điểm nào điểm số hiện tại vượt qua ngưỡng $\beta$, ta biết chắc đối phương sẽ không bao giờ chọn nhánh này ở lượt đi trước của họ. Do đó, thuật toán có quyền ngừng duyệt ngay lập tức (cắt tỉa) nhánh đó.
+
+Dựa trên sự tương tác của điểm số với cửa sổ $[\alpha, \beta]$, toàn bộ các trạng thái bàn cờ (nút mạng) trong cây tìm kiếm được Lingine phân loại thành ba nhóm cơ bản:
+
+\begin{enumerate}
+    \item \textbf{Nút PV (PV-Node / Principal Variation Node):} 
+    Đây là các nút mà điểm số trả về lọt hẳn vào bên trong cửa sổ kỳ vọng ($\alpha < \text{score} < \beta$). Tại đây, thuật toán chưa thể chứng minh được nhánh này là vô giá trị hay quá tốt để đối thủ né tránh. Do đó, nút PV yêu cầu phải duyệt \textit{toàn bộ} các nước đi con hợp lệ để tìm ra điểm số chính xác tuyệt đối. Số lượng nút PV trong cây chiếm tỷ lệ nhỏ nhưng tiêu tốn nhiều tài nguyên xử lý nhất.
+    
+    \item \textbf{Nút Cắt tỉa (Cut-Node):} 
+    Đây là các nút mà chỉ cần duyệt một (hoặc một vài) nước đi đầu tiên đã tìm thấy điểm số lớn hơn hoặc bằng biên trên ($\text{score} \ge \beta$). Hiện tượng này gọi là \textbf{Fail-high} (hoặc Cắt tỉa Beta - \textit{Beta Cutoff}). Về mặt chiến thuật mà nói, ta vừa tìm thấy một nước đi quá mạnh (ví dụ: ăn được Xe miễn phí), khiến đối phương thiệt hại nặng. Hệ quả tất yếu là ở lượt trước đó, đối phương khôn ngoan sẽ đi một nước khác để tránh việc mất Xe này. Do đó, ta không cần tốn thời gian tính tiếp các nước còn lại của nút này.
+    
+    \item \textbf{Nút Toàn bộ (All-Node):} 
+    Đây là các nút mà sau khi bắt buộc phải duyệt \textit{tất cả} các nước đi hợp lệ, không có bất kỳ một nước đi nào giúp điểm số vượt qua được mức an toàn $\alpha$ ($\text{score} \le \alpha$). Hiện tượng này gọi là \textbf{Fail-low}. Về mặt chiến thuật mà nói, dù ta có vùng vẫy thế nào ở thế cờ này, mọi kết quả nhận được đều tồi tệ hơn một sự lựa chọn thay thế mà ta đã tìm thấy ở nhánh trước đó. Nút này được lưu vào lịch sử như một nước đi sai lầm cần né tránh.
+\end{enumerate}
+
+Việc phân biệt rạch ròi ba loại nút này là cơ sở tối quan trọng. Mọi chiến thuật \textit{Sắp xếp nước đi} và \textit{Cắt tỉa} của Lingine ở các phần tiếp theo đều hướng đến một mục tiêu duy nhất: Tối đa hóa số lượng Cut-Node (để cắt tỉa thật sớm) và dùng các phép xấp xỉ để giảm thiểu tối đa độ sâu phải duyệt của các All-Node.
+
+\subsection{Quản lý thời gian}
+
+Trong các giải đấu cờ máy, việc quyết định khi nào nên dừng suy nghĩ quan trọng không kém việc động cơ tính toán như thế nào. Nếu dừng quá sớm, engine có thể đi những nước yếu do chưa nhìn đủ sâu; nếu nghĩ quá lâu, engine có thể bị xử thua vì hết thời gian. Mục tiêu của hệ thống quản lý thời gian là phân bổ quỹ thời gian còn lại của ván đấu một cách thông minh, ưu tiên đào sâu ở những thế cờ phức tạp nhưng vẫn đảm bảo tính an toàn tuyệt đối về mặt thời gian cho toàn bộ phần còn lại của trận đấu.
+
+Để thực hiện điều này, Lingine chia ngân sách thời gian cho mỗi nước đi thành hai ngưỡng độc lập: Giới hạn mềm (\textit{Soft-Bound}) và Giới hạn cứng (\textit{Hard-Bound}), đồng thời luôn trừ hao một khoảng trễ an toàn $\text{TimeOverhead} = 15\text{ms}$ để bù đắp cho thời gian trễ khi giao tiếp qua giao thức UCI.
+
+\begin{itemize}
+    \item \textbf{Phân bổ quỹ thời gian:} Tùy thuộc vào luật thời gian nhận được từ GUI, thuật toán sẽ tính toán hạn mức:
+    \begin{itemize}
+        \item Nếu biết trước số nước đi cần hoàn thành: Thời gian được chia đều cho số nước đi đó, cộng với thời gian cộng thêm sau khi đi một nước.
+        \item Nếu không có giới hạn số nước đi cụ thể: Lingine sử dụng tham số phân bổ tĩnh. Gọi tổng quỹ thời gian cho một nước là $\text{Total} = \text{TimeLeft} + \text{Increment}$, hệ thống quy định Giới hạn mềm là $\text{Total} / 40$ và Giới hạn cứng tối đa là $\text{Total} / 8$.
+    \end{itemize}
+    
+    \item \textbf{Cơ chế Giới hạn mềm (Soft-Bound):} Giới hạn này được tích hợp trực tiếp vào vòng lặp làm sâu lặp dần (\textit{Iterative Deepening}). Ngay sau khi hoàn thành trọn vẹn việc tìm kiếm ở một độ sâu $d$, thuật toán sẽ gọi hàm kiểm tra nếu quỹ thời gian đã vượt ngưỡng mềm, engine nhận định rằng việc khởi tạo tìm kiếm ở độ sâu $d+1$ là quá rủi ro (vì độ sâu sau thường tốn thời gian theo cấp số nhân so với độ sâu trước). Khi đó, vòng lặp bị ngắt và engine lập tức chốt nước đi tốt nhất hiện tại để đảm bảo an toàn thời gian.
+    
+    \item \textbf{Cơ chế Giới hạn cứng (Hard-Bound):} Đây là ``công tắc khẩn cấp''. Trong lúc engine đang mắc kẹt sâu bên trong một nhánh rẽ khổng lồ của cây Negamax, nếu phát hiện vượt thời gian tối đa cho phép, cờ tín hiệu \texttt{keep\_running = false} sẽ được kích hoạt trên toàn hệ thống. Tính năng này ép toàn bộ các nút Alpha-Beta đang chạy dở dang phải thoái lui ngay lập tức, hủy bỏ nhánh đang xét để trả về kết quả an toàn trước khi rớt giờ.
+
+\end{itemize}
+
+\subsection{Sắp xếp nước đi}
+
+Hiệu năng cắt tỉa của thuật toán Alpha-Beta phụ thuộc hoàn toàn vào việc hệ thống có duyệt các nước đi tốt nhất trước hay không. Nếu nước đi tối ưu được xét đầu tiên, biên $\alpha$ sẽ được nâng lên nhanh chóng, tạo ra các pha cắt tỉa $\beta$ sớm ở các nhánh khác.
+
+Lingine gán điểm ưu tiên sắp xếp cho mỗi nước đi theo một trật tự được phân cấp nghiêm ngặt:
+
+\begin{enumerate}
+    \item \textbf{Nước đi từ Bảng băm:} Nước đi tốt nhất được lưu trong Transposition Table từ các lần duyệt trước luôn được ưu tiên tuyệt đối ($\text{Score} = 2 \times 10^9$).
+    \item \textbf{Nước đi ăn quân:} Được sắp xếp theo heuristic MVV-LVA (\textit{Most Valuable Victim - Least Valuable Attacker}) để ưu tiên các nước ăn quân dùng quân nhỏ ăn quân lớn. Công thức: $\text{Score} = 10^9 + \text{Victim} \times 10^7 - \text{Attacker} \times 10^5$.
+    \item \textbf{Nước đi sát thủ:} Các nước đi không ăn quân nhưng đã từng gây ra cắt tỉa $\beta$ ở các nhánh khác cùng độ sâu ($\text{Score} = 9 \times 10^8$).
+    \item \textbf{Nước đi lịch sử:} Tích lũy điểm thưởng dựa trên lịch sử thành công của các nước đi không ăn quân trong quá khứ.
+\end{enumerate}
+
+\subsection{Iterative Deepening}
+
+Thay vì ngay lập tức ra lệnh cho thuật toán tìm kiếm một mạch đến độ sâu tối đa $N$, động cơ sẽ duyệt lặp lại nhiều lần, bắt đầu từ độ sâu 1, sau đó là 2, 3... cho đến $N$. Quá trình này thoạt nhìn có vẻ lãng phí tính toán, nhưng thực tế lại mang đến lợi ích khổng lồ: ở mỗi độ sâu $d$, thuật toán sẽ lưu lại nước đi tốt nhất vào Bảng băm (TT Move). Khi duyệt đến độ sâu $d+1$, nước đi này sẽ được ưu tiên duyệt đầu tiên, giúp biên Alpha tăng vọt ngay từ sớm và tạo ra hiệu ứng cắt tỉa dây chuyền tối đa. Ngoài ra, nó giúp engine luôn có sẵn một nước đi tốt nhất để trả về trong trường hợp bị hết thời gian đột ngột.
+
+Lingine sử dụng một vòng lặp \texttt{while} tăng dần độ sâu lên đến \texttt{max\_depth}. Tại mỗi vòng lặp, engine cập nhật trung gian kết quả về giao diện người dùng thông qua giao thức UCI. Quan trọng nhất, engine liên tục kiểm tra giới hạn thời gian mềm. Nếu thuật toán nhận thấy không còn đủ thời gian an toàn để hoàn thành vòng lặp tiếp theo, nó sẽ tự động ngắt sớm và chốt nước đi tốt nhất của độ sâu vừa hoàn thành.
+
+\subsection{Cửa sổ kỳ vọng (Aspiration Windows \& Fail-high Reductions)}
+
+Kỹ thuật này là sự kết hợp hoàn hảo với Iterative Deepening. Vì ta đã biết điểm số gần đúng của thế cờ từ kết quả của độ sâu $N-1$, ta không cần thiết phải khởi tạo Alpha-Beta với một cửa sổ vô cực $[-\infty, +\infty]$ ở độ sâu $N$. Thay vào đó, ta chỉ mở một cửa sổ nhỏ xung quanh điểm số đó. Cửa sổ càng hẹp, số lượng nhánh bị cắt tỉa càng nhiều. 
+
+Thêm vào đó, Lingine đưa vào kỹ thuật \textit{Fail-high Reductions}: Nếu một thế cờ liên tục phá vỡ biên trên của cửa sổ, điều đó chứng tỏ phe ta đang có một nước đi cực kỳ áp đảo. Khi đó, ta không cần phải tốn tài nguyên duyệt hết độ sâu tối đa chỉ để đo lường xem nước đi đó "tốt đến mức nào", mà có thể tự động giảm độ sâu duyệt xuống để chốt kết quả và phản hồi nhanh hơn.
+
+Trong Lingine, cửa sổ kỳ vọng chỉ được kích hoạt từ độ sâu $\ge 6$. Bán kính ban đầu $\delta$ được đặt mặc định là 25 \textit{centipawns} và được thu hẹp linh hoạt theo độ sâu: $\delta = \max(25 - \text{depth}, 10)$. Quá trình tìm kiếm lặp lại như sau:
+\begin{itemize}
+    \item Nếu điểm trả về lọt vào trong cửa sổ ($\alpha < \text{score} < \beta$): Tìm kiếm thành công, trả về điểm số.
+    \item Nếu $\text{score} \le \alpha$ (\textit{Fail-low}): Thế trận tiềm ẩn rủi ro lớn hơn dự kiến. Cửa sổ mở rộng phía dưới ($\alpha = \alpha - \delta$) và thuật toán bắt buộc phải duyệt lại với \textbf{độ sâu giữ nguyên} để tìm ra phương án phòng thủ.
+    \item Nếu $\text{score} \ge \beta$ (\textit{Fail-high}): Thế trận rất tốt. Cửa sổ mở rộng phía trên ($\beta = \beta + \delta$) và biến đếm \texttt{consecutive\_fail\_high} tăng thêm 1. Độ sâu duyệt lại được cắt giảm xuống thành: \texttt{(depth - consecutive\_fail\_high).max(1)}.
+\end{itemize}
+Mỗi lần vượt rào thất bại, $\delta$ sẽ được nhân đôi ($\delta = \delta \times 2$) để cửa sổ mở rộng nhanh chóng cho lần tìm kiếm lại tiếp theo.
+
+\subsection{Tìm kiếm biến thể chính (Principal Variation Search - PVS)}
+
+Với sắp xếp nước đi tốt, ta có niềm tin rằng nước đi đầu tiên trong danh sách chính là nước đi tốt nhất (thuộc dải PV). Do đó, ta duyệt nước đi này với cửa sổ mở tối đa. Đối với các nước đi còn lại, ta giả định chúng là nước đi kém, nên chỉ dùng một "cửa sổ rỗng" (\textit{Null Window}) cực hẹp để chứng minh chúng không thể vượt qua điểm số hiện tại.
+
+Về phần cài đặt, với nước đi đầu tiên, tìm kiếm với $[-\beta, -\alpha]$; với các nước sau, tìm kiếm với cửa sổ $[-\alpha - 1, -\alpha]$. Chỉ khi kết quả trả về cho thấy nước đi này thực sự tốt hơn điểm $\alpha$ (\textit{fail-high}), ta mới phải tốn công tìm kiếm lại với cửa sổ chuẩn $[-\beta, -\alpha]$.
 
 \begin{lstlisting}[language=Rust, caption=Giải thuật PVS trong Lingine]
-let mut score = -self.negamax::<false, false>(
-    depth - 1 - reductions,
-    ply + 1,
-    -alpha - 1,
-    -alpha,
-    Default::default(),
-);
-
-if alpha < score && reductions > 0 {
-    score = -self.negamax::<false, false>(
-        depth - 1,
+pub(super) fn pv_search<const PV: bool>(
+    &mut self,
+    depth: i8,
+    ply: u8,
+    alpha: i32,
+    beta: i32,
+    reductions: i8,
+) -> i32 {
+    let mut score = -self.negamax::<false, false>(
+        depth - 1 - reductions,
         ply + 1,
         -alpha - 1,
         -alpha,
         Default::default(),
     );
+
+    // If the search fails and there was depth reduction, we re-search
+    // with the full depth to get a better picture of the position.
+    if alpha < score && reductions > 0 {
+        score = -self.negamax::<false, false>(
+            depth - 1,
+            ply + 1,
+            -alpha - 1,
+            -alpha,
+            Default::default(),
+        );
+    }
+
+    // If the search fails, we need to re-search with the full window to get the
+    // correct score and PV.
+    if alpha < score && score < beta {
+        score =
+            -self.negamax::<false, PV>(depth - 1, ply + 1, -beta, -alpha, Default::default());
+    }
+
+    score
 }
 
-if alpha < score && score < beta {
-    score = -self.negamax::<false, PV>(depth - 1, ply + 1, -beta, -alpha, Default::default());
-}
+/// In the negamax function
+let score = if moves_played == 0 {
+    -self.negamax::<false, PV>(
+        depth - 1 + is_singular as i8,
+        ply + 1,
+        -beta,
+        -alpha,
+        SearchContext::default(),
+    )
+} else {
+    self.pv_search::<PV>(depth, ply, alpha, beta, reductions)
+};
+
 \end{lstlisting}
 
-\subsection{Các kỹ thuật tỉa nhánh nâng cao}
+\subsection{Các kỹ thuật Mở rộng không gian (Search Extensions)}
 
-\begin{enumerate}
-    \item \textbf{Null Move Pruning (NMP):} Áp dụng khi bên đi nhường lượt đi cho đối thủ (null move). Nếu ở độ sâu giảm bớt $R$ mà đối phương vẫn không thể đạt điểm vượt mức $\beta$, điều đó chứng tỏ thế trận của ta đang quá mạnh. Ta có thể tỉa nhánh trực tiếp mà không cần duyệt sâu thêm, tiết kiệm lượng lớn tài nguyên.
-    \item \textbf{Late Move Reductions (LMR):} Đối với các nước đi nằm ở phía sau danh sách (sau khi đã sắp xếp), khả năng chúng là nước đi tốt nhất là rất thấp. Lingine giảm độ sâu tìm kiếm của các nước đi quiet này theo công thức:
-    \[ R = R_{\text{base}} + \frac{\ln(M) \times \ln(d)}{C_{\text{LMR}}} - \frac{S_{\text{hist}}}{C_{\text{hist}}} \]
-    Trong đó: $R$ là độ giảm độ sâu, $R_{\text{base}}$ là hằng số cơ sở (0.75), $M$ là số nước đi quiet đã thực hiện, $d$ là độ sâu tìm kiếm hiện tại, $C_{\text{LMR}}$ là hệ số chia LMR (2.3), $S_{\text{hist}}$ là điểm lịch sử của nước đi, và $C_{\text{hist}}$ là hệ số chia điểm lịch sử (20000).
-    \item \textbf{Singular Extensions (Mở rộng đơn trị):} Nếu nước đi tốt nhất trong bảng băm TT vượt trội hoàn toàn so với các nước đi thay thế khác (khi loại bỏ nó đi, điểm số bị tụt giảm nghiêm trọng dưới biên Margin), ta tăng độ sâu tìm kiếm thêm 1 ply cho nước đi này để chắc chắn không bỏ sót các đòn phối hợp chiến thuật sâu.
-    \item \textbf{Quiescence Search (Tìm kiếm tĩnh):} Tại các nút lá (khi \texttt{depth <= 0}), thay vì dừng lại ngay và gọi hàm đánh giá (dễ mắc lỗi hiệu ứng chân trời -- Horizon Effect khi bàn cờ đang trao đổi quân dở dang), Lingine chỉ sinh các nước đi ăn quân (Captures) để giải quyết dứt điểm các tranh chấp vật chất trước khi trả về điểm số tĩnh.
-\end{enumerate}
+Các kỹ thuật mở rộng tăng thêm độ sâu vào những thời điểm nhạy cảm để tránh "hiệu ứng chân trời" (\textit{Horizon Effect}).
 
-\subsection{Sắp xếp nước đi (Move Ordering)}
+\subsubsection{Mở rộng khi bị chiếu (Check Extensions)}
+Khi Tướng bị chiếu, mọi nước đi đều là bắt buộc và thường dẫn đến các biến động vật chất lớn. Tạm thời nới rộng độ sâu tìm kiếm giúp engine nhìn xa hơn để tìm ra đường phòng thủ hoặc phát hiện các đòn sát cục.
 
-Hiệu quả tỉa nhánh của Alpha-Beta phụ thuộc hoàn toàn vào việc duyệt các nước đi tốt trước. Lingine gán điểm ưu tiên sắp xếp cho mỗi nước đi theo quy tắc:
-\begin{enumerate}
-    \item Nước đi tốt nhất lấy từ bảng băm Transposition Table ($\text{Score} = 2 \times 10^9$).
-    \item Các nước đi ăn quân xếp theo giá trị MVV-LVA (Most Valuable Victim - Least Valuable Attacker) để ăn quân to bằng quân nhỏ (được tính bằng công thức: $\text{Score} = 10^9 + \text{Victim} \times 10^7 - \text{Attacker} \times 10^5$).
-    \item Nước đi sát thủ Killer Moves -- nước đi quiet gây cắt tỉa beta ở các nhánh khác cùng độ sâu ($\text{Score} = 9 \times 10^8$).
-    \item Điểm lịch sử History Moves -- tích lũy điểm thưởng cho các nước đi quiet từng gây cắt tỉa beta trong suốt quá trình tìm kiếm trước đó.
-\end{enumerate}
+Trong Lingine, nếu trạng thái bàn cờ hiện tại đang bị chiếu, độ sâu duyệt được cộng thêm 1.
+
+\subsubsection{Mở rộng nước đi duy nhất (One-Reply Extensions)}
+
+Nếu tại một nút mạng chỉ có đúng 1 nước đi hợp lệ duy nhất, việc duyệt nước đi này không làm bùng nổ số lượng nhánh (hệ số rẽ nhánh bằng 1). Việc đào sâu thêm 1 ply gần như miễn phí về mặt tài nguyên nhưng lại cung cấp tầm nhìn chiến thuật vô giá.
+
+\subsubsection{Mở rộng đơn trị (Singular Extensions)}
+
+Nếu nước đi từ bảng chuyển vị được đánh giá là cực kỳ tốt, trong khi mọi nước đi khác đều tệ (cách biệt xa), đây là một nước đi "hiển nhiên phải đi". Ta cần mở rộng độ sâu cho nó để chắc chắn rằng đằng sau nước đi hiển nhiên này không ẩn chứa một cái bẫy chiến thuật sâu.
+
+\textbf{Cài đặt:} Ở độ sâu $\ge 8$, Lingine thử duyệt các nước đi thay thế với độ sâu giảm 3 ($R=3$) và một biên nhỏ $\text{rbeta} = \text{score} - 2 \times \text{depth}$. Nếu các nước đi thay thế này đều thất bại (\textit{fail-low}), nước đi TT chính thức được công nhận là "đơn trị" và được tăng thêm 1 độ sâu khi duyệt.
+
+\subsection{Các kỹ thuật Cắt tỉa (Pruning) và Giảm độ sâu (Reductions)}
+
+Trái ngược với mở rộng, cắt tỉa giúp engine bỏ qua những nhánh vô vọng để dồn sức cho PV.
+
+\subsubsection{Giảm độ sâu lặp nội bộ (Internal Iterative Reductions - IIR)}
+Nếu ta đang ở một độ sâu lớn mà Bảng băm lại không có dữ liệu về thế cờ này, rất có thể đây là một thế trận kém từng bị cắt tỉa ở quá khứ. Thay vì tốn thời gian duyệt sâu ngay lập tức, ta giảm độ sâu đi 1 để quét nhanh, tìm ra nước đi khá nhất rồi mới quyết định duyệt tiếp.
+
+\subsubsection{Cắt tỉa nước đi rỗng (Null Move Pruning - NMP)}
+Lấy ý tưởng "nếu tôi bỏ qua một lượt đi mà thế trận của tôi vẫn đủ mạnh để nghiền nát đối thủ (điểm vượt $\beta$), thì tôi không cần tốn thời gian tính toán các nước đi hợp lệ nữa". NMP đóng vai trò cốt lõi trong việc ép cây tìm kiếm nhỏ lại.
+
+Trong cài đặt, Lingine cho đối phương đi hai lần liên tiếp. Độ sâu duyệt được giảm cực mạnh: $R = 3 + \lfloor \frac{\text{depth}}{6} \rfloor$. Để tránh lỗi do Zugzwang (đi nước nào cũng thua), NMP chỉ áp dụng khi ta còn quân tấn công. Tại độ sâu lớn ($\ge 12$), một thuật toán \textit{Verification Search} được gọi để kiểm chứng lại việc cắt tỉa có gây bỏ sót các đòn sát cục ẩn hay không.
+
+\subsubsection{Cắt tỉa vô ích ngược (Reverse Futility Pruning - RFP)}
+Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà điểm số của ta đã bỏ xa biên $\beta$ một khoảng an toàn lớn, ta có thể cắt tỉa nhánh ngay tại chỗ mà không cần phải thực hiện bất kỳ nước đinào.
+
+Trong cài đặt, tại độ sâu $< 8$, nếu $\text{Eval} - 100 \times (\text{depth} - \text{improving}) > \beta$, trả về ngay điểm Eval.
+
+\subsubsection{Cắt tỉa vô ích (Futility Pruning - FP)}
+Trái ngược với RFP. Khi ta đang ở tình thế quá lép (điểm Eval cực thấp so với $\alpha$), và ta không ở thế bị chiếu, những nước đi bình thường không thể nào có phép màu giúp thế cờ lật ngược tình thế. Ta bỏ qua luôn nước này.
+
+\textbf{Cài đặt:} Tại độ sâu $\le 4$, nếu $\text{Eval} + 100 \times \text{depth} + 50 < \alpha$, các nước quiet sẽ bị bỏ qua (continue).
+
+\subsubsection{Cắt tỉa nước đi muộn (Late Move Pruning - LMP)}
+Tại các độ sâu thấp, sau khi ta đã thử một lượng lớn các nước đi không ăn quân mà không cải thiện được biên $\alpha$, ta có quyền kết luận rằng các nước đi quiet nằm tít phía dưới bảng xếp hạng (chưa được duyệt) đều là các nước đi vô giá trị.
+
+\textbf{Cài đặt:} Tại độ sâu $\le 3$, số lượng nước đi quiet được duyệt bị giới hạn bởi công thức: $\text{Limit} = \frac{\text{depth}^2}{1 + \text{!improving}} + 8$. Vượt quá giới hạn này, vòng lặp sinh nước đi bị ngắt.
+
+\subsubsection{Giảm độ sâu nước đi muộn (Late Move Reductions - LMR)}
+Với các nước đi không bị cắt tỉa hoàn toàn bởi LMP nhưng nằm trễ trong thứ tự duyệt (chứng tỏ chúng không hấp dẫn), ta vẫn duyệt chúng nhưng với độ sâu giảm bớt. Nếu vô tình chúng trả về điểm fail-high, ta sẽ duyệt lại với độ sâu chuẩn.
+
+\textbf{Cài đặt:} LMR được áp dụng cho các nước đi không ăn quân khi số nước đi đã duyệt $\ge 2$ và độ sâu $\ge 3$. Mức giảm $R$ được tính theo công thức phi tuyến:
+\[ R = 0.75 + \frac{\ln(\text{moves\_played}) \times \ln(\text{depth})}{2.3} - \frac{\text{HistoryScore}}{20000} - PV_{\text{flag}} \]
+
+\subsection{Tìm kiếm tĩnh (Quiescence Search)}
+
+Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng.
