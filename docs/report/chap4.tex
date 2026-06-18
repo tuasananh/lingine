@@ -550,7 +550,7 @@ Lấy ý tưởng "nếu tôi bỏ qua một lượt đi mà thế trận của 
 Trong cài đặt, Lingine cho đối phương đi hai lần liên tiếp. Độ sâu duyệt được giảm cực mạnh: $R = 3 + \lfloor \frac{\text{depth}}{6} \rfloor$. Để tránh lỗi do Zugzwang (đi nước nào cũng thua), NMP chỉ áp dụng khi ta còn quân tấn công. Tại độ sâu lớn ($\ge 12$), một thuật toán \textit{Verification Search} được gọi để kiểm chứng lại việc cắt tỉa có gây bỏ sót các đòn sát cục ẩn hay không.
 
 \subsubsection{Cắt tỉa vô ích ngược (Reverse Futility Pruning - RFP)}
-Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà điểm số của ta đã bỏ xa biên $\beta$ một khoảng an toàn lớn, ta có thể cắt tỉa nhánh ngay tại chỗ mà không cần phải thực hiện bất kỳ nước đinào.
+Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà điểm số của ta đã bỏ xa biên $\beta$ một khoảng an toàn lớn, ta có thể cắt tỉa nhánh ngay tại chỗ mà không cần phải thực hiện bất kỳ nước đi nào.
 
 Trong cài đặt, tại độ sâu $< 8$, nếu $\text{Eval} - 100 \times (\text{depth} - \text{improving}) > \beta$, trả về ngay điểm Eval.
 
