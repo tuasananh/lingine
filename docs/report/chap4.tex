@@ -780,6 +780,68 @@ Trong Lingine, cửa sổ kỳ vọng chỉ được kích hoạt từ độ sâ
 \end{itemize}
 Mỗi lần vượt rào thất bại, $\delta$ sẽ được nhân đôi ($\delta = \delta \times 2$) để cửa sổ mở rộng nhanh chóng cho lần tìm kiếm lại tiếp theo.
 
+\subsection{Tìm kiếm tĩnh (Quiescence Search)}
+
+Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        >=latex,
+        node distance=1.5cm,
+        every node/.style={align=center},
+        state/.style={circle, draw, black, fill=white, minimum size=1.3cm},
+        greenstate/.style={circle, draw, black, thick, fill=green!20, minimum size=1.3cm},
+        redstate/.style={circle, draw, black, thick, fill=red!20, minimum size=1.3cm}
+    ]
+
+    % --- Đường giới hạn độ sâu (Vẽ trước để nằm dưới các node có nền trắng) ---
+    \draw[dashed, gray] (-6, -4) -- (3, -4) node[right, text=gray] {Depth Limit (Horizon)};
+
+    % --- Các Nút (Nodes) ---
+    \node[state] (start) at (0, 0) {Start};
+    \node[state] (n1) at (-1.5, -2) {+100};
+    \node[state] (n2) at (1.5, -2) {+50};
+    \node[state] (n3) at (-1.5, -4) {+100};
+    
+    \node[greenstate] (n4) at (-3, -6) {+500};
+    \node[state] (n5) at (0, -6) {+100};
+    
+    \node[redstate] (n6) at (-3, -9) {-900};
+
+    % --- Các Cạnh (Edges) ---
+    \draw[->] (start) -- (n1);
+    \draw[->] (start) -- (n2);
+    \draw[->] (n1) -- (n3);
+    \draw[->] (n3) -- (n4);
+    \draw[->] (n3) -- (n5);
+    
+    % Đường nối mở rộng Q-Search
+    \draw[->, dashed, blue, thick] (n4) -- (n6);
+
+    % --- Chú thích văn bản (Annotations) ---
+    % Chú thích Horizon Effect (Bên phải)
+    \node[align=left, text=red, right] at (1.5, -6) {
+        \textbf{Horizon Effect:}\\
+        Dừng tại đây (Depth Limit)\\
+        thấy điểm cao (+500)\\
+        nhưng thực tế bị Hết cờ\\
+        ngay sau đó (-900).
+    };
+
+    % Chú thích Quiescence Search (Bên trái)
+    \node[align=right, text=blue, left] at (-4, -8) {
+        \textbf{Quiescence Search:}\\
+        Tiếp tục mở rộng\\
+        các nước ăn quân\\
+        để tìm giá trị thực.
+    };
+
+    \end{tikzpicture}
+    \caption{Minh họa Horizon Effect và Tìm kiếm tĩnh}
+    \label{fig:qsearch_tree_nodes}
+\end{figure}
+
 \subsection{Tìm kiếm biến thể chính (Principal Variation Search - PVS)}
 
 Với sắp xếp nước đi tốt, ta có niềm tin rằng nước đi đầu tiên trong danh sách chính là nước đi tốt nhất (thuộc dải PV). Do đó, ta duyệt nước đi này với cửa sổ mở tối đa. Đối với các nước đi còn lại, ta giả định chúng là nước đi kém, nên chỉ dùng một "cửa sổ rỗng" (\textit{Null Window}) cực hẹp để chứng minh chúng không thể vượt qua điểm số hiện tại.
@@ -1008,7 +1070,6 @@ Nếu ta đang ở một độ sâu lớn mà Bảng băm lại không có dữ 
 \end{figure}
 
 \subsubsection{Cắt tỉa nước đi rỗng (Null Move Pruning - NMP)}
-Lấy ý tưởng "nếu tôi bỏ qua một lượt đi mà thế trận của tôi vẫn đủ mạnh để nghiền nát đối thủ (điểm vượt $\beta$), thì tôi không cần tốn thời gian tính toán các nước đi hợp lệ nữa". NMP đóng vai trò cốt lõi trong việc ép cây tìm kiếm nhỏ lại.
 
 \begin{figure}[H]
     \centering
@@ -1069,8 +1130,75 @@ Lấy ý tưởng "nếu tôi bỏ qua một lượt đi mà thế trận của 
     \caption{Minh họa cây tìm kiếm của Null Move Pruning (NMP).}
     \label{fig:null_move_pruning}
 \end{figure}
+Lấy ý tưởng "nếu tôi bỏ qua một lượt đi mà thế trận của tôi vẫn đủ mạnh để nghiền nát đối thủ (điểm vượt $\beta$), thì tôi không cần tốn thời gian tính toán các nước đi hợp lệ nữa". NMP đóng vai trò cốt lõi trong việc ép cây tìm kiếm nhỏ lại.
+
 
 Trong cài đặt, Lingine cho đối phương đi hai lần liên tiếp. Độ sâu duyệt được giảm cực mạnh: $R = 3 + \lfloor \frac{\text{depth}}{6} \rfloor$. Để tránh lỗi do Zugzwang (đi nước nào cũng thua), NMP chỉ áp dụng khi ta còn quân tấn công. Tại độ sâu lớn ($\ge 12$), một thuật toán \textit{Verification Search} được gọi để kiểm chứng lại việc cắt tỉa có gây bỏ sót các đòn sát cục ẩn hay không.
+
+\subsubsection{Cắt tỉa vô ích (Futility Pruning - FP)}
+\begin{figure}[H]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=0.8cm and 0.5cm,
+        axis/.style={thick, -latex, draw=black!70},
+        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick},
+        limit_line/.style={dashed, thick, draw=#1},
+        box/.style={rectangle, rounded corners, draw=#1!80!black, fill=#1!10, thick, align=center, font=\footnotesize, inner sep=4pt}
+    ]
+
+    % Tô màu nền phân chia các khu vực (Đã mở rộng scale y từ -3.0 đến 3.0 giống RFP)
+    % Vùng đỏ: Tuyệt vọng (Sẽ bị cắt tỉa)
+    \fill[red!5] (-6.5, -3.0) rectangle (-2, 3);
+    % Vùng cam: Nguy hiểm nhưng còn hy vọng (Độ rộng 4.5 giống RFP)
+    \fill[orange!5] (-2, -3.0) rectangle (2.5, 3);
+    % Vùng xanh: An toàn
+    \fill[green!5] (2.5, -3.0) rectangle (5, 3);
+
+    % Trục điểm số (Scale x giống RFP)
+    \draw[axis] (-4.5, 0) -- (3.5, 0) node[right] {\textit{Score}};
+
+    % Điểm Alpha - Margin (Ngưỡng tuyệt vọng) - Đặt ở -2 giống mốc Beta của RFP
+    \coordinate (margin_pos) at (-2, 0);
+    \draw[limit_line=orange!80!black] (-2, -1.8) -- (-2, 2.4);
+    \node[below=1.8cm of margin_pos, text=orange!80!black, align=center] (margin_label) {Ngưỡng tuyệt vọng \\ $\alpha - \text{Margin}$};
+
+    % Điểm Alpha (Mốc an toàn tối thiểu) - Đặt ở 2.5 giống mốc Margin của RFP
+    \coordinate (alpha_pos) at (2.5, 0);
+    \draw[limit_line=green!70!black] (2.5, -1.8) -- (2.5, 2.4);
+    \node[below=1.8cm of alpha_pos, text=green!70!black] (alpha_label) {Biên $\alpha$};
+
+    % Mũi tên thể hiện kích thước Khoảng đệm (Dời hẳn lên cao để không bị đè)
+    \draw[latex-latex, draw=orange!80!black, thick] (-1.9, 2.2) -- (2.4, 2.2) node[midway, above, font=\footnotesize, text=orange!80!black] {Khoảng đệm $M = 100 \times \text{depth} + 50$};
+
+    % ==========================================
+    % KỊCH BẢN 1: Đánh giá tĩnh nằm ở Vùng tuyệt vọng
+    % ==========================================
+    \coordinate (eval_fail) at (-3.5, 0);
+    \node[score_dot=red!50, label={[text=red!70!black]below left:$\text{Eval}_1$}] at (eval_fail) {};
+    
+    % Hộp thông báo (Neo tương đối vào điểm Eval_1)
+    \node[box=red, above=0.7cm of eval_fail] (box_fail) {Quá thua thiệt ($\text{Eval} < \alpha - M$) \\ $\rightarrow$ Bỏ qua nước đi tĩnh (FP)};
+    \draw[-latex, draw=red!80!black] (eval_fail) -- (box_fail);
+
+    % ==========================================
+    % KỊCH BẢN 2: Đánh giá tĩnh chưa chạm đáy tuyệt vọng
+    % ==========================================
+    \coordinate (eval_pass) at (0.5, 0);
+    \node[score_dot=gray!50, label={[text=gray!80!black]above right:$\text{Eval}_2$}] at (eval_pass) {};
+    
+    % Hộp thông báo (Neo tương đối vào điểm Eval_2)
+    \node[box=gray, below=0.5cm of eval_pass] (box_pass) {Vẫn có hy vọng gỡ gạc \\ $\rightarrow$ Tiếp tục duyệt nước đi};
+    \draw[-latex, draw=gray!80!black] (eval_pass) -- (box_pass);
+
+    \end{tikzpicture}
+    \caption{Minh họa Cắt tỉa vô ích.}
+    \label{fig:futility_pruning}
+\end{figure}
+Trái ngược với RFP. Khi ta đang ở tình thế quá lép (điểm Eval cực thấp so với $\alpha$), và ta không ở thế bị chiếu, những nước đi bình thường không thể nào có phép màu giúp thế cờ lật ngược tình thế. Ta bỏ qua luôn nước này.
+
+\textbf{Cài đặt:} Tại độ sâu $\le 4$, nếu $\text{Eval} + 100 \times \text{depth} + 50 < \alpha$, các nước quiet sẽ bị bỏ qua (continue).
 
 \subsubsection{Cắt tỉa vô ích ngược (Reverse Futility Pruning - RFP)}
 
@@ -1135,84 +1263,123 @@ Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà đi
 
 Trong cài đặt, tại độ sâu $< 8$, nếu $\text{Eval} - 100 \times (\text{depth} - \text{improving}) > \beta$, trả về ngay điểm Eval.
 
-\subsubsection{Cắt tỉa vô ích (Futility Pruning - FP)}
-\begin{figure}[H]
-    \centering
-    % Bắt buộc thêm \usetikzlibrary{positioning} vào Preamble
-    \begin{tikzpicture}[
-        font=\small, line join=round,
-        node distance=0.8cm and 0.5cm,
-        axis/.style={thick, -latex, draw=black!70},
-        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick},
-        limit_line/.style={dashed, thick, draw=#1},
-        box/.style={rectangle, rounded corners, draw=#1!80!black, fill=#1!10, thick, align=center, font=\footnotesize, inner sep=4pt}
-    ]
-
-    % Tô màu nền phân chia các khu vực (Đã mở rộng scale y từ -3.0 đến 3.0 giống RFP)
-    % Vùng đỏ: Tuyệt vọng (Sẽ bị cắt tỉa)
-    \fill[red!5] (-6.5, -3.0) rectangle (-2, 3);
-    % Vùng cam: Nguy hiểm nhưng còn hy vọng (Độ rộng 4.5 giống RFP)
-    \fill[orange!5] (-2, -3.0) rectangle (2.5, 3);
-    % Vùng xanh: An toàn
-    \fill[green!5] (2.5, -3.0) rectangle (5, 3);
-
-    % Trục điểm số (Scale x giống RFP)
-    \draw[axis] (-4.5, 0) -- (3.5, 0) node[right] {\textit{Score}};
-
-    % Điểm Alpha - Margin (Ngưỡng tuyệt vọng) - Đặt ở -2 giống mốc Beta của RFP
-    \coordinate (margin_pos) at (-2, 0);
-    \draw[limit_line=orange!80!black] (-2, -1.8) -- (-2, 2.4);
-    \node[below=1.8cm of margin_pos, text=orange!80!black, align=center] (margin_label) {Ngưỡng tuyệt vọng \\ $\alpha - \text{Margin}$};
-
-    % Điểm Alpha (Mốc an toàn tối thiểu) - Đặt ở 2.5 giống mốc Margin của RFP
-    \coordinate (alpha_pos) at (2.5, 0);
-    \draw[limit_line=green!70!black] (2.5, -1.8) -- (2.5, 2.4);
-    \node[below=1.8cm of alpha_pos, text=green!70!black] (alpha_label) {Biên $\alpha$};
-
-    % Mũi tên thể hiện kích thước Khoảng đệm (Dời hẳn lên cao để không bị đè)
-    \draw[latex-latex, draw=orange!80!black, thick] (-1.9, 2.2) -- (2.4, 2.2) node[midway, above, font=\footnotesize, text=orange!80!black] {Khoảng đệm $M = 100 \times \text{depth} + 50$};
-
-    % ==========================================
-    % KỊCH BẢN 1: Đánh giá tĩnh nằm ở Vùng tuyệt vọng
-    % ==========================================
-    \coordinate (eval_fail) at (-3.5, 0);
-    \node[score_dot=red!50, label={[text=red!70!black]below left:$\text{Eval}_1$}] at (eval_fail) {};
-    
-    % Hộp thông báo (Neo tương đối vào điểm Eval_1)
-    \node[box=red, above=0.7cm of eval_fail] (box_fail) {Quá thua thiệt ($\text{Eval} < \alpha - M$) \\ $\rightarrow$ Bỏ qua nước đi tĩnh (FP)};
-    \draw[-latex, draw=red!80!black] (eval_fail) -- (box_fail);
-
-    % ==========================================
-    % KỊCH BẢN 2: Đánh giá tĩnh chưa chạm đáy tuyệt vọng
-    % ==========================================
-    \coordinate (eval_pass) at (0.5, 0);
-    \node[score_dot=gray!50, label={[text=gray!80!black]above right:$\text{Eval}_2$}] at (eval_pass) {};
-    
-    % Hộp thông báo (Neo tương đối vào điểm Eval_2)
-    \node[box=gray, below=0.5cm of eval_pass] (box_pass) {Vẫn có hy vọng gỡ gạc \\ $\rightarrow$ Tiếp tục duyệt nước đi};
-    \draw[-latex, draw=gray!80!black] (eval_pass) -- (box_pass);
-
-    \end{tikzpicture}
-    \caption{Minh họa Cắt tỉa vô ích (Futility Pruning - FP). Thuật toán cho phép thế cờ được "nợ" một khoảng điểm là $M$ (Khoảng đệm) - tượng trưng cho giá trị tối đa mà một nước đi tĩnh có thể gỡ gạc lại. Tuy nhiên, nếu điểm $\text{Eval}$ ban đầu quá thấp đến mức rơi vào "Vùng tuyệt vọng" (màu đỏ), ta tin chắc rằng mọi nỗ lực vùng vẫy bằng các nước tĩnh đều vô ích, do đó lập tức bỏ qua (continue) để tiết kiệm thời gian.}
-    \label{fig:futility_pruning}
-\end{figure}
-Trái ngược với RFP. Khi ta đang ở tình thế quá lép (điểm Eval cực thấp so với $\alpha$), và ta không ở thế bị chiếu, những nước đi bình thường không thể nào có phép màu giúp thế cờ lật ngược tình thế. Ta bỏ qua luôn nước này.
-
-\textbf{Cài đặt:} Tại độ sâu $\le 4$, nếu $\text{Eval} + 100 \times \text{depth} + 50 < \alpha$, các nước quiet sẽ bị bỏ qua (continue).
-
 \subsubsection{Cắt tỉa nước đi muộn (Late Move Pruning - LMP)}
 Tại các độ sâu thấp, sau khi ta đã thử một lượng lớn các nước đi không ăn quân mà không cải thiện được biên $\alpha$, ta có quyền kết luận rằng các nước đi quiet nằm tít phía dưới bảng xếp hạng (chưa được duyệt) đều là các nước đi vô giá trị.
 
 \textbf{Cài đặt:} Tại độ sâu $\le 3$, số lượng nước đi quiet được duyệt bị giới hạn bởi công thức: $\text{Limit} = \frac{\text{depth}^2}{1 + \text{!improving}} + 8$. Vượt quá giới hạn này, vòng lặp sinh nước đi bị ngắt.
 
+% Lưu ý: Cần khai báo \usepackage{tikz} và \usetikzlibrary{decorations.pathreplacing} trong phần preamble
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        move/.style={font=\footnotesize, rectangle, draw, minimum width=5.5cm, align=center},
+        pruned/.style={font=\footnotesize, rectangle, draw, dashed, fill=gray!15, text=gray!80!black, minimum width=5.5cm, align=center},
+    ]
+    
+    % Nhóm các nước đi được duyệt
+    \node[move, fill=blue!10] (m1) at (0, 0) {Các nước đi bắt quân, phong cấp};
+    \node[move] (m2) at (0, -1) {Quiet move 1 (Killer / History)};
+    \node[move] (m3) at (0, -2) {Quiet move 2};
+    \node at (0, -2.5) {$\vdots$};
+      \node[move] (l_qm) at (0, -3.2) {Quiet move thứ \textit{Limit}};
+    
+    % Đường ranh giới cắt tỉa (Cut-off line)
+    \draw[thick, dashed] (-3.8, -4) -- (4, -4) 
+        node[right, align=left] {Ngưỡng ngắt vòng lặp:\\ Limit = $\frac{\text{depth}^2}{1 + \text{!improving}} + 8$};
+        
+    % Nhóm các nước đi bị cắt tỉa
+      \node[pruned] (p1) at (0, -4.8)  {Quiet move thứ \textit{Limit} + 1};
+    \node[text=gray] at (0, -5.3) {$\vdots$};
+      \node[pruned] (pn) at (0, -6)  {Quiet move cuối cùng};
+    
+    % Mũi tên luồng duyệt
+    \draw[->, thick] (m1) -- (m2);
+    \draw[->, thick] (m2) -- (m3);
+    % Thêm fill=white để đường đứt nét không đè lên chữ
+    \draw[->, thick] (l_qm) -- (p1) node[midway, right=0.2cm, fill=white, inner sep=2pt] {Lệnh \texttt{break}};
+    
+    % Ngoặc ôm bên trái giải thích trạng thái
+    \draw [decorate, decoration={brace, amplitude=10pt, mirror}, thick] 
+        (m1.north west) -- (l_qm.south west) node [midway, left=0.4cm, align=right] {Được duyệt};
+        
+    \draw [decorate, decoration={brace, amplitude=10pt, mirror}, thick, gray] 
+        (p1.north west) -- (pn.south west) node [midway, left=0.4cm, align=right] {Bị cắt tỉa};
+        
+    \end{tikzpicture}
+    \caption{Minh họa cơ chế Cắt tỉa nước đi muộn (LMP).}
+    \label{fig:lmp_illustration}
+\end{figure}
+
 \subsubsection{Giảm độ sâu nước đi muộn (Late Move Reductions - LMR)}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\sffamily\small,
+        bar/.style={rectangle, draw=black, thick, minimum width=0.8cm, anchor=south},
+        full/.style={bar, fill=blue!30},
+        reduced/.style={bar, fill=gray!20},
+        failhigh/.style={bar, fill=orange!40},
+        research/.style={bar, fill=red!15, draw=red, dashed, thick},
+        >={latex}
+    ]
+
+    % --- Trục tọa độ ---
+    \draw[thick, ->] (-0.5,0) -- (9,0) node[anchor=west,align=center] {Thứ tự nước đi\\(Move Ordering)};
+    \draw[thick, ->] (0,-0.5) -- (0,5) node[anchor=east, align=center] {Độ sâu \\ còn lại};
+
+    % --- Nhãn trục Y ---
+    \draw (-0.1, 4) -- (0.1, 4) node[left=0.2cm] {$D$}; 
+    \draw (-0.1, 2) -- (0.1, 2) node[left=0.2cm] {$D - R$};
+
+    % --- Vẽ các cột độ sâu ---
+    % Nước 1: Duyệt full
+    \node[full, minimum height=4cm] at (1, 0) {};
+    \node[below=0.1cm] at (1,0) {1};
+    \node[above=0.1cm, text=blue!80!black, scale=0.8] at (1,4) {\textbf{PV Move}};
+
+    % Nước 2: Duyệt full
+    \node[full, minimum height=4cm] at (2, 0) {};
+    \node[below=0.1cm] at (2,0) {2};
+
+    % Nước 3: LMR
+    \node[reduced, minimum height=2cm] at (3, 0) {};
+    \node[below=0.1cm] at (3,0) {3};
+
+    % Nước 4: LMR
+    \node[reduced, minimum height=2cm] at (4, 0) {};
+    \node[below=0.1cm] at (4,0) {4};
+
+    % Nước 5: Fail-high + Re-search
+    \node[failhigh, minimum height=2cm] at (5, 0) {};
+    \node[research, minimum height=2cm] at (5, 2) {}; % Phần bù đắp
+    \node[below=0.1cm] at (5,0) {5};
+    \node[above=0.1cm, text=red!80!black, scale=0.8, align=center] at (5,4) {\textbf{Fail-high!}\\[-0.5ex] \textit{(Re-search)}};
+
+    % Nước 6: LMR
+    \node[reduced, minimum height=2cm] at (6, 0) {};
+    \node[below=0.1cm] at (6,0) {6};
+    
+    % Nước 7: LMR (Vẽ thấp hơn chút để thể hiện R phi tuyến)
+    \node[reduced, minimum height=1.7cm] at (7, 0) {};
+    \node[below=0.1cm] at (7,0) {7};
+
+    % --- Chú thích & Trang trí (Đã fix lỗi đè chữ) ---
+    % Mũi tên: Đẩy xuống y=3.0 để tránh đụng chữ "Fail-high"
+    \draw[<->, dashed, color=black!60] (2.6, 3.0) -- (4.4, 3.0) node[midway, above, scale=0.85, align=center] {Vùng tiết kiệm\\thời gian};
+    \draw[<->, dashed, color=black!60] (5.6, 3.0) -- (7.4, 3.0);
+
+    % Ngoặc ôm (Brace): Tăng khoảng cách (raise) để tránh đè vào các số 1..7
+    \draw[decorate,decoration={brace,amplitude=5pt,mirror,raise=0.7cm}] 
+        (2.6,0) -- (7.4,0) node[midway,below=1.0cm] {\textbf{Vùng áp dụng Giảm độ sâu (LMR)}};
+
+    \end{tikzpicture}
+    \caption{Minh họa tác động của LMR lên cây tìm kiếm}
+    \label{fig:lmr_profile}
+\end{figure}
+
 Với các nước đi không bị cắt tỉa hoàn toàn bởi LMP nhưng nằm trễ trong thứ tự duyệt (chứng tỏ chúng không hấp dẫn), ta vẫn duyệt chúng nhưng với độ sâu giảm bớt. Nếu vô tình chúng trả về điểm fail-high, ta sẽ duyệt lại với độ sâu chuẩn.
 
 \textbf{Cài đặt:} LMR được áp dụng cho các nước đi không ăn quân khi số nước đi đã duyệt $\ge 2$ và độ sâu $\ge 3$. Mức giảm $R$ được tính theo công thức phi tuyến:
 \[ R = 0.75 + \frac{\ln(\text{moves\_played}) \times \ln(\text{depth})}{2.3} - \frac{\text{HistoryScore}}{20000} - PV_{\text{flag}} \]
-
-\subsection{Tìm kiếm tĩnh (Quiescence Search)}
-
-Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng.
-
 
