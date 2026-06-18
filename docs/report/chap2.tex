@@ -275,3 +275,9 @@ Dưới đây là minh họa phiên làm việc thực tế của Lingine khi đ
 \end{figure}
 
 Như được minh họa ở Hình \ref{fig:uci_terminal}, khi người dùng gửi lệnh thiết lập thế cờ khởi điểm (\texttt{position startpos}) và yêu cầu tìm kiếm trong thời gian 1 giây (\texttt{go movetime 1000}), Lingine bắt đầu vòng lặp \textit{Iterative Deepening}. Ở mỗi độ sâu, hệ thống liên tục trả về các thông báo \texttt{info} chứa thông tin thời gian (\texttt{time}), số nút đã duyệt (\texttt{nodes}), nhánh tốt nhất (\texttt{pv}), và tốc độ tìm kiếm (\texttt{nps}). Khi hết thời gian cho phép, engine đã đạt đến độ sâu 10 và phản hồi nước đi tốt nhất \texttt{bestmove b0c2} (Mã b0 nhảy sang c2) cho giao diện đồ họa tiếp nhận.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.5\textwidth]{images/horse_b0c2.png}
+    \caption{Minh họa nước đi của quân Mã từ ô b0 đến ô c2}
+\end{figure}

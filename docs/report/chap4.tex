@@ -648,11 +648,11 @@ Lingine sử dụng một vòng lặp \texttt{while} tăng dần độ sâu lên
 
     % Cấu trúc các Nút (Nodes) sử dụng relative positioning
     \node[process] (init) {Bắt đầu: Độ sâu $d = 1$};
-    \node[process, below=of init] (search) {Duyệt Alpha-Beta \\ (Độ sâu hiện tại: $d$)};
-    \node[database, below=of search] (tt) {Lưu nước đi tốt nhất \\ vào Bảng băm (TT)};
-    \node[decision, below=1.3cm of tt] (time) {Còn đủ \\ thời gian?};
+    \node[process, below=0.5cm of init] (search) {Duyệt Alpha-Beta \\ (Độ sâu hiện tại: $d$)};
+    \node[database, below=0.5cm of search] (tt) {Lưu nước đi tốt nhất \\ vào Bảng băm (TT)};
+    \node[decision, below=0.5cm of tt] (time) {Còn đủ \\ thời gian?};
     
-    \node[terminal, below=of time] (end) {Ngắt tìm kiếm \\ Trả về Best Move};
+    \node[terminal, below=1cm of time] (end) {Ngắt tìm kiếm \\ Trả về Best Move};
     \node[process, fill=gray!15, draw=gray!80, minimum width=2.5cm, left=1.5cm of tt] (inc) {Tăng độ sâu \\ $d \leftarrow d + 1$};
 
     % Các mũi tên luồng chính
@@ -690,7 +690,7 @@ Trong Lingine, cửa sổ kỳ vọng chỉ được kích hoạt từ độ sâ
 \begin{itemize}
     \item Nếu điểm trả về lọt vào trong cửa sổ ($\alpha < \text{score} < \beta$): Tìm kiếm thành công, trả về điểm số.
       % --- KỊCH BẢN 1: THÀNH CÔNG ---
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
     \begin{tikzpicture}[
         font=\small, line join=round,
@@ -717,7 +717,7 @@ Trong Lingine, cửa sổ kỳ vọng chỉ được kích hoạt từ độ sâ
 \end{figure}
     \item Nếu $\text{score} \le \alpha$ (\textit{Fail-low}): Thế trận tiềm ẩn rủi ro lớn hơn dự kiến. Cửa sổ mở rộng phía dưới ($\alpha = \alpha - \delta$) và thuật toán bắt buộc phải duyệt lại với \textbf{độ sâu giữ nguyên} để tìm ra phương án phòng thủ.
       % --- KỊCH BẢN 2: FAIL-LOW ---
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
     \begin{tikzpicture}[
         font=\small, line join=round,
@@ -748,7 +748,7 @@ Trong Lingine, cửa sổ kỳ vọng chỉ được kích hoạt từ độ sâ
 \end{figure}
     \item Nếu $\text{score} \ge \beta$ (\textit{Fail-high}): Thế trận rất tốt. Cửa sổ mở rộng phía trên ($\beta = \beta + \delta$) và biến đếm \texttt{consecutive\_fail\_high} tăng thêm 1. Độ sâu duyệt lại được cắt giảm xuống thành: \texttt{(depth - consecutive\_fail\_high).max(1)}.
 % --- KỊCH BẢN 3: FAIL-HIGH ---
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
     \begin{tikzpicture}[
         font=\small, line join=round,
@@ -782,9 +782,7 @@ Mỗi lần vượt rào thất bại, $\delta$ sẽ được nhân đôi ($\del
 
 \subsection{Tìm kiếm tĩnh (Quiescence Search)}
 
-Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng.
-
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
     \begin{tikzpicture}[
         >=latex,
@@ -796,18 +794,18 @@ Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engi
     ]
 
     % --- Đường giới hạn độ sâu (Vẽ trước để nằm dưới các node có nền trắng) ---
-    \draw[dashed, gray] (-6, -4) -- (3, -4) node[right, text=gray] {Depth Limit (Horizon)};
+    \draw[dashed, gray] (-6, -3.3) -- (3, -3.3) node[right, text=gray] {Depth Limit (Horizon)};
 
     % --- Các Nút (Nodes) ---
     \node[state] (start) at (0, 0) {Start};
-    \node[state] (n1) at (-1.5, -2) {+100};
-    \node[state] (n2) at (1.5, -2) {+50};
-    \node[state] (n3) at (-1.5, -4) {+100};
+    \node[state] (n1) at (-1.5, -1.5) {+100};
+    \node[state] (n2) at (1.5, -1.5) {+50};
+    \node[state] (n3) at (-1.5, -3.3) {+100};
     
-    \node[greenstate] (n4) at (-3, -6) {+500};
-    \node[state] (n5) at (0, -6) {+100};
+    \node[greenstate] (n4) at (-3, -5) {+500};
+    \node[state] (n5) at (0, -5) {+100};
     
-    \node[redstate] (n6) at (-3, -9) {-900};
+    \node[redstate] (n6) at (-3, -7.5) {-900};
 
     % --- Các Cạnh (Edges) ---
     \draw[->] (start) -- (n1);
@@ -830,7 +828,7 @@ Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engi
     };
 
     % Chú thích Quiescence Search (Bên trái)
-    \node[align=right, text=blue, left] at (-4, -8) {
+    \node[align=right, text=blue, left] at (-4, -6) {
         \textbf{Quiescence Search:}\\
         Tiếp tục mở rộng\\
         các nước ăn quân\\
@@ -842,65 +840,15 @@ Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engi
     \label{fig:qsearch_tree_nodes}
 \end{figure}
 
+Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng. Hình \ref{fig:qsearch_tree_nodes} minh họa kỹ thuật này.
+
 \subsection{Tìm kiếm biến thể chính (Principal Variation Search - PVS)}
 
 Với sắp xếp nước đi tốt, ta có niềm tin rằng nước đi đầu tiên trong danh sách chính là nước đi tốt nhất (thuộc dải PV). Do đó, ta duyệt nước đi này với cửa sổ mở tối đa. Đối với các nước đi còn lại, ta giả định chúng là nước đi kém, nên chỉ dùng một "cửa sổ rỗng" (\textit{Null Window}) cực hẹp để chứng minh chúng không thể vượt qua điểm số hiện tại.
 
 Về phần cài đặt, với nước đi đầu tiên, tìm kiếm với $[-\beta, -\alpha]$; với các nước sau, tìm kiếm với cửa sổ $[-\alpha - 1, -\alpha]$. Chỉ khi kết quả trả về cho thấy nước đi này thực sự tốt hơn điểm $\alpha$ (\textit{fail-high}), ta mới phải tốn công tìm kiếm lại với cửa sổ chuẩn $[-\beta, -\alpha]$.
 
-\begin{lstlisting}[language=Rust, caption=Giải thuật PVS trong Lingine]
-pub(super) fn pv_search<const PV: bool>(
-    &mut self,
-    depth: i8,
-    ply: u8,
-    alpha: i32,
-    beta: i32,
-    reductions: i8,
-) -> i32 {
-    let mut score = -self.negamax::<false, false>(
-        depth - 1 - reductions,
-        ply + 1,
-        -alpha - 1,
-        -alpha,
-        Default::default(),
-    );
-
-    // If the search fails and there was depth reduction, we re-search
-    // with the full depth to get a better picture of the position.
-    if alpha < score && reductions > 0 {
-        score = -self.negamax::<false, false>(
-            depth - 1,
-            ply + 1,
-            -alpha - 1,
-            -alpha,
-            Default::default(),
-        );
-    }
-
-    // If the search fails, we need to re-search with the full window to get the
-    // correct score and PV.
-    if alpha < score && score < beta {
-        score =
-            -self.negamax::<false, PV>(depth - 1, ply + 1, -beta, -alpha, Default::default());
-    }
-
-    score
-}
-
-/// In the negamax function
-let score = if moves_played == 0 {
-    -self.negamax::<false, PV>(
-        depth - 1 + is_singular as i8,
-        ply + 1,
-        -beta,
-        -alpha,
-        SearchContext::default(),
-    )
-} else {
-    self.pv_search::<PV>(depth, ply, alpha, beta, reductions)
-};
-
-\end{lstlisting}
+Hình \ref{fig:pvs_flowchart} minh họa sơ đồ giải thuật của kĩ thuật này.
 
 \begin{figure}[htbp]
     \centering
@@ -974,9 +922,8 @@ Nếu tại một nút mạng chỉ có đúng 1 nước đi hợp lệ duy nh�
 
 Nếu nước đi từ bảng chuyển vị được đánh giá là cực kỳ tốt, trong khi mọi nước đi khác đều tệ (cách biệt xa), đây là một nước đi "hiển nhiên phải đi". Ta cần mở rộng độ sâu cho nó để chắc chắn rằng đằng sau nước đi hiển nhiên này không ẩn chứa một cái bẫy chiến thuật sâu.
 
-\textbf{Cài đặt:} Ở độ sâu $\ge 8$, Lingine thử duyệt các nước đi thay thế với độ sâu giảm 3 ($R=3$) và một biên nhỏ $\text{rbeta} = \text{score} - 2 \times \text{depth}$. Nếu các nước đi thay thế này đều thất bại (\textit{fail-low}), nước đi TT chính thức được công nhận là "đơn trị" và được tăng thêm 1 độ sâu khi duyệt.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
     % Bắt buộc thêm \usetikzlibrary{shapes.geometric, positioning} vào Preamble
     \begin{tikzpicture}[
@@ -1020,6 +967,8 @@ Nếu nước đi từ bảng chuyển vị được đánh giá là cực kỳ 
     \label{fig:singular_extensions}
 \end{figure}
 
+\textbf{Cài đặt:} Ở độ sâu $\ge 8$, Lingine thử duyệt các nước đi thay thế với độ sâu giảm 3 ($R=3$) và một biên nhỏ $\text{rbeta} = \text{score} - 2 \times \text{depth}$. Nếu các nước đi này đều thất bại (\textit{fail-low}), nước đi TT được coi là "đơn trị" và được tăng thêm 1 độ sâu khi duyệt.
+
 \subsection{Các kỹ thuật Cắt tỉa (Pruning) và Giảm độ sâu (Reductions)}
 
 Trái ngược với mở rộng, cắt tỉa giúp engine bỏ qua những nhánh vô vọng để dồn sức cho PV.
@@ -1045,10 +994,10 @@ Nếu ta đang ở một độ sâu lớn mà Bảng băm lại không có dữ 
     \node[block] (start) {\textbf{Trạng thái hiện tại} \\ (Độ sâu $d$ đủ lớn)};
 
     % Điều kiện kiểm tra
-    \node[decision, below=of start] (check_tt) {Bảng băm (TT) \\ có lưu nước đi?};
+    \node[decision, right=of start] (check_tt) {Bảng băm (TT) \\ có lưu nước đi?};
 
     % Nhánh Yes (Trái)
-    \node[block, left=1.2cm of check_tt] (normal_flow) {Thực hiện Sắp xếp nước đi \\ \& Duyệt Alpha-Beta ($d$)};
+    \node[block, right=1.2cm of check_tt] (normal_flow) {Thực hiện Sắp xếp nước đi \\ \& Duyệt Alpha-Beta ($d$)};
 
     % Nhánh No (Dưới - Kích hoạt IIR)
     \node[action, below=of check_tt] (iir_search) {\textbf{Kích hoạt IIR} \\ Duyệt lướt với độ sâu $d-1$};
@@ -1057,12 +1006,12 @@ Nếu ta đang ở một độ sâu lớn mà Bảng băm lại không có dữ 
 
     % Vẽ mũi tên luồng đi
     \draw[arrow] (start) -- (check_tt);
-    \draw[arrow] (check_tt.west) -- node[above, font=\footnotesize, text=green!70!black] {Có} (normal_flow.east);
-    \draw[arrow] (check_tt.south) -- node[right, font=\footnotesize, text=red!70!black] {Không (Rủi ro)} (iir_search.north);
+    \draw[arrow] (check_tt) -- node[above, font=\footnotesize, text=green!70!black] {Có} (normal_flow);
+    \draw[arrow] (check_tt) -- node[right, font=\footnotesize, text=red!70!black] {Không (Rủi ro)} (iir_search);
     \draw[arrow] (iir_search) -- (pseudo_tt);
 
     % Mũi tên đứt nét quay ngược lại luồng chính (Sử dụng neo vuông góc -|)
-    \draw[dashed arrow] (pseudo_tt.west) -| node[pos=0.25, above, font=\footnotesize, text=green!70!black, align=center] {Sử dụng làm\\TT Move ảo} (normal_flow.south);
+    \draw[dashed arrow] (pseudo_tt.west) -| node[pos=0.5, below, font=\footnotesize, text=green!70!black, align=center] {Sử dụng làm\\TT Move ảo} (normal_flow.south);
 
     \end{tikzpicture}
     \caption{Cơ chế Giảm độ sâu lặp nội bộ.}
@@ -1264,33 +1213,32 @@ Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà đi
 Trong cài đặt, tại độ sâu $< 8$, nếu $\text{Eval} - 100 \times (\text{depth} - \text{improving}) > \beta$, trả về ngay điểm Eval.
 
 \subsubsection{Cắt tỉa nước đi muộn (Late Move Pruning - LMP)}
-Tại các độ sâu thấp, sau khi ta đã thử một lượng lớn các nước đi không ăn quân mà không cải thiện được biên $\alpha$, ta có quyền kết luận rằng các nước đi quiet nằm tít phía dưới bảng xếp hạng (chưa được duyệt) đều là các nước đi vô giá trị.
-
-\textbf{Cài đặt:} Tại độ sâu $\le 3$, số lượng nước đi quiet được duyệt bị giới hạn bởi công thức: $\text{Limit} = \frac{\text{depth}^2}{1 + \text{!improving}} + 8$. Vượt quá giới hạn này, vòng lặp sinh nước đi bị ngắt.
 
 % Lưu ý: Cần khai báo \usepackage{tikz} và \usetikzlibrary{decorations.pathreplacing} trong phần preamble
 \begin{figure}[htbp]
     \centering
     \begin{tikzpicture}[
-        move/.style={font=\footnotesize, rectangle, draw, minimum width=5.5cm, align=center},
-        pruned/.style={font=\footnotesize, rectangle, draw, dashed, fill=gray!15, text=gray!80!black, minimum width=5.5cm, align=center},
+        move/.style={rectangle, draw, minimum height=1.5cm, minimum width=5.5cm, align=center},
+        pruned/.style={rectangle, draw, dashed, fill=gray!15, text=gray!80!black, minimum height=1.5cm, minimum width=5.5cm, align=center},
     ]
     
     % Nhóm các nước đi được duyệt
-    \node[move, fill=blue!10] (m1) at (0, 0) {Các nước đi bắt quân, phong cấp};
-    \node[move] (m2) at (0, -1) {Quiet move 1 (Killer / History)};
-    \node[move] (m3) at (0, -2) {Quiet move 2};
-    \node at (0, -2.5) {$\vdots$};
-      \node[move] (l_qm) at (0, -3.2) {Quiet move thứ \textit{Limit}};
+    \node[move, fill=blue!10] (m1) {Các nước đi bắt quân, phong cấp};
+    \node[move, below=of m1] (m2) {Quiet move 1 (Killer / History)};
+    \node[move, below=of m2] (m3) {Quiet move 2};
+    \node[below=0.1cm of m3] (vdots1) {$\vdots$};
+    \node[move, below=0.2cm of vdots1] (l_qm) {Quiet move thứ \textit{Limit}};
+
+    \node[below=of l_qm, minimum width=8cm] (anchor) {};
     
     % Đường ranh giới cắt tỉa (Cut-off line)
-    \draw[thick, dashed] (-3.8, -4) -- (4, -4) 
+    \draw[thick, dashed] (anchor.north west) -- (anchor.north east) 
         node[right, align=left] {Ngưỡng ngắt vòng lặp:\\ Limit = $\frac{\text{depth}^2}{1 + \text{!improving}} + 8$};
         
     % Nhóm các nước đi bị cắt tỉa
-      \node[pruned] (p1) at (0, -4.8)  {Quiet move thứ \textit{Limit} + 1};
-    \node[text=gray] at (0, -5.3) {$\vdots$};
-      \node[pruned] (pn) at (0, -6)  {Quiet move cuối cùng};
+      \node[pruned, below=of anchor] (p1) {Quiet move thứ \textit{Limit} + 1};
+      \node[text=gray, below=0.1cm of p1] (vdots2) {$\vdots$};
+      \node[pruned, below=0.2cm of vdots2] (pn)   {Quiet move cuối cùng};
     
     % Mũi tên luồng duyệt
     \draw[->, thick] (m1) -- (m2);
@@ -1309,6 +1257,10 @@ Tại các độ sâu thấp, sau khi ta đã thử một lượng lớn các n�
     \caption{Minh họa cơ chế Cắt tỉa nước đi muộn (LMP).}
     \label{fig:lmp_illustration}
 \end{figure}
+
+Tại các độ sâu thấp, sau khi ta đã thử một lượng lớn các nước đi không ăn quân mà không cải thiện được biên $\alpha$, ta có quyền kết luận rằng các nước đi quiet nằm tít phía dưới bảng xếp hạng (chưa được duyệt) đều là các nước đi vô giá trị.
+
+\textbf{Cài đặt:} Tại độ sâu $\le 3$, số lượng nước đi quiet được duyệt bị giới hạn bởi công thức: $\text{Limit} = \frac{\text{depth}^2}{1 + \text{!improving}} + 8$. Vượt quá giới hạn này, vòng lặp sinh nước đi bị ngắt.
 
 \subsubsection{Giảm độ sâu nước đi muộn (Late Move Reductions - LMR)}
 
