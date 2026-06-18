@@ -158,6 +158,54 @@ Hai bảng này chứa tất cả các kịch bản di chuyển hợp lệ của
 
 \section{Hàm đánh giá thế cờ}
 
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        % Định nghĩa phong cách chung cho các khối
+        comp/.style={rectangle, draw, fill=blue!12, minimum width=2.8cm, minimum height=0.8cm, rounded corners, align=center},
+        sum/.style={circle, draw, fill=orange!20, minimum size=0.8cm, font=\normalsize},
+        result/.style={rectangle, draw, fill=green!15, minimum width=3cm, minimum height=0.8cm, rounded corners,  align=center},
+        arrow/.style={-latex, thick}
+    ]
+        % --- KHỐI ĐẦU VÀO (Xếp dọc theo cột bên trái) ---
+        \node[comp] (pst) {PST Scores};
+        \node[comp, right=0.3cm of pst] (mat) {Material Values};
+        \node[comp, right=0.3cm of mat] (mob) {Mobility Bonus};
+        \node[comp, right=0.3cm of mob] (def) {Defender Bonus};
+        
+        % --- KHỐI XỬ LÝ TRUNG GIAN ---
+        % Bộ cộng nằm ngang với nhóm đầu vào
+        \node[sum] at ([yshift=-2cm]$(mat)!0.5!(mob)$) (plus) {$+$};
+        
+        % --- KHỐI KẾT QUẢ ---
+        % Điểm Tapered nằm ngang hàng với bộ cộng
+        \node[result, below=1cm of plus] (tapered) {TaperedScore};
+
+        % Giai đoạn cờ nằm phía dưới bộ cộng
+        \node[comp, fill=yellow!15, left=1.2cm of tapered] (phase) {Phase = $\sum$PieceWeight};
+        
+        % Điểm số cuối cùng nằm ở tận cùng bên phải
+        \node[result, fill=red!10, below=1.7cm of tapered] (final) {Final Score};
+        
+        % --- VẼ ĐƯỜNG NỐI LUỒNG DỮ LIỆU ---
+        % Đường nối từ các thành phần vào bộ cộng
+        \draw[arrow] (pst) |- (plus);
+        \draw[arrow] (mat) -- (plus);
+        \draw[arrow] (mob) -- (plus);
+        \draw[arrow] (def) |- (plus);
+        
+        % Đường nối tính toán điểm Tapered
+        \draw[arrow] (plus) -- (tapered);
+        \draw[arrow] (phase) -- (tapered);
+        
+        % Đường nối ra kết quả cuối cùng kèm công thức nội suy
+        \draw[arrow] (tapered) -- node[left, font=\large, midway] {$\frac{MG \times \varphi + EG \times (32-\varphi)}{32}$} (final);
+        
+    \end{tikzpicture}
+    \caption{Sơ đồ pipeline hàm đánh giá thế cờ trong Lingine}
+    \label{fig:eval_pipeline}
+\end{figure}
+
 Hàm đánh giá chịu trách nhiệm lượng hóa ưu thế của thế cờ hiện tại từ góc nhìn của bên Đỏ dưới dạng một số nguyên:
 
 \subsection{Công thức tổng quát}
@@ -172,6 +220,7 @@ Trong đó:
     \item \textbf{TaperedScore} thực hiện pha trộn động điểm số Trung cuộc và Tàn cuộc.
 \end{itemize}
 
+
 \subsection{Nội suy pha ván cờ (Tapered Evaluation)}
 
 Để tránh sự thay đổi điểm số đột ngột khi chuyển giao giai đoạn (ví dụ quân cờ bị ăn dẫn đến thay đổi thuật toán đánh giá), Lingine áp dụng kỹ thuật nội suy tuyến tính dựa trên giá trị pha ván cờ (Game Phase):
@@ -179,6 +228,43 @@ Trong đó:
 
 Với quy ước trọng số pha: Xe = 2, Pháo = 2, Mã = 2, Sĩ = 1, Tượng = 1, Tốt/Tướng = 0. Tổng trọng số pha tối đa của một bàn cờ đầy đủ là $\text{MAX\_PHASE} = 32$. Điểm số cuối cùng được tính bằng:
 \[ \text{Score} = \frac{\text{Score}_{\text{MG}} \times \text{Phase} + \text{Score}_{\text{EG}} \times (\text{MAX\_PHASE} - \text{Phase})}{\text{MAX\_PHASE}} \]
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=0.8\textwidth,
+            height=6.5cm,
+            xlabel={Pha ván cờ (Phase)},
+            ylabel={Tỷ trọng ảnh hưởng (\%)},
+            xmin=0, xmax=32,
+            x dir=reverse,
+            ymin=0, ymax=100,
+            xtick={32, 24, 16, 8, 0},
+            xticklabels={32\\(Khai cuộc), 24, 16, 8, 0\\(Tàn cuộc)},
+            ytick={0, 25, 50, 75, 100},
+            tick label style={font=\footnotesize},
+            grid=major,
+            grid style={dashed, gray!30},
+            legend pos=north east,
+            legend style={font=\footnotesize},
+            xticklabel style={
+                fill=white,        % Tùy chọn: Giúp nhãn không bị đường grid đè lên
+                align=center,      % BẮT BUỘC: Cho phép nhận lệnh \\ và căn giữa dòng
+            },
+        ]
+        
+        \addplot[blue, ultra thick] coordinates {(32,100) (0,0)};
+        \addlegendentry{Tỷ trọng Middlegame}
+        
+        \addplot[red, ultra thick] coordinates {(32,0) (0,100)};
+        \addlegendentry{Tỷ trọng Endgame}
+        
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Tỷ trọng của Khai/Trung cuộc và Tàn cuộc trong Tapered Evaluation}
+    \label{fig:tapered_eval}
+\end{figure}
 
 \subsection{Tinh chỉnh tự động bằng Texel Tuning}
 
@@ -406,6 +492,59 @@ Dựa trên sự tương tác của điểm số với cửa sổ $[\alpha, \bet
 
 Việc phân biệt rạch ròi ba loại nút này là cơ sở tối quan trọng. Mọi chiến thuật \textit{Sắp xếp nước đi} và \textit{Cắt tỉa} của Lingine ở các phần tiếp theo đều hướng đến một mục tiêu duy nhất: Tối đa hóa số lượng Cut-Node (để cắt tỉa thật sớm) và dùng các phép xấp xỉ để giảm thiểu tối đa độ sâu phải duyệt của các All-Node.
 
+\subsubsection{Ví dụ minh họa}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        level distance=3.2cm, % Đã tăng từ 2.8cm lên 3.2cm để sơ đồ thoáng hơn
+        level 1/.style={sibling distance=5.2cm},
+        level 2/.style={sibling distance=1.8cm},
+        every node/.style={circle, draw, minimum size=1.2cm, inner sep=2pt, font=\small\bfseries, align=center},
+        pvnode/.style={fill=green!10, draw=green!70!black, thick},
+        allnode/.style={fill=blue!10, draw=blue!70!black, thick},
+        cutnode/.style={fill=red!10, draw=red!70!black, thick},
+        leaf/.style={rectangle, draw=black, minimum size=0.8cm, fill=gray!10, font=\bfseries},
+        pruned/.style={rectangle, draw=gray, dashed, fill=gray!5, text=gray, font=\bfseries},
+        edge from parent/.style={draw, -latex, thick},
+        pruned edge/.style={draw=gray, dashed, -latex, thick}
+        ]
+        
+        % Root
+        \node[pvnode, rectangle, rounded corners, inner sep=6pt] (root) {Nút Gốc (Negamax) \\ Cửa sổ: $[\alpha=5, \beta=10]$}
+            % PV Node Branch
+            child {node[pvnode, label={[text=green!70!black, font=\bfseries]above left:PV-Node}] {Nút A \\ $\text{score}=7$}
+                child {node[leaf] {6} edge from parent node[left, draw=none, rectangle, fill=none] {}}
+                child {node[leaf] {7} edge from parent node[right, draw=none, rectangle, fill=none] {}}
+            }
+            % All Node Branch
+            child {node[allnode, label={[text=blue!70!black, font=\bfseries]left:All-Node}] {Nút B \\ $\text{score}=4$}
+                child {node[leaf] {3} edge from parent node[left, draw=none, rectangle, fill=none] {}}
+                child {node[leaf] {4} edge from parent node[right, draw=none, rectangle, fill=none] {}}
+            }
+            % Cut Node Branch
+            child {node[cutnode, label={[text=red!70!black, font=\bfseries]above right:Cut-Node}] {Nút C \\ $\text{score}=12$}
+                child {node[leaf] {12} edge from parent node[left, draw=none, rectangle, fill=none] {}}
+                child {node[pruned] {?} 
+                    edge from parent[pruned edge] node[right, draw=none, rectangle, fill=none, color=red!80!black, font=\bfseries] {$\ge \beta$ (Cắt!)}
+                }
+            };
+    \end{tikzpicture}
+    \caption{Minh họa hành vi thuật toán Alpha-Beta Negamax}
+    \label{fig:alphabeta_nodes}
+\end{figure}
+
+Ở Hình \ref{fig:alphabeta_nodes{}}, giả sử tại Nút Gốc, thuật toán truyền xuống một cửa sổ kỳ vọng với $\alpha=5$ (điểm an toàn tối thiểu đã nắm chắc) và $\beta=10$ (giới hạn tối đa mà đối phương cho phép). Tùy thuộc vào kết quả trả về của các nước đi con, mỗi nhánh sẽ rơi vào một trong ba kịch bản sau:
+
+\begin{itemize}
+    \item \textbf{Nút PV (Nút A):} Thuật toán duyệt qua các nước đi con và tìm được điểm số tốt nhất là $7$. Vì giá trị này lọt thỏm vào giữa cửa sổ kỳ vọng ($5 < 7 < 10$, hay $\alpha < \text{score} < \beta$), Nút A mang lại một kết quả khả quan để cải thiện $\alpha$, nhưng chưa đủ áp đảo để khiến đối phương phải né tránh (chưa chạm $\beta$). Do không có cơ sở để cắt tỉa, thuật toán bắt buộc phải duyệt \textit{toàn bộ} các nhánh con của Nút A để xác định điểm số chính xác này.
+    
+    \item \textbf{Nút Toàn bộ / All-Node (Nút B):} Thuật toán lần lượt duyệt qua tất cả các nước đi con, nhưng điểm số cao nhất thu về chỉ là $4$. Vì $4 \le 5$ ($\text{score} \le \alpha$), mọi nỗ lực tại nhánh này đều tồi tệ hơn mức an toàn $5$ mà ta đã có sẵn từ nơi khác. Thuật toán đã phải lãng phí tài nguyên duyệt \textit{toàn bộ} các nhánh con chỉ để nhận ra đây là một nước đi kém hiệu quả (hiện tượng Fail-low).
+    
+    \item \textbf{Nút Cắt tỉa / Cut-Node (Nút C):} Ngay tại nước đi con đầu tiên, thuật toán đã tìm thấy một thế cờ mang lại điểm số $12$. Vì $12 \ge 10$ ($\text{score} \ge \beta$), nước đi này "quá tốt" đối với phe ta. Trở lại thực tế, đối phương là người khôn ngoan và họ đã có sẵn một phương án ở lượt trước để ghim điểm số của ta ở mức tối đa là $10$ ($\beta$). Do đó, đối phương chắc chắn sẽ không bao giờ chọn đi vào nhánh C để dâng cho ta mức điểm $12$. Biết được điều này, thuật toán lập tức \textbf{cắt tỉa} toàn bộ các nước đi con còn lại (nút "?") để tiết kiệm thời gian (hiện tượng Fail-high / Beta Cutoff).
+\end{itemize}
+
+
 \subsection{Quản lý thời gian}
 
 Trong các giải đấu cờ máy, việc quyết định khi nào nên dừng suy nghĩ quan trọng không kém việc engine tính toán như thế nào. Nếu dừng quá sớm, engine có thể đi những nước yếu do chưa nhìn đủ sâu; nếu nghĩ quá lâu, engine có thể bị xử thua vì hết thời gian. Mục tiêu của hệ thống quản lý thời gian là phân bổ quỹ thời gian còn lại của ván đấu một cách thông minh, ưu tiên đào sâu ở những thế cờ phức tạp nhưng vẫn đảm bảo tính an toàn tuyệt đối về mặt thời gian cho toàn bộ phần còn lại của trận đấu.
@@ -425,24 +564,121 @@ Trong các giải đấu cờ máy, việc quyết định khi nào nên dừng 
 
 \end{itemize}
 
-\subsection{Sắp xếp nước đi}
+\subsection{Sắp xếp nước đi (Move Ordering)}
 
 Hiệu năng cắt tỉa của thuật toán Alpha-Beta phụ thuộc hoàn toàn vào việc hệ thống có duyệt các nước đi tốt nhất trước hay không. Nếu nước đi tối ưu được xét đầu tiên, biên $\alpha$ sẽ được nâng lên nhanh chóng, tạo ra các pha cắt tỉa $\beta$ sớm ở các nhánh khác.
 
-Lingine gán điểm ưu tiên sắp xếp cho mỗi nước đi theo một trật tự được phân cấp nghiêm ngặt:
+Vì vậy, Lingine gán điểm ưu tiên (Move Score) cho mọi nước đi hợp lệ tại một nút, sau đó phân cấp chúng theo một trật tự được thiết kế cực kỳ nghiêm ngặt:
 
 \begin{enumerate}
-    \item \textbf{Nước đi từ Bảng băm:} Nước đi tốt nhất được lưu trong Transposition Table từ các lần duyệt trước luôn được ưu tiên tuyệt đối ($\text{Score} = 2 \times 10^9$).
-    \item \textbf{Nước đi ăn quân:} Được sắp xếp theo heuristic MVV-LVA (\textit{Most Valuable Victim - Least Valuable Attacker}) để ưu tiên các nước ăn quân dùng quân nhỏ ăn quân lớn. Công thức: $\text{Score} = 10^9 + \text{Victim} \times 10^7 - \text{Attacker} \times 10^5$.
-    \item \textbf{Nước đi sát thủ:} Các nước đi không ăn quân nhưng đã từng gây ra cắt tỉa $\beta$ ở các nhánh khác cùng độ sâu ($\text{Score} = 9 \times 10^8$).
-    \item \textbf{Nước đi lịch sử:} Tích lũy điểm thưởng dựa trên lịch sử thành công của các nước đi không ăn quân trong quá khứ.
+    \item \textbf{Nước đi từ Bảng băm (TT Move):} Nếu trạng thái bàn cờ hiện tại đã từng được tính toán và lưu trong Transposition Table (Bảng băm), nước đi tốt nhất được ghi nhận từ lần duyệt trước sẽ được ưu tiên tuyệt đối. Về mặt xác suất, đây gần như chắc chắn là nước đi mạnh nhất.
+    
+    \item \textbf{Nước đi ăn quân (Captures):} Các nước đi mang tính trao đổi quân được đánh giá thông qua Heuristic MVV-LVA (\textit{Most Valuable Victim - Least Valuable Attacker}). Nguyên tắc cốt lõi là ưu tiên tối đa các pha dùng quân giá trị thấp để tiêu diệt quân giá trị cao của đối phương (ví dụ: dùng Tốt ăn Xe).
+    
+    \item \textbf{Nước đi sát thủ (Killer Moves):} Ưu tiên các nước đi không ăn quân (quiet moves) nhưng lại có lịch sử "đáng gờm" — tức là chúng đã gây ra các pha cắt tỉa $\beta$ ở các nhánh khác có cùng độ sâu trong cây tìm kiếm hiện tại.
+    
+    \item \textbf{Nước đi lịch sử (History Heuristic):} Nếu một nước đi không ăn quân từng mang lại kết quả tốt (tạo ra cắt tỉa) trong quá khứ, nó sẽ được cộng dồn điểm thưởng. Các nước đi có điểm lịch sử lũy kế cao sẽ được duyệt trước các nước đi vô danh khác.
 \end{enumerate}
+
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[font=\small, line join=round]
+        % Định nghĩa màu sắc (tông màu pastel nhạt, chuyên nghiệp)
+        \colorlet{colorTT}{red!15}
+        \colorlet{colorMVV}{orange!15}
+        \colorlet{colorKiller}{cyan!15}
+        \colorlet{colorHist}{blue!10}
+        
+        % Vẽ các tầng của hình thang (độ dốc đứng hơn để thanh thoát hơn)
+        % Tầng 4: History (Đáy)
+        \filldraw[fill=colorHist, draw=black!80, thick] (-3.5, 0) -- (-3.0, 1.2) -- (3.0, 1.2) -- (3.5, 0) -- cycle;
+        % Tầng 3: Killer
+        \filldraw[fill=colorKiller, draw=black!80, thick] (-3.0, 1.2) -- (-2.5, 2.4) -- (2.5, 2.4) -- (3.0, 1.2) -- cycle;
+        % Tầng 2: MVV-LVA
+        \filldraw[fill=colorMVV, draw=black!80, thick] (-2.5, 2.4) -- (-2.0, 3.6) -- (2.0, 3.6) -- (2.5, 2.4) -- cycle;
+        % Tầng 1: TT Move (Đỉnh hình thang)
+        \filldraw[fill=colorTT, draw=black!80, thick] (-2.0, 3.6) -- (-1.5, 4.8) -- (1.5, 4.8) -- (2.0, 3.6) -- cycle;
+        
+        % Chữ hiển thị bên trong các tầng
+        \node[text=black!80, align=center] at (0, 0.6) (history) {Nước đi Lịch sử \\ (History)};
+        \node[text=black!80, align=center] at (0, 1.8) (killer) {Nước đi Sát thủ \\ (Killer)};
+        \node[text=black!80, align=center] at (0, 3.0) (capture) {Ăn quân \\ (MVV-LVA)};
+        \node[text=black!80, align=center] at (0, 4.2) (tt) {TT Move};
+        % Cột điểm số
+        \node[right, font=\footnotesize\bfseries, text=red!70!black, right=1.5cm of tt] (tt_desc) {$2 \times 10^9$};
+        \node[right, font=\footnotesize, text=black!90, right=2cm of capture] (capture_desc) {$10^9 + \text{Victim} \times 10^7 - \text{Attacker} \times 10^5$};
+        \node[right, font=\footnotesize, text=black!90, right=2.5cm of killer] (killer_desc) {$9 \times 10^8$};
+        \node[right, font=\footnotesize, text=black!90, right=3cm of history] (history_desc) {Lũy kế theo thành tích ($\ge 0$)};
+
+        % Đường nét đứt nối ra các hệ số điểm (rút ngắn lại để neo sát cạnh mới)
+        \draw[dashed, draw=gray, thick] (tt) -- (tt_desc);
+        \draw[dashed, draw=gray, thick] (capture) -- (capture_desc);
+        \draw[dashed, draw=gray, thick] (killer) -- (killer_desc);
+        \draw[dashed, draw=gray, thick] (history) -- (history_desc);
+
+        % Mũi tên chỉ Mức độ ưu tiên bên trái (dịch vào gần tháp hơn)
+        \draw[-latex, thick, color=gray!80!black] (-4.5, 0) -- (-4.5, 4.8) node[above, font=\bfseries] {Mức độ ưu tiên};
+        
+    \end{tikzpicture}
+    \caption{Tháp phân cấp thứ tự duyệt nước đi trong Lingine.}
+    \label{fig:move_ordering}
+\end{figure}
+
 
 \subsection{Tìm kiếm sâu dần (Iterative Deepening)}
 
 Thay vì ngay lập tức ra lệnh cho thuật toán tìm kiếm một mạch ở độ sâu tối đa $N$, engine sẽ duyệt lặp lại nhiều lần, bắt đầu từ độ sâu 1, sau đó là 2, 3... cho đến $N$. Quá trình này thoạt nhìn có vẻ lãng phí tính toán, nhưng thực tế lại mang đến lợi ích khổng lồ: ở mỗi độ sâu $d$, thuật toán sẽ lưu lại nước đi tốt nhất vào Bảng băm (TT Move). Khi duyệt đến độ sâu $d+1$, nước đi này sẽ được ưu tiên duyệt đầu tiên, giúp biên Alpha tăng vọt ngay từ sớm và tạo ra hiệu ứng cắt tỉa dây chuyền tối đa. Ngoài ra, nó giúp engine luôn có sẵn một nước đi tốt nhất để trả về trong trường hợp bị hết thời gian đột ngột.
 
 Lingine sử dụng một vòng lặp \texttt{while} tăng dần độ sâu lên đến \texttt{max\_depth}. Tại mỗi vòng lặp, engine cập nhật trung gian kết quả về giao diện người dùng thông qua giao thức UCI. Quan trọng nhất, engine liên tục kiểm tra giới hạn thời gian mềm. Nếu thuật toán nhận thấy không còn đủ thời gian an toàn để hoàn thành vòng lặp tiếp theo, nó sẽ tự động ngắt sớm và chốt nước đi tốt nhất của độ sâu vừa hoàn thành.
+
+\begin{figure}[htbp]
+    \centering
+    % Lưu ý: Cần thêm \usetikzlibrary{shapes.geometric, positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round, 
+        node distance=1cm and 1.5cm, % Khoảng cách mặc định giữa các nút
+        process/.style={rectangle, rounded corners, draw=blue!80!black, fill=blue!10, thick, minimum width=4cm, minimum height=1.2cm, align=center},
+        decision/.style={diamond, aspect=2, draw=orange!80!black, fill=orange!15, thick, align=center, inner sep=0pt},
+        database/.style={rectangle, draw=green!70!black, fill=green!10, thick, minimum width=4cm, minimum height=1.2cm, align=center},
+        terminal/.style={rectangle, rounded corners, draw=red!80!black, fill=red!15, thick, minimum width=3cm, minimum height=1.2cm, align=center},
+        arrow/.style={draw=black!80, -latex, thick},
+        dashed arrow/.style={draw=green!70!black, -latex, thick, dashed}
+    ]
+
+    % Cấu trúc các Nút (Nodes) sử dụng relative positioning
+    \node[process] (init) {Bắt đầu: Độ sâu $d = 1$};
+    \node[process, below=0.5cm of init] (search) {Duyệt Alpha-Beta \\ (Độ sâu hiện tại: $d$)};
+    \node[database, below=0.5cm of search] (tt) {Lưu nước đi tốt nhất \\ vào Bảng băm (TT)};
+    \node[decision, below=0.5cm of tt] (time) {Còn đủ \\ thời gian?};
+    
+    \node[terminal, below=1cm of time] (end) {Ngắt tìm kiếm \\ Trả về Best Move};
+    \node[process, fill=gray!15, draw=gray!80, minimum width=2.5cm, left=1.5cm of tt] (inc) {Tăng độ sâu \\ $d \leftarrow d + 1$};
+
+    % Các mũi tên luồng chính
+    \draw[arrow] (init) -- (search);
+    \draw[arrow] (search) -- (tt);
+    \draw[arrow] (tt) -- (time);
+    
+    % Điều kiện kiểm tra thời gian
+    \draw[arrow] (time) -- node[left, font=\small\bfseries, text=red!70!black] {Không} (end);
+    \draw[arrow] (time.west) -| node[pos=0.15, above, font=\small\bfseries, text=green!70!black] {Có} (inc.south);
+    
+    % Vòng lặp quay lại bước duyệt nhánh
+    \draw[arrow] (inc.north) |- (search.west);
+
+    % Mũi tên mô tả lợi ích của TT Move
+    \draw[dashed arrow] (tt.east) -- ++(2.2,0) |- node[pos=0.25, right, align=left, font=\footnotesize, text=green!70!black] {Ưu tiên duyệt TT Move đầu tiên \\ giúp nâng cao biên $\alpha$ sớm \\ \& tối đa hóa cắt tỉa $\beta$} (search.east);
+
+    % Giao thức UCI
+    \node[process, fill=gray!15, draw=gray!80, align=center, below right= of tt.south east] (uci) {Cập nhật giao diện \\ (\texttt{info depth d...})};
+
+    \draw[dashed, draw=gray!80, -latex, thick] (tt.south east) -- (uci.north west);
+
+    \end{tikzpicture}
+    \caption{Lưu đồ thuật toán Tìm kiếm sâu dần (Iterative Deepening)}
+    \label{fig:iterative_deepening}
+\end{figure}
 
 \subsection{Cửa sổ kỳ vọng (Aspiration Windows \& Fail-high Reductions)}
 
@@ -453,10 +689,158 @@ Thêm vào đó, Lingine đưa vào kỹ thuật \textit{Fail-high Reductions}: 
 Trong Lingine, cửa sổ kỳ vọng chỉ được kích hoạt từ độ sâu $\ge 6$. Bán kính ban đầu $\delta$ được đặt mặc định là 25 \textit{centipawns} và được thu hẹp linh hoạt theo độ sâu: $\delta = \max(25 - \text{depth}, 10)$. Quá trình tìm kiếm lặp lại như sau:
 \begin{itemize}
     \item Nếu điểm trả về lọt vào trong cửa sổ ($\alpha < \text{score} < \beta$): Tìm kiếm thành công, trả về điểm số.
+      % --- KỊCH BẢN 1: THÀNH CÔNG ---
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        axis/.style={thick, -latex, draw=black!70},
+        window/.style={rectangle, fill=cyan!10, draw=cyan!70!black, thick, minimum height=1.2cm},
+        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick}
+    ]
+    
+    % Trục điểm số
+    \draw[axis] (-4, 0) -- (4, 0) node[right] {\textit{Score}};
+    
+    % Cửa sổ [alpha, beta]
+    \draw[window] (-1, -0.6) rectangle (1, 0.6);
+    \draw[dashed, draw=gray] (0, -0.8) -- (0, 0.8) node[above, font=\footnotesize] {Điểm dự đoán ($N-1$)};
+    \node[below, font=\bfseries] at (-1, -0.6) {$\alpha$};
+    \node[below, font=\bfseries] at (1, -0.6) {$\beta$};
+
+    % Chấm điểm rơi vào giữa
+    \node[score_dot=green!50, label={[font=\bfseries, text=green!60!black]above:score}] at (0.3, 0) {};
+    
+    \end{tikzpicture}
+    \caption{Điểm số trả về nằm gọn trong Cửa sổ kỳ vọng ($\alpha < \text{score} < \beta$).}
+    \label{fig:aspiration_exact}
+\end{figure}
     \item Nếu $\text{score} \le \alpha$ (\textit{Fail-low}): Thế trận tiềm ẩn rủi ro lớn hơn dự kiến. Cửa sổ mở rộng phía dưới ($\alpha = \alpha - \delta$) và thuật toán bắt buộc phải duyệt lại với \textbf{độ sâu giữ nguyên} để tìm ra phương án phòng thủ.
+      % --- KỊCH BẢN 2: FAIL-LOW ---
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        axis/.style={thick, -latex, draw=black!70},
+        window/.style={rectangle, fill=cyan!10, draw=cyan!70!black, thick, minimum height=1.2cm},
+        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick}
+    ]
+    
+    % Trục điểm số
+    \draw[axis] (-5, 0) -- (3, 0) node[right] {\textit{Score}};
+    
+    % Cửa sổ [alpha, beta]
+    \draw[window] (-1, -0.6) rectangle (1, 0.6);
+    \draw[dashed, draw=gray] (0, -0.8) -- (0, 0.8) node[above, font=\footnotesize] {Điểm dự đoán ($N-1$)};
+    \node[below, font=\bfseries] at (-1, -0.6) {$\alpha$};
+    \node[below, font=\bfseries] at (1, -0.6) {$\beta$};
+
+    % Chấm điểm rơi ra ngoài biên trái
+    \node[score_dot=blue!50, label={[font=\bfseries, text=blue!70!black]above:score}] at (-2.2, 0) {};
+    
+    % Mũi tên mở rộng cửa sổ
+    \draw[-latex, thick, draw=blue!70!black] (-1.1, -0.3) -- (-4, -0.3) node[midway, below, font=\footnotesize] {Mở rộng: $\alpha - \delta$};
+    \draw[dashed, draw=blue!70!black, thick] (-4, -0.6) -- (-4, 0.6) node[above] {$\alpha_{new}$};
+
+    \end{tikzpicture}
+    \caption{Fail-low ($\text{score} \le \alpha$). Cửa sổ mở rộng xuống phía dưới.}
+    \label{fig:aspiration_fail_low}
+\end{figure}
     \item Nếu $\text{score} \ge \beta$ (\textit{Fail-high}): Thế trận rất tốt. Cửa sổ mở rộng phía trên ($\beta = \beta + \delta$) và biến đếm \texttt{consecutive\_fail\_high} tăng thêm 1. Độ sâu duyệt lại được cắt giảm xuống thành: \texttt{(depth - consecutive\_fail\_high).max(1)}.
+% --- KỊCH BẢN 3: FAIL-HIGH ---
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        axis/.style={thick, -latex, draw=black!70},
+        window/.style={rectangle, fill=cyan!10, draw=cyan!70!black, thick, minimum height=1.2cm},
+        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick}
+    ]
+    
+    % Trục điểm số
+    \draw[axis] (-4, 0) -- (5, 0) node[right] {\textit{Score}};
+    
+    % Cửa sổ [alpha, beta]
+    \draw[window] (-1, -0.6) rectangle (1, 0.6);
+    \draw[dashed, draw=gray] (0, -0.8) -- (0, 0.8) node[above, font=\footnotesize] {Điểm dự đoán ($N-1$)};
+    \node[below, font=\bfseries] at (-1, -0.6) {$\alpha$};
+    \node[below, font=\bfseries] at (1, -0.6) {$\beta$};
+
+    % Chấm điểm rơi ra ngoài biên phải
+    \node[score_dot=red!50, label={[font=\bfseries, text=red!70!black]above:score}] at (2.8, 0) {};
+    
+    % Mũi tên mở rộng cửa sổ
+    \draw[-latex, thick, draw=red!70!black] (1.1, -0.3) -- (4, -0.3) node[midway, below, font=\footnotesize] {Mở rộng: $\beta + \delta$};
+    \draw[dashed, draw=red!70!black, thick] (4, -0.6) -- (4, 0.6) node[above] {$\beta_{new}$};
+
+    \end{tikzpicture}
+    \caption{Fail-high ($\text{score} \ge \beta$). Cửa sổ mở rộng lên phía trên.}
+    \label{fig:aspiration_fail_high}
+\end{figure}
 \end{itemize}
 Mỗi lần vượt rào thất bại, $\delta$ sẽ được nhân đôi ($\delta = \delta \times 2$) để cửa sổ mở rộng nhanh chóng cho lần tìm kiếm lại tiếp theo.
+
+\subsection{Tìm kiếm tĩnh (Quiescence Search)}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        >=latex,
+        node distance=1.5cm,
+        every node/.style={align=center},
+        state/.style={circle, draw, black, fill=white, minimum size=1.3cm},
+        greenstate/.style={circle, draw, black, thick, fill=green!20, minimum size=1.3cm},
+        redstate/.style={circle, draw, black, thick, fill=red!20, minimum size=1.3cm}
+    ]
+
+    % --- Đường giới hạn độ sâu (Vẽ trước để nằm dưới các node có nền trắng) ---
+    \draw[dashed, gray] (-6, -3.3) -- (3, -3.3) node[right, text=gray] {Depth Limit (Horizon)};
+
+    % --- Các Nút (Nodes) ---
+    \node[state] (start) at (0, 0) {Start};
+    \node[state] (n1) at (-1.5, -1.5) {+100};
+    \node[state] (n2) at (1.5, -1.5) {+50};
+    \node[state] (n3) at (-1.5, -3.3) {+100};
+    
+    \node[greenstate] (n4) at (-3, -5) {+500};
+    \node[state] (n5) at (0, -5) {+100};
+    
+    \node[redstate] (n6) at (-3, -7.5) {-900};
+
+    % --- Các Cạnh (Edges) ---
+    \draw[->] (start) -- (n1);
+    \draw[->] (start) -- (n2);
+    \draw[->] (n1) -- (n3);
+    \draw[->] (n3) -- (n4);
+    \draw[->] (n3) -- (n5);
+    
+    % Đường nối mở rộng Q-Search
+    \draw[->, dashed, blue, thick] (n4) -- (n6);
+
+    % --- Chú thích văn bản (Annotations) ---
+    % Chú thích Horizon Effect (Bên phải)
+    \node[align=left, text=red, right] at (1.5, -6) {
+        \textbf{Horizon Effect:}\\
+        Dừng tại đây (Depth Limit)\\
+        thấy điểm cao (+500)\\
+        nhưng thực tế bị Hết cờ\\
+        ngay sau đó (-900).
+    };
+
+    % Chú thích Quiescence Search (Bên trái)
+    \node[align=right, text=blue, left] at (-4, -6) {
+        \textbf{Quiescence Search:}\\
+        Tiếp tục mở rộng\\
+        các nước ăn quân\\
+        để tìm giá trị thực.
+    };
+
+    \end{tikzpicture}
+    \caption{Minh họa Horizon Effect và Tìm kiếm tĩnh}
+    \label{fig:qsearch_tree_nodes}
+\end{figure}
+
+Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng. Hình \ref{fig:qsearch_tree_nodes} minh họa kỹ thuật này.
 
 \subsection{Tìm kiếm biến thể chính (Principal Variation Search - PVS)}
 
@@ -464,59 +848,62 @@ Với sắp xếp nước đi tốt, ta có niềm tin rằng nước đi đầu
 
 Về phần cài đặt, với nước đi đầu tiên, tìm kiếm với $[-\beta, -\alpha]$; với các nước sau, tìm kiếm với cửa sổ $[-\alpha - 1, -\alpha]$. Chỉ khi kết quả trả về cho thấy nước đi này thực sự tốt hơn điểm $\alpha$ (\textit{fail-high}), ta mới phải tốn công tìm kiếm lại với cửa sổ chuẩn $[-\beta, -\alpha]$.
 
-\begin{lstlisting}[language=Rust, caption=Giải thuật PVS trong Lingine]
-pub(super) fn pv_search<const PV: bool>(
-    &mut self,
-    depth: i8,
-    ply: u8,
-    alpha: i32,
-    beta: i32,
-    reductions: i8,
-) -> i32 {
-    let mut score = -self.negamax::<false, false>(
-        depth - 1 - reductions,
-        ply + 1,
-        -alpha - 1,
-        -alpha,
-        Default::default(),
-    );
+Hình \ref{fig:pvs_flowchart} minh họa sơ đồ giải thuật của kĩ thuật này.
 
-    // If the search fails and there was depth reduction, we re-search
-    // with the full depth to get a better picture of the position.
-    if alpha < score && reductions > 0 {
-        score = -self.negamax::<false, false>(
-            depth - 1,
-            ply + 1,
-            -alpha - 1,
-            -alpha,
-            Default::default(),
-        );
-    }
+\begin{figure}[htbp]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{shapes.geometric, positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=0.8cm and 0.5cm, % Khoảng cách tương đối mặc định
+        block/.style={rectangle, rounded corners, draw=black!80, thick, align=center, minimum height=1.2cm},
+        pv/.style={block, fill=green!10, draw=green!70!black, minimum width=4.2cm},
+        nw/.style={block, fill=blue!10, draw=blue!70!black, minimum width=4.5cm},
+        re/.style={block, fill=orange!15, draw=orange!80!black, minimum width=3.8cm},
+        decision/.style={diamond, aspect=2.5, draw=gray!80!black, fill=gray!15, thick, align=center, inner sep=1pt},
+        arrow/.style={-latex, thick, draw=black!80},
+        dashed arrow/.style={-latex, thick, dashed, draw=green!70!black}
+    ]
 
-    // If the search fails, we need to re-search with the full window to get the
-    // correct score and PV.
-    if alpha < score && score < beta {
-        score =
-            -self.negamax::<false, PV>(depth - 1, ply + 1, -beta, -alpha, Default::default());
-    }
+    % Nút Root
+    \node[block, fill=gray!15, minimum width=6cm, font=\bfseries] (root) {Lấy nước đi từ danh sách đã sắp xếp};
 
-    score
-}
+    % Phân nhánh (neo tương đối vào điểm split)
+    \node[pv, below=1cm of root, xshift=-4cm] (move1) {\textbf{Nước đi đầu tiên} (Giả định PV) \\ \texttt{moves\_played == 0}};
+    \node[nw, below=1cm of root, xshift=4cm] (moven) {\textbf{Các nước đi còn lại} (Giả định kém) \\ \texttt{moves\_played > 0}};
 
-/// In the negamax function
-let score = if moves_played == 0 {
-    -self.negamax::<false, PV>(
-        depth - 1 + is_singular as i8,
-        ply + 1,
-        -beta,
-        -alpha,
-        SearchContext::default(),
-    )
-} else {
-    self.pv_search::<PV>(depth, ply, alpha, beta, reductions)
-};
+    \draw[arrow] (root) -- (move1);
+    \draw[arrow] (root) -- (moven);
 
-\end{lstlisting}
+    % Nhánh Trái (PV Move)
+    \node[pv, below=of move1] (search1) {Tìm kiếm \textbf{Full Window} \\ Cửa sổ: $[-\beta, -\alpha]$};
+    \node[pv, below=of search1] (update) {Chốt điểm số $\text{score}$ \\ Cập nhật biên an toàn $\alpha$};
+    
+    \draw[arrow] (move1) -- (search1);
+    \draw[arrow] (search1) -- (update);
+
+    % Nhánh Phải (Late Moves)
+    \node[nw, below=of moven] (searchn) {Tìm kiếm \textbf{Null Window} \\ Cửa sổ cực hẹp: $[-\alpha - 1, -\alpha]$};
+    \node[decision, below=of searchn] (check) {\texttt{$\alpha <$ score}? \\ (Fail-high)};
+    
+    \draw[arrow] (moven) -- (searchn);
+    \draw[arrow] (searchn) -- (check);
+
+    % Xử lý kết quả từ Null Window (neo tương đối vào 2 bên của biến check)
+    \node[block, fill=gray!10, draw=gray!60, minimum width=2.5cm, text=gray!80!black, below right=0.8cm and 0.2cm of check] (faillow) {Không (Kém thật) \\ \textbf{Cắt tỉa thành công}};
+    \node[re, below left=0.8cm and 0.2cm of check] (research) {Phát hiện nước đi tốt! \\ \textbf{Re-search Full Window} \\ $[-\beta, -\alpha]$};
+
+    \draw[arrow] (check) -| node[above right, xshift=-1cm, font=\footnotesize, text=gray!80!black] {Đúng dự đoán} (faillow.north);
+    \draw[arrow] (check) -| node[above left, xshift=1cm, font=\footnotesize, text=red!70!black] {Sai dự đoán!} (research.north);
+
+    % Vòng lặp cập nhật điểm số (Sử dụng neo giao điểm vuông góc)
+    \coordinate[below=0.8cm of research] (loop_y);
+      \draw[dashed arrow] (research.south) -- (loop_y) -- (loop_y -| update.south) node[midway, align=center, below, font=\footnotesize, text=green!70!black] {Đóng vai trò là PV mới\\(Cập nhật lại $\alpha$)} -- (update.south);
+
+    \end{tikzpicture}
+    \caption{Lưu đồ giải thuật Principal Variation Search.}
+    \label{fig:pvs_flowchart}
+\end{figure}
 
 \subsection{Các kỹ thuật Mở rộng không gian (Search Extensions)}
 
@@ -535,7 +922,52 @@ Nếu tại một nút mạng chỉ có đúng 1 nước đi hợp lệ duy nh�
 
 Nếu nước đi từ bảng chuyển vị được đánh giá là cực kỳ tốt, trong khi mọi nước đi khác đều tệ (cách biệt xa), đây là một nước đi "hiển nhiên phải đi". Ta cần mở rộng độ sâu cho nó để chắc chắn rằng đằng sau nước đi hiển nhiên này không ẩn chứa một cái bẫy chiến thuật sâu.
 
-\textbf{Cài đặt:} Ở độ sâu $\ge 8$, Lingine thử duyệt các nước đi thay thế với độ sâu giảm 3 ($R=3$) và một biên nhỏ $\text{rbeta} = \text{score} - 2 \times \text{depth}$. Nếu các nước đi thay thế này đều thất bại (\textit{fail-low}), nước đi TT chính thức được công nhận là "đơn trị" và được tăng thêm 1 độ sâu khi duyệt.
+
+\begin{figure}[H]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{shapes.geometric, positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=0.8cm and 1.0cm, % Khoảng cách tương đối mặc định
+        block/.style={rectangle, rounded corners, draw=blue!80!black, fill=blue!10, thick, minimum width=4cm, minimum height=1.2cm, align=center},
+        test/.style={rectangle, rounded corners, draw=purple!80!black, fill=purple!10, thick, minimum width=4cm, minimum height=1.2cm, align=center},
+        decision/.style={diamond, aspect=2.2, draw=orange!80!black, fill=orange!15, thick, align=center, inner sep=1pt},
+        extend/.style={rectangle, draw=green!70!black, fill=green!10, thick, minimum width=3.8cm, minimum height=1.2cm, align=center},
+        normal/.style={rectangle, draw=gray!80!black, fill=gray!15, thick, minimum width=3.8cm, minimum height=1.2cm, align=center},
+        arrow/.style={-latex, thick, draw=black!80}
+    ]
+
+    % Nút Khởi đầu
+    \node[block] (start) {\textbf{Trạng thái hiện tại ($d \ge 8$)} \\ Có nước đi TT với điểm số $\text{score}$};
+
+    % Nút Test (Kiểm tra các nước thay thế)
+    \node[test, below=of start] (singular_test) {\textbf{Bài test Đơn trị (Singular Test)} \\ Duyệt lướt các nước đi thay thế \\ Biên đánh giá: $\text{rbeta} = \text{score} - 2 \times d$ \\ Độ sâu: $d - 3$};
+
+    \draw[arrow] (start) -- (singular_test);
+
+    % Điều kiện kiểm tra
+    \node[decision, below=of singular_test] (check) {Các nước thay thế \\ đều $\le \text{rbeta}$? \\ (Fail-low)};
+
+    \draw[arrow] (singular_test) -- (check);
+
+    % Điểm neo ẩn để chia nhánh cân xứng
+    \coordinate[below=0.8cm of check] (split);
+
+    % Nhánh Yes (Trái - Mở rộng)
+    \node[extend, left=0.4cm of split] (do_extend) {\textbf{Nước đi hiển nhiên!} \\ (Singular Move) \\ $\Rightarrow$ Mở rộng độ sâu: $d \leftarrow d + 1$};
+
+    % Nhánh No (Phải - Giữ nguyên)
+    \node[normal, right=0.4cm of split] (no_extend) {\textbf{Có lựa chọn thay thế tốt} \\ (Non-Singular) \\ $\Rightarrow$ Giữ nguyên độ sâu $d$};
+
+    \draw[arrow] (check) -- node[above left, font=\footnotesize, text=green!70!black] {Đúng (Áp đảo)} (do_extend.north);
+    \draw[arrow] (check) -- node[above right, font=\footnotesize, text=red!70!black] {Sai} (no_extend.north);
+
+    \end{tikzpicture}
+    \caption{Cơ chế Mở rộng đơn trị (Singular Extensions).}
+    \label{fig:singular_extensions}
+\end{figure}
+
+\textbf{Cài đặt:} Ở độ sâu $\ge 8$, Lingine thử duyệt các nước đi thay thế với độ sâu giảm 3 ($R=3$) và một biên nhỏ $\text{rbeta} = \text{score} - 2 \times \text{depth}$. Nếu các nước đi này đều thất bại (\textit{fail-low}), nước đi TT được coi là "đơn trị" và được tăng thêm 1 độ sâu khi duyệt.
 
 \subsection{Các kỹ thuật Cắt tỉa (Pruning) và Giảm độ sâu (Reductions)}
 
@@ -544,32 +976,362 @@ Trái ngược với mở rộng, cắt tỉa giúp engine bỏ qua những nhá
 \subsubsection{Giảm độ sâu lặp nội bộ (Internal Iterative Reductions - IIR)}
 Nếu ta đang ở một độ sâu lớn mà Bảng băm lại không có dữ liệu về thế cờ này, rất có thể đây là một thế trận kém từng bị cắt tỉa ở quá khứ. Thay vì tốn thời gian duyệt sâu ngay lập tức, ta giảm độ sâu đi 1 để quét nhanh, tìm ra nước đi khá nhất rồi mới quyết định duyệt tiếp.
 
+\begin{figure}[H]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{shapes.geometric, positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=0.8cm and 1.5cm, % Khoảng cách tương đối mặc định
+        block/.style={rectangle, rounded corners, draw=blue!80!black, fill=blue!10, thick, minimum width=3.8cm, minimum height=1.2cm, align=center},
+        decision/.style={diamond, aspect=2.2, draw=orange!80!black, fill=orange!15, thick, align=center, inner sep=1pt},
+        action/.style={rectangle, rounded corners, draw=red!80!black, fill=red!10, thick, minimum width=3.8cm, minimum height=1.2cm, align=center},
+        result/.style={rectangle, draw=green!70!black, fill=green!10, thick, minimum width=3.8cm, minimum height=1.2cm, align=center},
+        arrow/.style={-latex, thick, draw=black!80},
+        dashed arrow/.style={-latex, thick, dashed, draw=green!70!black}
+    ]
+
+    % Nút Khởi đầu
+    \node[block] (start) {\textbf{Trạng thái hiện tại} \\ (Độ sâu $d$ đủ lớn)};
+
+    % Điều kiện kiểm tra
+    \node[decision, right=of start] (check_tt) {Bảng băm (TT) \\ có lưu nước đi?};
+
+    % Nhánh Yes (Trái)
+    \node[block, right=1.2cm of check_tt] (normal_flow) {Thực hiện Sắp xếp nước đi \\ \& Duyệt Alpha-Beta ($d$)};
+
+    % Nhánh No (Dưới - Kích hoạt IIR)
+    \node[action, below=of check_tt] (iir_search) {\textbf{Kích hoạt IIR} \\ Duyệt lướt với độ sâu $d-1$};
+    
+    \node[result, below=of iir_search] (pseudo_tt) {Lưu lại được một \\ \textbf{Nước đi tốt tạm thời}};
+
+    % Vẽ mũi tên luồng đi
+    \draw[arrow] (start) -- (check_tt);
+    \draw[arrow] (check_tt) -- node[above, font=\footnotesize, text=green!70!black] {Có} (normal_flow);
+    \draw[arrow] (check_tt) -- node[right, font=\footnotesize, text=red!70!black] {Không (Rủi ro)} (iir_search);
+    \draw[arrow] (iir_search) -- (pseudo_tt);
+
+    % Mũi tên đứt nét quay ngược lại luồng chính (Sử dụng neo vuông góc -|)
+    \draw[dashed arrow] (pseudo_tt.west) -| node[pos=0.5, below, font=\footnotesize, text=green!70!black, align=center] {Sử dụng làm\\TT Move ảo} (normal_flow.south);
+
+    \end{tikzpicture}
+    \caption{Cơ chế Giảm độ sâu lặp nội bộ.}
+    \label{fig:iir_flowchart}
+\end{figure}
+
 \subsubsection{Cắt tỉa nước đi rỗng (Null Move Pruning - NMP)}
+
+\begin{figure}[H]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=1.2cm and 1.5cm,
+        maxnode/.style={rectangle, rounded corners, draw=blue!80!black, fill=blue!10, thick, minimum width=3.5cm, minimum height=1.2cm, align=center},
+        minnode/.style={rectangle, rounded corners, draw=red!80!black, fill=red!10, thick, minimum width=3.5cm, minimum height=1.2cm, align=center},
+        pruned/.style={rectangle, rounded corners, draw=gray, dashed, fill=gray!5, thick, minimum width=1.8cm, minimum height=0.8cm, align=center, text=gray},
+        arrow/.style={-latex, thick, draw=black!80},
+        pruned arrow/.style={-latex, thick, dashed, draw=gray}
+    ]
+
+    % Nút gốc (Phe Ta)
+    \node[maxnode] (root) {\textbf{Thế cờ hiện tại (Max)} \\ Độ sâu: $d$};
+
+    % --- NHÁNH TRÁI: NULL MOVE (ĐƯỢC ƯU TIÊN DUYỆT TRƯỚC) ---
+    \node[minnode, below left=1cm and 1.5cm of root] (null_node) {\textbf{Phe Địch (Min) đi tiếp} \\ \textit{(Ta vừa bỏ lượt)} \\ Độ sâu: $d - 1 - R$};
+    
+    \draw[arrow, draw=purple!80!black] (root.south) -- node[above left, font=\footnotesize\bfseries, text=purple!80!black] {Null Move} (null_node.north);
+
+    % Cây tìm kiếm con (Vẽ thủ công hình tam giác)
+    \coordinate[below=1.5cm of null_node] (subtree_bottom);
+    \draw[fill=purple!5, draw=purple!80!black, thick] (null_node.south) -- ++(-1.5, -2) -- ++(3.0, 0) -- cycle;
+      \node[below=0.6cm of null_node, align=center, font=\footnotesize, text=purple!80!black] {Duyệt\\với độ sâu\\giảm mạnh};
+
+    % Kết quả nhánh Null Move
+    \node[below=0.4cm of subtree_bottom, text=red!70!black] (score) {Kết quả: $\text{score} \ge \beta$ (Fail-high)};
+
+    % --- NHÁNH PHẢI: CÁC NƯỚC ĐI BÌNH THƯỜNG ---
+    \node[pruned, below=of root] (move1) {Nước đi 1};
+    \node[pruned, right=0.3cm of move1] (move2) {Nước đi 2};
+    \node[font=\bfseries, text=gray, right=0.1cm of move2] (dots) {...};
+
+    \draw[pruned arrow] (root.south) -- node[above right, pos=0.85, xshift=1cm, align=center, font=\footnotesize, text=gray] {Các nước đi\\hợp lệ} (move1.north);
+    \draw[pruned arrow] (root.south) -- (move2.north);
+
+    % --- LIÊN KẾT CẮT TỈA ---
+    % Đặt khung thông báo cắt tỉa ở dưới các nhánh bình thường
+    \node[rectangle, rounded corners, fill=red!15, draw=red!80!black, thick, font=\bfseries, text=red!80!black, below=0.8cm of move1, xshift=1cm] (cut_msg) {Cắt tỉa toàn bộ!};
+    
+    % Mũi tên từ kết quả Null Move chỉ sang việc cắt tỉa
+    \draw[arrow, draw=red!80!black] (score.east) -| node[pos=0.28, xshift=1cm, below, font=\footnotesize, align=center] {Thế trận áp đảo ngay cả khi bỏ lượt \\ $\rightarrow$ Không cần duyệt các nước hợp lệ} (cut_msg.south);
+    
+    % Mũi tên gạch chéo nhánh bình thường
+    \draw[arrow, draw=red!80!black] (cut_msg.north) -- (move1.south);
+    \draw[arrow, draw=red!80!black] (cut_msg.north) -- (move2.south);
+
+    % --- HỘP GHI CHÚ ĐIỀU KIỆN ---
+    \node[rectangle, draw=gray!80, fill=yellow!10, align=left, font=\footnotesize, left=0.2cm of root, yshift=0.2cm] (cond) {
+        \textbf{Điều kiện an toàn:}\\
+        $\bullet$ Phe Ta còn quân tấn công\\
+        $\bullet$ $\text{depth} \ge 12 \rightarrow$ \textit{Verification Search}
+    };
+
+    \end{tikzpicture}
+    \caption{Minh họa cây tìm kiếm của Null Move Pruning (NMP).}
+    \label{fig:null_move_pruning}
+\end{figure}
 Lấy ý tưởng "nếu tôi bỏ qua một lượt đi mà thế trận của tôi vẫn đủ mạnh để nghiền nát đối thủ (điểm vượt $\beta$), thì tôi không cần tốn thời gian tính toán các nước đi hợp lệ nữa". NMP đóng vai trò cốt lõi trong việc ép cây tìm kiếm nhỏ lại.
+
 
 Trong cài đặt, Lingine cho đối phương đi hai lần liên tiếp. Độ sâu duyệt được giảm cực mạnh: $R = 3 + \lfloor \frac{\text{depth}}{6} \rfloor$. Để tránh lỗi do Zugzwang (đi nước nào cũng thua), NMP chỉ áp dụng khi ta còn quân tấn công. Tại độ sâu lớn ($\ge 12$), một thuật toán \textit{Verification Search} được gọi để kiểm chứng lại việc cắt tỉa có gây bỏ sót các đòn sát cục ẩn hay không.
 
-\subsubsection{Cắt tỉa vô ích ngược (Reverse Futility Pruning - RFP)}
-Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà điểm số của ta đã bỏ xa biên $\beta$ một khoảng an toàn lớn, ta có thể cắt tỉa nhánh ngay tại chỗ mà không cần phải thực hiện bất kỳ nước đi nào.
-
-Trong cài đặt, tại độ sâu $< 8$, nếu $\text{Eval} - 100 \times (\text{depth} - \text{improving}) > \beta$, trả về ngay điểm Eval.
-
 \subsubsection{Cắt tỉa vô ích (Futility Pruning - FP)}
+\begin{figure}[H]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=0.8cm and 0.5cm,
+        axis/.style={thick, -latex, draw=black!70},
+        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick},
+        limit_line/.style={dashed, thick, draw=#1},
+        box/.style={rectangle, rounded corners, draw=#1!80!black, fill=#1!10, thick, align=center, font=\footnotesize, inner sep=4pt}
+    ]
+
+    % Tô màu nền phân chia các khu vực (Đã mở rộng scale y từ -3.0 đến 3.0 giống RFP)
+    % Vùng đỏ: Tuyệt vọng (Sẽ bị cắt tỉa)
+    \fill[red!5] (-6.5, -3.0) rectangle (-2, 3);
+    % Vùng cam: Nguy hiểm nhưng còn hy vọng (Độ rộng 4.5 giống RFP)
+    \fill[orange!5] (-2, -3.0) rectangle (2.5, 3);
+    % Vùng xanh: An toàn
+    \fill[green!5] (2.5, -3.0) rectangle (5, 3);
+
+    % Trục điểm số (Scale x giống RFP)
+    \draw[axis] (-4.5, 0) -- (3.5, 0) node[right] {\textit{Score}};
+
+    % Điểm Alpha - Margin (Ngưỡng tuyệt vọng) - Đặt ở -2 giống mốc Beta của RFP
+    \coordinate (margin_pos) at (-2, 0);
+    \draw[limit_line=orange!80!black] (-2, -1.8) -- (-2, 2.4);
+    \node[below=1.8cm of margin_pos, text=orange!80!black, align=center] (margin_label) {Ngưỡng tuyệt vọng \\ $\alpha - \text{Margin}$};
+
+    % Điểm Alpha (Mốc an toàn tối thiểu) - Đặt ở 2.5 giống mốc Margin của RFP
+    \coordinate (alpha_pos) at (2.5, 0);
+    \draw[limit_line=green!70!black] (2.5, -1.8) -- (2.5, 2.4);
+    \node[below=1.8cm of alpha_pos, text=green!70!black] (alpha_label) {Biên $\alpha$};
+
+    % Mũi tên thể hiện kích thước Khoảng đệm (Dời hẳn lên cao để không bị đè)
+    \draw[latex-latex, draw=orange!80!black, thick] (-1.9, 2.2) -- (2.4, 2.2) node[midway, above, font=\footnotesize, text=orange!80!black] {Khoảng đệm $M = 100 \times \text{depth} + 50$};
+
+    % ==========================================
+    % KỊCH BẢN 1: Đánh giá tĩnh nằm ở Vùng tuyệt vọng
+    % ==========================================
+    \coordinate (eval_fail) at (-3.5, 0);
+    \node[score_dot=red!50, label={[text=red!70!black]below left:$\text{Eval}_1$}] at (eval_fail) {};
+    
+    % Hộp thông báo (Neo tương đối vào điểm Eval_1)
+    \node[box=red, above=0.7cm of eval_fail] (box_fail) {Quá thua thiệt ($\text{Eval} < \alpha - M$) \\ $\rightarrow$ Bỏ qua nước đi tĩnh (FP)};
+    \draw[-latex, draw=red!80!black] (eval_fail) -- (box_fail);
+
+    % ==========================================
+    % KỊCH BẢN 2: Đánh giá tĩnh chưa chạm đáy tuyệt vọng
+    % ==========================================
+    \coordinate (eval_pass) at (0.5, 0);
+    \node[score_dot=gray!50, label={[text=gray!80!black]above right:$\text{Eval}_2$}] at (eval_pass) {};
+    
+    % Hộp thông báo (Neo tương đối vào điểm Eval_2)
+    \node[box=gray, below=0.5cm of eval_pass] (box_pass) {Vẫn có hy vọng gỡ gạc \\ $\rightarrow$ Tiếp tục duyệt nước đi};
+    \draw[-latex, draw=gray!80!black] (eval_pass) -- (box_pass);
+
+    \end{tikzpicture}
+    \caption{Minh họa Cắt tỉa vô ích.}
+    \label{fig:futility_pruning}
+\end{figure}
 Trái ngược với RFP. Khi ta đang ở tình thế quá lép (điểm Eval cực thấp so với $\alpha$), và ta không ở thế bị chiếu, những nước đi bình thường không thể nào có phép màu giúp thế cờ lật ngược tình thế. Ta bỏ qua luôn nước này.
 
 \textbf{Cài đặt:} Tại độ sâu $\le 4$, nếu $\text{Eval} + 100 \times \text{depth} + 50 < \alpha$, các nước quiet sẽ bị bỏ qua (continue).
 
+\subsubsection{Cắt tỉa vô ích ngược (Reverse Futility Pruning - RFP)}
+
+\begin{figure}[htbp]
+    \centering
+    % Bắt buộc thêm \usetikzlibrary{positioning} vào Preamble
+    \begin{tikzpicture}[
+        font=\small, line join=round,
+        node distance=0.8cm and 0.5cm,
+        axis/.style={thick, -latex, draw=black!70},
+        score_dot/.style={circle, inner sep=2.5pt, fill=#1, draw=black!80, thick},
+        limit_line/.style={dashed, thick, draw=#1},
+        box/.style={rectangle, rounded corners, draw=#1!80!black, fill=#1!10, thick, align=center, font=\footnotesize, inner sep=4pt}
+    ]
+
+    % Tô màu nền phân chia các khu vực (Mở rộng chiều dọc lên 2.6 và xuống -2.0)
+    \fill[red!5] (-4.5, -3.0) rectangle (-2, 3);
+    \fill[orange!5] (-2, -3.0) rectangle (1.5, 3);
+    \fill[green!5] (1.5, -3.0) rectangle (9, 3);
+
+    % Trục điểm số
+    \draw[axis] (-4.5, 0) -- (7.5, 0) node[right] {\textit{Score}};
+
+    % Điểm Beta (Mốc cơ sở)
+    \coordinate (beta_pos) at (-2, 0);
+    \draw[limit_line=red!70!black] (-2, -1.8) -- (-2, 2.4);
+    \node[below=1.8cm of beta_pos, text=red!70!black] (beta_label) {Biên $\beta$};
+
+    % Điểm Beta + Margin (Ngưỡng an toàn)
+    \coordinate (margin_pos) at (2.5, 0);
+    \draw[limit_line=orange!80!black] (2.5, -1.8) -- (2.5, 2.4);
+    \node[below=1.8cm of margin_pos, text=orange!80!black, align=center] (margin_label) {Ngưỡng an toàn \\ $\beta + \text{Margin}$};
+
+    % Mũi tên thể hiện kích thước Khoảng đệm (Dời hẳn lên cao để không bị đè)
+    \draw[latex-latex, draw=orange!80!black, thick] (-1.9, 2.2) -- (2.4, 2.2) node[midway, above, font=\footnotesize, text=orange!80!black] {Khoảng đệm $M = 100 \times (\text{depth} - \text{improving})$};
+
+    % ==========================================
+    % KỊCH BẢN 1: Đánh giá tĩnh chưa đủ lớn
+    % ==========================================
+    \coordinate (eval_fail) at (-0.2, 0);
+    \node[score_dot=gray!50, label={[text=gray!80!black]below right:$\text{Eval}_1$}] at (eval_fail) {};
+    
+    % Hộp thông báo (Neo tương đối vào điểm Eval_1, nằm hoàn toàn dưới mũi tên margin)
+    \node[box=gray, above=0.7cm of eval_fail] (box_fail) {Chưa đủ an toàn \\ $\rightarrow$ Tiếp tục sinh nước đi};
+    \draw[-latex, draw=gray!80!black] (eval_fail) -- (box_fail);
+
+    % ==========================================
+    % KỊCH BẢN 2: Đánh giá tĩnh vượt ngưỡng
+    % ==========================================
+    \coordinate (eval_pass) at (5.5, 0);
+    \node[score_dot=green!50, label={[text=green!70!black]above left:$\text{Eval}_2$}] at (eval_pass) {};
+    
+    % Hộp thông báo (Neo tương đối vào điểm Eval_2)
+    \node[box=green, below=0.8cm of eval_pass] (box_pass) {Thế trận quá áp đảo \\ $\rightarrow$ Kích hoạt RFP (Trả về $\text{Eval}_2$)};
+    \draw[-latex, draw=green!70!black] (eval_pass) -- (box_pass);
+
+    \end{tikzpicture}
+    \caption{Minh họa Cắt tỉa vô ích ngược.}
+    \label{fig:reverse_futility_pruning}
+\end{figure}
+Nếu chỉ bằng việc đánh giá tĩnh (\textit{static evaluation}) mà điểm số của ta đã bỏ xa biên $\beta$ một khoảng an toàn lớn, ta có thể cắt tỉa nhánh ngay tại chỗ mà không cần phải thực hiện bất kỳ nước đi nào.
+
+Trong cài đặt, tại độ sâu $< 8$, nếu $\text{Eval} - 100 \times (\text{depth} - \text{improving}) > \beta$, trả về ngay điểm Eval.
+
 \subsubsection{Cắt tỉa nước đi muộn (Late Move Pruning - LMP)}
+
+% Lưu ý: Cần khai báo \usepackage{tikz} và \usetikzlibrary{decorations.pathreplacing} trong phần preamble
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        move/.style={rectangle, draw, minimum height=1.5cm, minimum width=5.5cm, align=center},
+        pruned/.style={rectangle, draw, dashed, fill=gray!15, text=gray!80!black, minimum height=1.5cm, minimum width=5.5cm, align=center},
+    ]
+    
+    % Nhóm các nước đi được duyệt
+    \node[move, fill=blue!10] (m1) {Các nước đi bắt quân, phong cấp};
+    \node[move, below=of m1] (m2) {Quiet move 1 (Killer / History)};
+    \node[move, below=of m2] (m3) {Quiet move 2};
+    \node[below=0.1cm of m3] (vdots1) {$\vdots$};
+    \node[move, below=0.2cm of vdots1] (l_qm) {Quiet move thứ \textit{Limit}};
+
+    \node[below=of l_qm, minimum width=8cm] (anchor) {};
+    
+    % Đường ranh giới cắt tỉa (Cut-off line)
+    \draw[thick, dashed] (anchor.north west) -- (anchor.north east) 
+        node[right, align=left] {Ngưỡng ngắt vòng lặp:\\ Limit = $\frac{\text{depth}^2}{1 + \text{!improving}} + 8$};
+        
+    % Nhóm các nước đi bị cắt tỉa
+      \node[pruned, below=of anchor] (p1) {Quiet move thứ \textit{Limit} + 1};
+      \node[text=gray, below=0.1cm of p1] (vdots2) {$\vdots$};
+      \node[pruned, below=0.2cm of vdots2] (pn)   {Quiet move cuối cùng};
+    
+    % Mũi tên luồng duyệt
+    \draw[->, thick] (m1) -- (m2);
+    \draw[->, thick] (m2) -- (m3);
+    % Thêm fill=white để đường đứt nét không đè lên chữ
+    \draw[->, thick] (l_qm) -- (p1) node[midway, right=0.2cm, fill=white, inner sep=2pt] {Lệnh \texttt{break}};
+    
+    % Ngoặc ôm bên trái giải thích trạng thái
+    \draw [decorate, decoration={brace, amplitude=10pt, mirror}, thick] 
+        (m1.north west) -- (l_qm.south west) node [midway, left=0.4cm, align=right] {Được duyệt};
+        
+    \draw [decorate, decoration={brace, amplitude=10pt, mirror}, thick, gray] 
+        (p1.north west) -- (pn.south west) node [midway, left=0.4cm, align=right] {Bị cắt tỉa};
+        
+    \end{tikzpicture}
+    \caption{Minh họa cơ chế Cắt tỉa nước đi muộn (LMP).}
+    \label{fig:lmp_illustration}
+\end{figure}
+
 Tại các độ sâu thấp, sau khi ta đã thử một lượng lớn các nước đi không ăn quân mà không cải thiện được biên $\alpha$, ta có quyền kết luận rằng các nước đi quiet nằm tít phía dưới bảng xếp hạng (chưa được duyệt) đều là các nước đi vô giá trị.
 
 \textbf{Cài đặt:} Tại độ sâu $\le 3$, số lượng nước đi quiet được duyệt bị giới hạn bởi công thức: $\text{Limit} = \frac{\text{depth}^2}{1 + \text{!improving}} + 8$. Vượt quá giới hạn này, vòng lặp sinh nước đi bị ngắt.
 
 \subsubsection{Giảm độ sâu nước đi muộn (Late Move Reductions - LMR)}
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\sffamily\small,
+        bar/.style={rectangle, draw=black, thick, minimum width=0.8cm, anchor=south},
+        full/.style={bar, fill=blue!30},
+        reduced/.style={bar, fill=gray!20},
+        failhigh/.style={bar, fill=orange!40},
+        research/.style={bar, fill=red!15, draw=red, dashed, thick},
+        >={latex}
+    ]
+
+    % --- Trục tọa độ ---
+    \draw[thick, ->] (-0.5,0) -- (9,0) node[anchor=west,align=center] {Thứ tự nước đi\\(Move Ordering)};
+    \draw[thick, ->] (0,-0.5) -- (0,5) node[anchor=east, align=center] {Độ sâu \\ còn lại};
+
+    % --- Nhãn trục Y ---
+    \draw (-0.1, 4) -- (0.1, 4) node[left=0.2cm] {$D$}; 
+    \draw (-0.1, 2) -- (0.1, 2) node[left=0.2cm] {$D - R$};
+
+    % --- Vẽ các cột độ sâu ---
+    % Nước 1: Duyệt full
+    \node[full, minimum height=4cm] at (1, 0) {};
+    \node[below=0.1cm] at (1,0) {1};
+    \node[above=0.1cm, text=blue!80!black, scale=0.8] at (1,4) {\textbf{PV Move}};
+
+    % Nước 2: Duyệt full
+    \node[full, minimum height=4cm] at (2, 0) {};
+    \node[below=0.1cm] at (2,0) {2};
+
+    % Nước 3: LMR
+    \node[reduced, minimum height=2cm] at (3, 0) {};
+    \node[below=0.1cm] at (3,0) {3};
+
+    % Nước 4: LMR
+    \node[reduced, minimum height=2cm] at (4, 0) {};
+    \node[below=0.1cm] at (4,0) {4};
+
+    % Nước 5: Fail-high + Re-search
+    \node[failhigh, minimum height=2cm] at (5, 0) {};
+    \node[research, minimum height=2cm] at (5, 2) {}; % Phần bù đắp
+    \node[below=0.1cm] at (5,0) {5};
+    \node[above=0.1cm, text=red!80!black, scale=0.8, align=center] at (5,4) {\textbf{Fail-high!}\\[-0.5ex] \textit{(Re-search)}};
+
+    % Nước 6: LMR
+    \node[reduced, minimum height=2cm] at (6, 0) {};
+    \node[below=0.1cm] at (6,0) {6};
+    
+    % Nước 7: LMR (Vẽ thấp hơn chút để thể hiện R phi tuyến)
+    \node[reduced, minimum height=1.7cm] at (7, 0) {};
+    \node[below=0.1cm] at (7,0) {7};
+
+    % --- Chú thích & Trang trí (Đã fix lỗi đè chữ) ---
+    % Mũi tên: Đẩy xuống y=3.0 để tránh đụng chữ "Fail-high"
+    \draw[<->, dashed, color=black!60] (2.6, 3.0) -- (4.4, 3.0) node[midway, above, scale=0.85, align=center] {Vùng tiết kiệm\\thời gian};
+    \draw[<->, dashed, color=black!60] (5.6, 3.0) -- (7.4, 3.0);
+
+    % Ngoặc ôm (Brace): Tăng khoảng cách (raise) để tránh đè vào các số 1..7
+    \draw[decorate,decoration={brace,amplitude=5pt,mirror,raise=0.7cm}] 
+        (2.6,0) -- (7.4,0) node[midway,below=1.0cm] {\textbf{Vùng áp dụng Giảm độ sâu (LMR)}};
+
+    \end{tikzpicture}
+    \caption{Minh họa tác động của LMR lên cây tìm kiếm}
+    \label{fig:lmr_profile}
+\end{figure}
+
 Với các nước đi không bị cắt tỉa hoàn toàn bởi LMP nhưng nằm trễ trong thứ tự duyệt (chứng tỏ chúng không hấp dẫn), ta vẫn duyệt chúng nhưng với độ sâu giảm bớt. Nếu vô tình chúng trả về điểm fail-high, ta sẽ duyệt lại với độ sâu chuẩn.
 
 \textbf{Cài đặt:} LMR được áp dụng cho các nước đi không ăn quân khi số nước đi đã duyệt $\ge 2$ và độ sâu $\ge 3$. Mức giảm $R$ được tính theo công thức phi tuyến:
 \[ R = 0.75 + \frac{\ln(\text{moves\_played}) \times \ln(\text{depth})}{2.3} - \frac{\text{HistoryScore}}{20000} - PV_{\text{flag}} \]
 
-\subsection{Tìm kiếm tĩnh (Quiescence Search)}
-
-Khi cây duyệt đạt đến giới hạn (\texttt{depth $\le$ 0}), nếu engine gọi ngay hàm đánh giá tĩnh, nó rất dễ rơi vào bẫy ảo ảnh (\textit{Horizon Effect}) – ví dụ một thế cờ mà Xe ta vừa ăn Mã đối phương nhưng ngay sau đó bị đối phương ăn lại Xe. Nhìn bề ngoài ta đang lời Mã, nhưng thực tế là lỗ Xe. Quiescence Search giải quyết điều này bằng cách không dừng lại ngay, mà tiếp tục tạo ra một "cuộc chiến" phụ: chỉ sinh và duyệt các nước đi ăn quân, kéo dài cho đến khi bàn cờ bước vào trạng thái "tĩnh lặng" (không còn nước ăn quân hoặc đổi quân) thì mới trả về điểm số cuối cùng.

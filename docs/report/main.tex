@@ -1,7 +1,15 @@
 \documentclass[12pt,a4paper,oneside]{report}
 
 % Language and font encoding
-\usepackage{fontspec}
+\usepackage{iftex}
+\ifXeTeX
+  \usepackage{fontspec}
+\else\ifLuaTeX
+  \usepackage{fontspec}
+\else
+  \usepackage[T5]{fontenc}
+  \usepackage[utf8]{inputenc}
+\fi\fi
 \usepackage[vietnamese]{babel}
 
 % Margins and geometry
@@ -15,7 +23,11 @@
 % Graphics and diagrams
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{shapes,arrows,positioning,calc}
+\usetikzlibrary{positioning,calc,decorations.pathreplacing,backgrounds}
+\usetikzlibrary{shapes.geometric, arrows.meta}
+\usepackage{xcolor}
+\usepackage{pgfplots}
+\usepackage[most]{tcolorbox}
 
 % Tables and formatting
 \usepackage{booktabs}

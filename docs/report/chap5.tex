@@ -40,6 +40,59 @@ Trong bài đo lường thực tế tại thế cờ khởi đầu với độ s
 
 \subsection{Scripts và Môi trường Kiểm thử}
 
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        >=latex,
+        font=\sffamily,
+        % --- Định nghĩa Styles cho các khối (Đã sửa lỗi tham số) ---
+        db blue/.style={cylinder, draw=blue!70!black, thick, fill=blue!15, text=blue!70!black, shape border rotate=90, aspect=0.25,minimum height=2.6cm, align=center},
+        db green/.style={cylinder, draw=green!60!black, thick, fill=green!20, text=green!60!black, shape border rotate=90, aspect=0.25,minimum height=2.6cm, align=center},
+        proc teal/.style={rectangle, draw=teal!80!black, thick, fill=teal!20, text=teal!80!black, minimum height=1.6cm, align=center},
+        eng purple/.style={rectangle, draw=purple!70!black, thick, fill=purple!15, text=purple!70!black, minimum height=1.5cm, align=center},
+        labelbox/.style={rectangle, fill=gray!25, text=black!80, inner sep=4pt, font=\small\sffamily}
+    ]
+
+    % --- Các Nút (Nodes) chính ---
+    % 1. Opening Book
+    \node[db blue] (book) at (-4.5, 0) {Opening\\Book};
+
+    % 2. Sylvan CLI Tournament
+    \node[proc teal] (sylvan) at (0, 0) {Sylvan CLI\\Tournament};
+
+    % 3. Engines & Result DB
+    \node[eng purple] (lingine) at (6.5, 2.5) {Lingine\\v1.9.0};
+    \node[eng purple] (fairy) at (6.5, 0) {Fairy-\\Stockfish};
+    \node[db green] (db) at (6.5, -2.5) {Result DB\\PGN};
+
+    % --- Các Nút Nhãn (Labels) xen giữa đường nối ---
+    \node[labelbox] (lbl_fen) at (-2.5, 0) {Cấp FEN};
+    \node[labelbox] (lbl_giao1) at (3.2, 2.5) {UCI};
+    \node[labelbox] (lbl_giao2) at (3.2, 0) {UCI};
+    \node[labelbox] (lbl_luu) at (3.2, -2.5) {Lưu kết quả};
+
+    % --- Các Đường Nối (Edges) ---
+    % Tuyến 1: Opening Book -> Sylvan
+    \draw[thick] (book.east) -- (lbl_fen.west);
+    \draw[->, thick] (lbl_fen.east) -- (sylvan.west);
+
+    % Tuyến 2: Sylvan -> Lingine (Xuất phát từ cạnh phải, dịch lên một chút)
+    \draw[thick] ([yshift=0.4cm]sylvan.east) -- (lbl_giao1.west);
+    \draw[->, thick] (lbl_giao1.east) -- (lingine.west);
+
+    % Tuyến 3: Sylvan -> Fairy-Stockfish (Xuất phát từ chính giữa cạnh phải)
+    \draw[thick] (sylvan.east) -- (lbl_giao2.west);
+    \draw[->, thick] (lbl_giao2.east) -- (fairy.west);
+
+    % Tuyến 4: Sylvan -> Result DB (Xuất phát từ cạnh phải, dịch xuống một chút)
+    \draw[thick] ([yshift=-0.4cm]sylvan.east) -- (lbl_luu.west);
+    \draw[->, thick] (lbl_luu.east) -- (db.west);
+
+    \end{tikzpicture}
+    \caption{Sơ đồ quy trình tổ chức giải đấu Gauntlet tự động qua giao thức UCI}
+    \label{fig:gauntlet_flow}
+\end{figure}
+
 Mỗi phiên bản engine cờ khi phát triển đều được đưa qua một quy trình kiểm định nghiêm ngặt gồm 3 giai đoạn đối đầu độc lập:
 
 \begin{enumerate}
@@ -50,7 +103,38 @@ Mỗi phiên bản engine cờ khi phát triển đều được đưa qua một
 
 Toàn bộ các trận đấu được chạy với thiết lập kiểm soát thời gian chặt chẽ là 3 giây khởi đầu và tích lũy thêm 0.03 giây sau mỗi nước đi. Môi trường phần cứng được chuẩn hóa để đảm bảo tính đồng đều giữa các lượt chạy. Việc sử dụng cơ sở dữ liệu khai cuộc \textit{Masters Opening Database} với 40,711 ván đấu của các danh thủ cờ tướng giúp tạo ra các vị trí ban đầu ngẫu nhiên, tránh việc engine cờ lặp lại cùng một ván cờ dẫn đến sai lệch kết quả thống kê.
 
+
+
 \subsection{Mô hình Ước lượng ELO bằng MLE}
+
+\begin{table}[H]
+    \centering
+    \small
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{ccccp{5.5cm}}
+        \toprule
+        Phiên bản & ELO uớc lượng & Diff/Trước & Diff/Gốc & Các cải tiến cốt lõi \\
+        \midrule
+        1.0.0  & 1465 ± 8.9 & N/A & N/A & Sinh nước đi Bitboard, Negamax Fail-soft, Quiescence Search, Đánh giá vật chất cơ bản. \\
+        1.1.0  & 1460 ± 8.8 & -9.0 & -2.1 & Sửa đổi và hoàn thiện luật cờ tướng (Cản Mã, Tướng lộ mặt, Sĩ Tượng cung). \\
+        1.2.0  & 1567 ± 8.7 & +96.2 & +85.0 & Triển khai bảng đảo vị trí (\textit{Transposition Table - TT}). \\
+        1.3.0  & 1572 ± 8.7 & +20.2 & +100.3 & Áp dụng kỹ thuật Cửa sổ vọng tưởng (\textit{Aspiration Window}). \\
+        1.4.0  & 1612 ± 8.6 & +69.4 & +145.5 & Sắp xếp nước đi với \textit{Killer Moves} và \textit{History Heuristics}. \\
+        1.5.0  & 1854 ± 8.7 & +358.8 & +556.7 & Tích hợp bảng lịch sử vị trí quân cờ (\textit{Piece-Square Tables - PST}). \\
+        1.6.0  & 1916 ± 8.8 & +80.6 & +640.0 & Tìm kiếm mở rộng: \textit{Check}, \textit{Singular}, \textit{One-Reply Extensions}. \\
+        1.6.1  & 1919 ± 8.8 & +34.5 & +632.9 & Tái cấu trúc mã nguồn và sửa các lỗi nhỏ. \\
+        1.6.2  & 1912 ± 8.8 & -17.7 & +576.2 & Định dạng phong cách mã nguồn, thêm thông tin PV/seldepth/hashfull. \\
+        1.6.3  & 1902 ± 8.8 & -4.5 & +561.4 & Tái cấu trúc, dọn dẹp luồng tìm kiếm, thử nghiệm kiểu dữ liệu i16/i8. \\
+        1.6.4  & 1920 ± 8.8 & +19.5 & +613.0 & Khôi phục và tối ưu hóa các thử nghiệm cắt tỉa tìm kiếm. \\
+        1.6.5  & 1936 ± 8.9 & +33.1 & +640.0 & Cải thiện cấu trúc dự án, TT trong \textit{Quiescence Search}. \\
+        1.7.0  & 2027 ± 9.2 & +152.2 & +536.9 & \textit{Tapered Evaluation}, \textit{Principal Variation Search} (PVS), LMR, \textit{Null Move Pruning}. \\
+        1.8.0  & 2189 ± 10.3 & +237.6 & +619.4 & \textit{Mobility Bonus}, \textit{Defender Bonus}, tối ưu hóa tham số bằng \textit{Texel Tuning}. \\
+        1.9.0  & 2244 ± 10.9 & +127.4 & +651.3 & \textit{Aspiration Window Fail-high Reductions}, RFP, \textit{Futility Pruning}, LMP, IIR. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Tiến trình phát triển và tăng trưởng sức mạnh ELO của Lingine}
+    \label{tab:elo_progression}
+\end{table}
 
 Ước lượng sức mạnh ELO tuyệt đối từ kết quả đối đầu của giải Gauntlet và ELO tương đối từ các trận đối đầu trực tiếp được thực hiện thông qua mô hình toán học Bradley-Terry. Mô hình này giả định rằng mỗi tác tử $i$ sở hữu một tham số sức mạnh ẩn $\beta_i$. Xác suất để tác tử $i$ đánh bại tác tử $j$ được xác định bởi hàm logistic:
 \[ P(i > j) = \frac{e^{\beta_i}}{e^{\beta_i} + e^{\beta_j}} = \frac{1}{1 + 10^{(ELO_j - ELO_i)/400}} \]
@@ -67,40 +151,71 @@ Sai số tiêu chuẩn (\textit{Standard Error - $\sigma$}) và khoảng tin c�
 
 \section{Lịch sử phát triển và Tiến trình tăng trưởng Elo}
 
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+            width=\textwidth,
+            height=7cm,
+            xlabel={Phiên bản},
+            ylabel={ELO ước lượng},
+            xlabel style={yshift=-0.3cm},
+            ylabel style={yshift=0.2cm},
+            xtick={1,2,...,15},
+            xticklabels={1.0,1.1,1.2,1.3,1.4,1.5,1.6.0,1.6.1,1.6.2,1.6.3,1.6.4,1.6.5,1.7,1.8,1.9},
+            xticklabel style={rotate=45, anchor=east, font=\footnotesize},
+            ytick={1400,1600,1800,2000,2200},
+            yticklabel style={font=\footnotesize},
+            ymin=1400, ymax=2350,
+            grid=major,
+            grid style={dashed, gray!30},
+            legend style={at={(0.02,0.98)}, anchor=north west, font=\footnotesize},
+        ]
+        
+        % Thay đổi sang mark=square* (hình chữ nhật/vuông) và thêm error bars
+        \addplot[
+            blue, thick, 
+            mark=square*, mark options={fill=blue, scale=0.8},
+            error bars/.cd,
+            y dir=both, y explicit,
+            error bar style={line width=1pt, blue!80},
+            error mark=-
+        ] coordinates {
+            (1,1465)  +- (0,8.9)
+            (2,1460)  +- (0,8.8)
+            (3,1567)  +- (0,8.7)
+            (4,1572)  +- (0,8.7)
+            (5,1612)  +- (0,8.6)
+            (6,1854)  +- (0,8.7)
+            (7,1916)  +- (0,8.8)
+            (8,1919)  +- (0,8.8)
+            (9,1912)  +- (0,8.8)
+            (10,1902) +- (0,8.8)
+            (11,1920) +- (0,8.8)
+            (12,1936) +- (0,8.9)
+            (13,2027) +- (0,9.2)
+            (14,2189) +- (0,10.3)
+            (15,2244) +- (0,10.9)
+        };
+        \addlegendentry{ELO $\pm$ Sai số}
+        
+        % Milestone annotations (đẩy nhẹ sang left để không đè lên thanh sai số)
+        \node[above left, font=\footnotesize, text=red] at (axis cs:6,1854) {+358 PST};
+        \node[above left, font=\footnotesize, text=red] at (axis cs:14,2189) {+237 Texel};
+        
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Biểu đồ tăng trưởng ELO của Lingine qua 15 phiên bản}
+    \label{fig:elo_chart}
+\end{figure}
+
+
 Trải qua chu kỳ phát triển liên tục, Lingine đã có những bước tiến vượt bậc về mặt trình độ chơi cờ. Từ một phiên bản thô sơ ở v1.0.0 chỉ có sức mạnh tương đương người mới học chơi cờ tướng (khoảng 1465 ELO), Lingine v1.9.0 đã đạt ngưỡng 2244 ELO tuyệt đối trên thang đo Gauntlet, vươn lên cấp độ tương đương các kiện tướng hàng đầu trên nền tảng Playstrategy.
 
 \subsection{Bảng tổng hợp tiến trình 15 phiên bản}
 
-Bảng~\ref{tab:elo_progression} trình bày chi tiết sự tiến hóa của Lingine qua các mốc phiên bản bao gồm cả điểm ELO tuyệt đối và các cải tiến kỹ thuật chính:
+Bảng~\ref{tab:elo_progression} trình bày chi tiết sự tiến hóa của Lingine qua các mốc phiên bản bao gồm cả điểm ELO tuyệt đối và các cải tiến kỹ thuật chính. Đồ thị \ref{fig:elo_chart} thể hiện sự thay đổi rõ rệt của ELO qua thời gian.
 
-\begin{table}[htbp]
-    \centering
-    \small
-    \setlength{\tabcolsep}{6pt}
-    \begin{tabular}{ccccp{5.5cm}}
-        \toprule
-        Phiên bản & ELO uớc lượng & Diff/Trước & Diff/Gốc & Các cải tiến cốt lõi \\
-        \midrule
-        1.0.0  & 1465 & N/A & N/A & Sinh nước đi Bitboard, Negamax Fail-soft, Quiescence Search, Đánh giá vật chất cơ bản. \\
-        1.1.0  & 1460 & -9.0 & -2.1 & Sửa đổi và hoàn thiện luật cờ tướng (Cản Mã, Tướng lộ mặt, Sĩ Tượng cung). \\
-        1.2.0  & 1567 & +96.2 & +85.0 & Triển khai bảng đảo vị trí (\textit{Transposition Table - TT}). \\
-        1.3.0  & 1572 & +20.2 & +100.3 & Áp dụng kỹ thuật Cửa sổ vọng tưởng (\textit{Aspiration Window}). \\
-        1.4.0  & 1612 & +69.4 & +145.5 & Sắp xếp nước đi với \textit{Killer Moves} và \textit{History Heuristics}. \\
-        1.5.0  & 1854 & +358.8 & +556.7 & Tích hợp bảng lịch sử vị trí quân cờ (\textit{Piece-Square Tables - PST}). \\
-        1.6.0  & 1916 & +80.6 & +640.0 & Tìm kiếm mở rộng: \textit{Check}, \textit{Singular}, \textit{One-Reply Extensions}. \\
-        1.6.1  & 1919 & +34.5 & +632.9 & Tái cấu trúc mã nguồn và sửa các lỗi nhỏ. \\
-        1.6.2  & 1912 & -17.7 & +576.2 & Định dạng phong cách mã nguồn, thêm thông tin PV/seldepth/hashfull. \\
-        1.6.3  & 1902 & -4.5 & +561.4 & Tái cấu trúc, dọn dẹp luồng tìm kiếm, thử nghiệm kiểu dữ liệu i16/i8. \\
-        1.6.4  & 1920 & +19.5 & +613.0 & Khôi phục và tối ưu hóa các thử nghiệm cắt tỉa tìm kiếm. \\
-        1.6.5  & 1936 & +33.1 & +640.0 & Cải thiện cấu trúc dự án, TT trong \textit{Quiescence Search}. \\
-        1.7.0  & 2027 & +152.2 & +536.9 & \textit{Tapered Evaluation}, \textit{Principal Variation Search} (PVS), LMR, \textit{Null Move Pruning}. \\
-        1.8.0  & 2189 & +237.6 & +619.4 & \textit{Mobility Bonus}, \textit{Defender Bonus}, tối ưu hóa tham số bằng \textit{Texel Tuning}. \\
-        1.9.0  & 2244 & +127.4 & +651.3 & \textit{Aspiration Window Fail-high Reductions}, RFP, \textit{Futility Pruning}, LMP, IIR. \\
-        \bottomrule
-    \end{tabular}
-    \caption{Tiến trình phát triển và tăng trưởng sức mạnh ELO của Lingine}
-    \label{tab:elo_progression}
-\end{table}
 
 \subsection{Phân tích các cột mốc lịch sử}
 

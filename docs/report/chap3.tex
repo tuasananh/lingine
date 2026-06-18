@@ -85,193 +85,118 @@ struct StateInfo {
 
 \subsection{Biểu diễn bàn cờ bằng Bitboard 128-bit}
 
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        font=\ttfamily,
+        scale=0.85,
+        transform shape,
+        blank square/.style={fill=gray!50, rounded corners=6pt, minimum size=0.9cm, thick},
+        active square/.style={fill=green!60!gray, rounded corners=6pt, minimum size=0.9cm, thick},
+    ]
+
+    % Định nghĩa chuỗi bitboard phẳng gồm đúng 90 phần tử (từ ô A9 đến I0)
+    \def\bitboarddata{
+        1,1,1,1,1,1,1,1,1, % Hàng 9
+        0,0,0,0,0,0,0,0,0, % Hàng 8
+        0,1,0,0,0,0,0,1,0, % Hàng 7
+        1,0,1,0,1,0,1,0,1, % Hàng 6
+        0,0,0,0,0,0,0,0,0, % Hàng 5
+        0,0,0,0,0,0,0,0,0, % Hàng 4
+        1,0,1,0,1,0,1,0,1, % Hàng 3
+        0,1,0,0,0,0,0,1,0, % Hàng 2
+        0,0,0,0,0,0,0,0,0, % Hàng 1
+        1,1,1,1,1,1,1,1,1  % Hàng 0
+    }
+
+    % Duyệt qua 90 phần tử
+    \foreach \bit [count=\idx from 0] in \bitboarddata {
+        % Tọa độ X (Cột): từ 0 đến 8
+        \pgfmathtruncatemacro{\realX}{mod(\idx, 9)}
+        % Tọa độ Y (Hàng): Sử dụng floor để cố định chính xác chỉ số hàng không bị làm tròn sai
+        \pgfmathtruncatemacro{\realY}{9 - floor(\idx / 9)}
+        
+        % Chọn kiểu hiển thị dựa trên giá trị bit
+        \def\squarestyle{blank square}
+        \ifnum\bit=1
+            \def\squarestyle{active square}
+        \fi
+        
+        % Vẽ ô vuông
+        \node[\squarestyle] (sq-\realX-\realY) at (\realX, \realY) {};
+    }
+
+    % Vẽ nhãn số cho các Hàng (0 -> 9) ở hai bên lề
+    \foreach \y in {0,...,9} {
+        \node[text=gray] at (-0.7, \y) {\y};
+        \node[text=gray] at (8.7, \y) {\y};
+    }
+
+    % Vẽ nhãn chữ cho các Cột (A -> I) ở trên và dưới
+    \foreach \x/\letter in {0/A, 1/B, 2/C, 3/D, 4/E, 5/F, 6/G, 7/H, 8/I} {
+        \node[text=gray] at (\x, 9.7) {\letter};
+        \node[text=gray] at (\x, -0.7) {\letter};
+    }
+
+    \end{tikzpicture}
+    \caption{Sơ đồ ma trận Bitboard 90-bit cho Bàn cờ tướng lúc bắt đầu}
+    \label{fig:xiangqi_bitboard}
+\end{figure}
+
+
 Do bàn cờ tướng có kích thước $10 \times 9 = 90$ ô, cấu trúc Bitboard chuẩn 64-bit của cờ vua ($8 \times 8 = 64$ ô) là hoàn toàn không đủ. Lingine đã phát triển một giải pháp Bitboard dựa trên kiểu số nguyên không dấu 128-bit (\texttt{u128}), trong đó 90 bit đầu tiên được gán tương ứng cho 90 ô cờ từ vị trí $0$ (a1) tới $89$ (i10):
 \[ \text{Bitboard} = \sum_{sq=0}^{89} b_{sq} \cdot 2^{sq} \quad (\text{với } b_{sq} \in \{0, 1\}) \]
 
-Cấu trúc \texttt{Bitboard} được cài đặt trong tệp \url{src/core/bitboard.rs} như sau:
+Cấu trúc bộ nhớ của Bitboard dược thể hiện như Hình \ref{fig:bitboard_128bit_diagram}.
 
-\begin{lstlisting}[language=Rust, caption=Cấu trúc Bitboard trong Lingine]
-#[derive(
-    BitAnd,
-    BitAndAssign,
-    BitOr,
-    BitOrAssign,
-    BitXor,
-    BitXorAssign,
-    Not,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Debug,
-    Default,
-)]
-pub struct Bitboard(u128);
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[font=\sffamily, scale=0.75, transform shape]
+        
+        % --- KHỐI 1: Bit 0 - 31 (Đang dùng) ---
+        \node[draw, minimum size=0.8cm, fill=green!20] (b0) at (0,0) {1};
+        \node[draw, minimum size=0.8cm, fill=green!20] (b1) at (0.8,0) {1};
+        \node[draw, minimum size=0.8cm, fill=green!20] (b2) at (1.6,0) {1};
+        \node[minimum size=0.8cm] (dots1) at (2.4,0) {\dots};
+        \node[draw, minimum size=0.8cm, fill=green!20] (b31) at (3.2,0) {1};
+        \node[draw, minimum size=0.8cm, fill=green!20] (b31) at (4.0,0) {1};
+        \node[draw, minimum size=0.8cm, fill=green!20] (b31) at (4.8,0) {1};
+        
+        % --- KHỐI 4: Bit 90 - 127 (Dư thừa / Bỏ) ---
+        \node[draw, minimum size=0.8cm, fill=gray!20] (b90) at (5.6,0) {0};
+        \node[draw, minimum size=0.8cm, fill=gray!20] (b91) at (6.4,0) {0};
+        \node[minimum size=0.8cm] (dots4) at (7.2,0) {\dots};
+        \node[draw, minimum size=0.8cm, fill=gray!20] (b127) at (8.0,0) {0};
+        \node[draw, minimum size=0.8cm, fill=gray!20] (b127) at (8.8,0) {0};
+        
+        % --- Ngoặc nhọn (Braces) và Nhãn (Labels) phía trên ---
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (b0.north west) -- (b31.north east) node[midway, above=8pt, align=center] {Bit 0 - 89\\};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (b90.north west) -- (b127.north east) node[midway, above=8pt, align=center] {Bit 90 - 127\\(Dư thừa / Bỏ)};
 
-impl Bitboard {
-    /// Creates a new, completely empty bitboard (all bits set to 0).
-    #[inline]
-    pub const fn new() -> Self {
-        Self(0)
-    }
+    \end{tikzpicture}
+    \caption{Sơ đồ khối bit-field minh họa cấu trúc bộ nhớ u128 Bitboard}
+    \label{fig:bitboard_128bit_diagram}
+\end{figure}
 
-    /// Make a bitboard directly from a raw `u128` value.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the provided `u128` value only has
-    /// bits set in the range 0..89, as bits 90 to 127 are unused and
-    /// may lead to undefined behavior
-    #[inline]
-    pub const unsafe fn from_raw(bitboard: u128) -> Self {
-        Self(bitboard)
-    }
+Ví dụ, với bàn cờ lúc khởi đầu, ta có giá trị Bitboard dưới dạng nhị phân là:
 
-    /// Retrieves the raw `u128` value of the bitboard, useful for
-    /// low-level operations or debugging.
-    #[inline]
-    pub const fn raw(&self) -> u128 {
-        self.0
-    }
+\begin{center}
+\begin{tabular}{llll}
+  00000000 & 00000000 & 00000000 & 00000000 \\
+  00000011 & 11111110 & 00000000 & 01000001 \\
+  01010101 & 01000000 & 00000000 & 00001010 \\ 
+  10101010 & 00001000 & 00000001 & 11111111 
+\end{tabular}
+\end{center}
 
-    /// Checks if the bitboard is completely empty (no active squares).
-    #[inline]
-    pub const fn is_empty(&self) -> bool {
-        self.0 == 0
-    }
-
-    /// Verifies if a given square bit is active (set to 1) in the bitboard.
-    #[inline]
-    pub const fn is_occupied(&self, square: Square) -> bool {
-        (self.0 & (1u128 << (square as u8))) != 0
-    }
-
-    /// Checks if this board (set of squares) contains the square
-    #[inline]
-    pub const fn contains(&self, square: Square) -> bool {
-        self.is_occupied(square)
-    }
-
-    /// Activates (sets to 1) the bit corresponding to the given square.
-    #[inline]
-    pub const fn set_bit(&mut self, square: Square) {
-        self.0 |= 1u128 << (square as u8);
-    }
-
-    /// Deactivates (clears to 0) the bit corresponding to the given square.
-    #[inline]
-    pub const fn clear_bit(&mut self, square: Square) {
-        self.0 &= !(1u128 << (square as u8));
-    }
-
-    /// Returns the number of active squares (bits set to 1) in the bitboard.
-    #[inline]
-    pub const fn count_ones(&self) -> u32 {
-        self.0.count_ones()
-    }
-
-    /// Pops (extracts and clears) the Least Significant Bit (LSB) from
-    /// the bitboard, returning the corresponding `Square`. Returns
-    /// `None` if the bitboard is empty. Used for rapid, zero-overhead
-    /// sequence generation and iterator-like popping of pieces.
-    #[inline]
-    pub const fn pop_lsb(&mut self) -> Option<Square> {
-        if self.0 == 0 {
-            None
-        } else {
-            let lsb = self.0.trailing_zeros() as u8;
-            self.0 &= self.0 - 1; // Clears the lowest set bit
-            Some(unsafe { Square::from_repr_unchecked(lsb) })
-        }
-    }
-
-    /// A const-compatible bitwise OR operator for building compile-time
-    /// constants lookup tables.
-    #[inline]
-    pub const fn const_or(&self, b: Self) -> Self {
-        Self(self.0 | b.0)
-    }
-
-    /// A const-compatible bitwise AND operator for building compile-time
-    /// constants
-    #[inline]
-    pub const fn const_and(&self, b: Self) -> Self {
-        Self(self.0 & b.0)
-    }
-
-    #[inline]
-    pub const fn from_square(s: Square) -> Self {
-        Self(1u128 << (s as u8))
-    }
-
-    /// Constructs a bitboard with all bits active along the specified
-    /// vertical column (`File`).
-    #[inline]
-    pub const fn from_file(f: File) -> Self {
-        let mut bits = 0u128;
-        let mut r = 0u8;
-        let f = f as u8;
-
-        while r < Rank::COUNT as u8 {
-            let square_index = (r * File::COUNT as u8) + f;
-            bits |= 1u128 << square_index;
-            r += 1;
-        }
-
-        Self(bits)
-    }
-
-    /// Constructs a bitboard with all bits active along the specified
-    /// horizontal row (`Rank`).
-    #[inline]
-    pub const fn from_rank(r: Rank) -> Self {
-        Self(0x1FFu128 << (r as u8 * 9))
-    }
-
-    /// Returns a precomputed bitboard covering one half of the board
-    /// (5 ranks) for a given player:
-    #[inline]
-    pub const fn side(side: Side) -> Self {
-        match side {
-            Side::Red => Self::from_rank(Rank::R0)
-                .const_or(Self::from_rank(Rank::R1))
-                .const_or(Self::from_rank(Rank::R2))
-                .const_or(Self::from_rank(Rank::R3))
-                .const_or(Self::from_rank(Rank::R4)),
-            Side::Black => Self::from_rank(Rank::R5)
-                .const_or(Self::from_rank(Rank::R6))
-                .const_or(Self::from_rank(Rank::R7))
-                .const_or(Self::from_rank(Rank::R8))
-                .const_or(Self::from_rank(Rank::R9)),
-        }
-    }
-
-    /// Returns a precomputed bitboard covering the palace of the given player
-    #[inline]
-    pub const fn palace(side: Side) -> Self {
-        let ranks = match side {
-            Side::Red => Self::from_rank(Rank::R0)
-                .const_or(Self::from_rank(Rank::R1))
-                .const_or(Self::from_rank(Rank::R2)),
-            Side::Black => Self::from_rank(Rank::R7)
-                .const_or(Self::from_rank(Rank::R8))
-                .const_or(Self::from_rank(Rank::R9)),
-        };
-
-        ranks.const_and(
-            Self::from_file(File::FD)
-                .const_or(Self::from_file(File::FE))
-                .const_or(Self::from_file(File::FF)),
-        )
-    }
-
-    pub const PALACE: Self = Self::palace(Side::Red).const_or(Self::palace(Side::Black));
-}
-\end{lstlisting}
+và có thể được hình dung như Hình \ref{fig:xiangqi_bitboard}.
 
 Việc sử dụng \texttt{u128} cho phép CPU thực hiện các phép tính logic bit song song trên toàn bộ 90 ô cờ chỉ bằng một chỉ thị máy duy nhất. Nhờ cơ chế \texttt{pop\_lsb} sử dụng lệnh assembly \texttt{TZCNT} của vi xử lý x86-64 thông qua hàm \texttt{trailing\_zeros()}, việc duyệt qua tất cả các quân cờ đang hoạt động đạt tốc độ tối đa.
 
-Trong \texttt{Position}, ta lưu thành phần $B$ bằng các biến:
+Trong \texttt{Position}, ta lưu thành phần $B$ bằng các trường:
 
 \begin{itemize}
   \item \texttt{board}: Mảng 90 phần tử chứa quân cờ hiện tại ở mỗi vị trí trên bàn cờ.
@@ -291,80 +216,43 @@ Trong \texttt{Position}, ta lưu thành phần $B$ bằng các biến:
 
 Trong quá trình duyệt cây tìm kiếm, hàng triệu nước đi được tạo ra và truyền qua lại giữa các hàm. Nếu sử dụng các cấu trúc dữ liệu cồng kềnh, chi phí cấp phát bộ nhớ và truyền tham số sẽ làm chậm đáng kể tốc độ của engine. Lingine giải quyết triệt để vấn đề này bằng cách nén nước đi thành một số nguyên không dấu 16-bit (\texttt{u16}) duy nhất:
 
-\begin{table}[h]
+\begin{figure}[H]
     \centering
-    \begin{tabular}{ccl}
-        \toprule
-        \textbf{Các bit} & \textbf{Khoảng giá trị} & \textbf{Ý nghĩa} \\
-        \midrule
-        0 -- 6 & 0 .. 89 & Chỉ số ô đích (To Square) -- Cần 7 bit ($2^7 = 128$) \\
-        7 -- 13 & 0 .. 89 & Chỉ số ô xuất phát (From Square) -- Cần 7 bit \\
-        14 -- 15 & 0 .. 3 & Không được sử dụng \\
-        \bottomrule
-    \end{tabular}
-    \caption{Cấu trúc mã hóa nước đi 16-bit trong Lingine}
-\end{table}
-
-Cấu trúc \texttt{Move} được cài đặt trong tệp \url{src/core/types/move.rs} như sau:
-
-\begin{lstlisting}[language=Rust, caption=Cấu trúc Move trong Lingine]
-/// A compact 16-bit move representation designed for performance:
-///
-/// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since
-///   $2^7=128$).
-/// * **Bits 7 - 13**: Origin square (0 to 89, fits in 7 bits).
-/// * **Bits 14 - 15**: Reserved.
-///
-/// The move is guaranteed to be non-zero, so we can use NonZeroU16 for
-/// better optimization when using Option<Move>.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Move(NonZeroU16);
-
-impl Move {
-    /// Constructs a basic quiet or capture move from an origin and
-    /// destination square.
-    #[inline]
-    pub const fn new(from: Square, to: Square) -> Self {
-        assert!(
-            from as u16 != to as u16,
-            "Move cannot have the same origin and destination square"
-        );
-        Self(unsafe { NonZeroU16::new_unchecked((to as u16) | ((from as u16) << 7)) })
-    }
-
-    /// Extracts the starting square index by shifting past the
-    /// destination bits.
-    #[inline]
-    pub const fn from(&self) -> Square {
-        unsafe { std::mem::transmute(((self.0.get() >> 7) & 0x7F) as u8) }
-    }
-
-    /// Extracts the target square index by masking the lower 7 bits.
-    #[inline]
-    pub const fn to(&self) -> Square {
-        unsafe { std::mem::transmute((self.0.get() & 0x7F) as u8) }
-    }
-
-    /// Converts the move into its UCI string format
-    pub fn to_uci_string(&self) -> String {
-        let from = self.from();
-        let to = self.to();
-        let from_file = (b'a' + from.file() as u8) as char;
-        let from_rank = (b'0' + from.rank() as u8) as char;
-        let to_file = (b'a' + to.file() as u8) as char;
-        let to_rank = (b'0' + to.rank() as u8) as char;
-        format!("{}{}{}{}", from_file, from_rank, to_file, to_rank)
-    }
-}
-\end{lstlisting}
+    \begin{tikzpicture}[font=\sffamily, scale=0.8, transform shape]
+        % Draw 16 bit boxes
+        \foreach \i in {0,...,6} \node[draw, minimum width=0.8cm, minimum height=0.8cm, anchor=south west, fill=blue!20] (bit\i) at (\i*0.8, 0) {\i};
+        \foreach \i in {7,...,13} \node[draw, minimum width=0.8cm, minimum height=0.8cm, anchor=south west, fill=green!20] (bit\i) at (\i*0.8, 0) {\i};
+        \foreach \i in {14,...,15} \node[draw, minimum width=0.8cm, minimum height=0.8cm, anchor=south west, fill=gray!20] (bit\i) at (\i*0.8, 0) {\i};
+        
+        % Labels above
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (bit0.north west) -- (bit6.north east) node[midway, above=8pt] {Ô đích (To) [0-6]};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (bit7.north west) -- (bit13.north east) node[midway, above=8pt] {Ô nguồn (From) [7-13]};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (bit14.north west) -- (bit15.north east) node[midway, above=8pt] {Trống [14-15]};
+    \end{tikzpicture}
+    \caption{Sơ đồ khối bit-field minh họa dữ liệu nước đi 16-bit trong Lingine}
+    \label{fig:move_16bit_diagram}
+\end{figure}
 
 \subsection{Ví dụ minh họa}
-Giả sử ta cần mã hóa nước đi di chuyển quân Xe từ ô xuất phát $h2$ (chỉ số 16, nhị phân \texttt{0010000}) đến ô đích $e2$ (chỉ số 13, nhị phân \texttt{0001101}):
+
+Giả sử ta cần mã hóa nước đi di chuyển quân Mã (Hình \ref{fig:horse_move_b0c2}) từ ô xuất phát $b0$ (chỉ số 1, nhị phân \texttt{0000001}) đến ô đích $c2$ (chỉ số 20, nhị phân \texttt{0010100}):
 \begin{itemize}
-    \item Chỉ số ô đi (From): $16 \ll 7 = 2048$ (nhị phân \texttt{00001000 00000000})
-    \item Chỉ số ô đến (To): $13$ (nhị phân \texttt{00000000 00001101})
-    \item Giá trị nước đi mã hóa: $\text{Move} = 2048 \lor 13 = 2061$ (thập lục phân \texttt{0x080D})
+    \item Chỉ số ô đi (From): $1 \ll 7 = 128$ (nhị phân \texttt{00000000 10000000})
+    \item Chỉ số ô đến (To): $20$ (nhị phân \texttt{00000000 00010100})
+    \item Giá trị nước đi mã hóa: $\text{Move} = 128 \lor 20 = 148$ (thập lục phân \texttt{0x0094})
 \end{itemize}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.5\textwidth]{images/horse_b0c2.png}
+    \caption{Minh họa nước đi của quân Mã từ ô b0 đến ô c2}
+    \label{fig:horse_move_b0c2}
+\end{figure}
 
 Nhờ kích thước cực nhỏ (2 bytes), dữ liệu nước đi có thể nằm gọn trong các thanh ghi CPU và truyền trực tiếp bằng trị số, tránh tối đa việc truy xuất bộ nhớ RAM và tận dụng tối ưu bộ nhớ đệm L1 Cache.
 
@@ -437,20 +325,57 @@ pub(super) static ZOBRIST: ZobristTable = {
 
 Khi di chuyển quân cờ, mã băm Zobrist không cần phải quét duyệt lại toàn bộ bàn cờ. Nhờ tính chất của phép XOR ($A \oplus A = 0$ và $0 \oplus B = B$), ta có thể cập nhật vi phân mã băm chỉ bằng các phép XOR tại các vị trí thay đổi.
 
-Ví dụ, khi thực hiện một nước đi dịch chuyển một quân \texttt{piece} từ ô \texttt{from} đến ô \texttt{to}, mã băm thay đổi như sau:
+Ví dụ, khi thực hiện một nước đi dịch chuyển một quân \texttt{piece} từ ô \texttt{from} đến ô \texttt{to}, mã băm thay đổi như Hình \ref{fig:zobrist_math_flow}.
 
-\begin{lstlisting}[language=Rust, caption=Cập nhật vi phân Zobrist trong do\_move]
-// Remove piece from the starting square
-hash ^= ZOBRIST.pieces[piece][from];
-// Put the piece at the ending square
-hash ^= ZOBRIST.pieces[piece][to];
-// If there exist a piece at the ending square, remove it from the board
-if let Some(captured) = captured_piece {
-    hash ^= ZOBRIST.pieces[captured][to];
-}
-// Change the side to move
-hash ^= ZOBRIST.side;
-\end{lstlisting}
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        font=\sffamily\small,
+        % Định nghĩa phong cách cho các khối lưu trình
+        startstop/.style={rectangle, draw, fill=blue!10, minimum width=3.5cm, minimum height=0.7cm, rounded corners, thick, align=center},
+        process/.style={rectangle, draw, fill=orange!15, minimum width=5.2cm, minimum height=0.7cm, thick, align=center},
+        decision/.style={diamond, draw, fill=yellow!15, minimum width=3.2cm, minimum height=1cm, aspect=2, thick, align=center, inner sep=0pt},
+        arrow/.style={-Latex, thick}
+    ]
+
+    % --- KHỞI TẠO CÁC KHỐI THEO LUỒNG DỌC ---
+    % Trạng thái băm ban đầu
+    \node[startstop] (start) {Mã băm ban đầu: $hash$};
+    
+    % Bước 1: Xóa quân ở ô đi
+    \node[process, below=0.5cm of start] (xor1) {$hash \leftarrow hash \oplus Z[\text{piece}][\text{from}]$\\ (Xóa quân ở ô xuất phát)};
+    
+    % Bước 2: Đặt quân vào ô đến
+    \node[process, below=0.5cm of xor1] (xor2) {$hash \leftarrow hash \oplus Z[\text{piece}][\text{to}]$\\ (Đặt quân vào ô đích)};
+    
+    % Bước 3: Kiểm tra điều kiện ăn quân (Khối hình thoi)
+    \node[decision, below=0.6cm of xor2] (check) {Có quân bị bắt\\ tại ô đích?};
+    
+    % Bước 4: Nhánh YES - Loại bỏ quân bị ăn khỏi mã băm
+    \node[process, below right=0.5cm and 4cm of check, anchor=north] (xor3) {$hash \leftarrow hash \oplus Z[\text{captured}][\text{to}]$\\ (Xóa quân bị ăn khỏi bàn cờ)};
+    
+    % Bước 5: Đổi lượt đi (Điểm hội tụ của luồng điều kiện)
+    \node[process, below=2.3cm of check] (xor4) {$hash \leftarrow hash \oplus Z_{\text{side}}$\\ (Thay đổi lượt đi)};
+    
+    % Trạng thái băm cuối cùng
+    \node[startstop, fill=green!15, below=0.5cm of xor4] (end) {Mã băm mới: $hash'$};
+
+    % --- VẼ ĐƯỜNG NỐI LUỒNG DỮ LIỆU ---
+    \draw[arrow] (start) -- (xor1);
+    \draw[arrow] (xor1) -- (xor2);
+    \draw[arrow] (xor2) -- (check);
+    
+    % Nhánh xử lý điều kiện Có/Không
+    \draw[arrow] (check) -| node[above, pos=0.25] {Có (Yes)} (xor3);
+    \draw[arrow] (xor3) |- (xor4);
+    \draw[arrow] (check) -- node[left] {Không (No)} (xor4);
+    
+    \draw[arrow] (xor4) -- (end);
+
+    \end{tikzpicture}
+    \caption{Sơ đồ luồng cập nhật vi phân Zobrist Hash sử dụng toán tử logic $\oplus$}
+    \label{fig:zobrist_math_flow}
+\end{figure}
 
 Cơ chế cập nhật vi phân này biến thao tác tính toán mã băm từ độ phức tạp $O(N)$ (với $N=90$ ô cờ) về độ phức tạp $O(1)$ chỉ với 3 đến 4 phép XOR cơ bản, tiết kiệm tối đa tài nguyên CPU.
 
@@ -499,7 +424,62 @@ struct Storage {
 }
 \end{lstlisting}
 
-Nhờ sử dụng kiểu dữ liệu nguyên tử \texttt{NonZeroU8} cho \texttt{flags}, trình biên dịch Rust thực hiện tối ưu hóa ngách (niche optimization) để nén toàn bộ thực thể \texttt{Option<Storage>} vào đúng 16 byte mà không cần thêm byte padding nào.
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        % Định nghĩa biến độ rộng cho 1 byte (ví dụ: 1 byte = 0.9cm)
+        /tikz/byte width/.initial=1.4cm,
+        % Định nghĩa phong cách chung cho các khối dữ liệu
+        entry/.style={draw, minimum height=0.9cm, font=\ttfamily, align=center, thick},
+        node distance=0cm,
+        scale=0.7,
+        transform shape
+    ]
+        % Đọc giá trị biến byte width vào macro \bw để dễ tính toán
+        \pgfkeysgetvalue{/tikz/byte width}{\bw}
+
+        % --- VẼ CÁC KHỐI DỮ LIỆU ---
+        % Key: 8 bytes
+        \node[entry, fill=blue!15, minimum width=8*\bw, anchor=south west] (key) at (0, 0) {key};
+        
+        % Score: 4 bytes
+        \node[entry, fill=green!15, minimum width=4*\bw, anchor=south west] (score) at (key.south east) {score};
+        
+        % Move: 2 bytes
+        \node[entry, fill=orange!15, minimum width=2*\bw, anchor=south west] (move) at (score.south east) {move};
+        
+        % Flags: 1 byte
+        \node[entry, fill=red!15, minimum width=1*\bw, anchor=south west] (flags) at (move.south east) {flags};
+        
+        % Depth: 1 byte
+        \node[entry, fill=purple!15, minimum width=1*\bw, anchor=south west] (depth) at (flags.south east) {depth};
+
+        % --- NHÃN SỐ BYTES PHÍA TRÊN ---
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (key.north west) -- (key.north east) node[midway, above=8pt] {\large 8 bytes};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (score.north west) -- (score.north east) node[midway, above=8pt] {\large 4 bytes};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=5pt, raise=2pt}] 
+            (move.north west) -- (move.north east) node[midway, above=8pt] {\large 2 bytes};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=4pt, raise=2pt}] 
+            (flags.north west) -- (flags.north east) node[midway, above=8pt] {\large 1 byte};
+            
+        \draw[thick, decorate, decoration={brace, amplitude=4pt, raise=2pt}] 
+            (depth.north west) -- (depth.north east) node[midway, above=8pt] {\large 1 byte};
+            
+        % --- TỔNG KÍCH THƯỚC PHÍA DƯỚI ---
+        \draw[thick, decorate, decoration={brace, mirror, amplitude=8pt, raise=5pt}] 
+            (key.south west) -- (depth.south east) node[midway, below=15pt] {\large Tổng kích thước: 16 bytes};
+            
+    \end{tikzpicture}
+    \caption{Sơ đồ phân bổ bộ nhớ của một entry Bảng chuyển vị trong Lingine}
+    \label{fig:tt_storage_modified}
+\end{figure}
+
+Nhờ sử dụng kiểu dữ liệu \texttt{NonZeroU8} cho \texttt{flags}, trình biên dịch Rust thực hiện tối ưu hóa ngách (niche optimization) để nén toàn bộ thực thể \texttt{Option<Storage>} vào đúng 16 byte mà không cần thêm byte padding nào.
 
 \subsection{Chính sách thay thế của bảng chuyển vị}
 

@@ -41,19 +41,147 @@ Dự án nghiên cứu thiết kế và triển khai engine cờ tướng Lingin
 
 \section{Hướng phát triển tương lai}
 
-Để tiếp tục nâng cao sức mạnh và tính thực tiễn của engine, nhóm phát triển đề xuất hai hướng nghiên cứu trọng tâm tiếp theo:
+Để tiếp tục nâng cao sức mạnh và tính thực tiễn của engine, nhóm phát triển đề xuất ba hướng nghiên cứu trọng tâm tiếp theo:
 
 \subsection{Tăng tính đa dạng trong lối chơi bằng Softmax Sampling}
 
-Hiện tại, engine luôn chọn nước đi tốt nhất tuyệt đối có điểm số cao nhất (\texttt{bestmove}). Trong đấu tập hoặc giai đoạn khai cuộc, điều này làm lối chơi của engine dễ bị bắt bài và rập khuôn. 
+Trong phiên bản hiện tại, cơ chế ra quyết định của Lingine mang tính xác định tuyệt đối (deterministic) bằng cách luôn ưu tiên chọn nước đi có điểm số đánh giá cao nhất (\texttt{bestmove}). Mặc dù tối ưu về mặt lý thuyết, cách tiếp cận này khiến lối chơi của engine trở nên rập khuôn và rất dễ bị đối thủ bắt bài, đặc biệt là trong các ván đấu tập hoặc ở giai đoạn khai cuộc.
 
-Hướng cải tiến là áp dụng lấy mẫu xác suất Softmax dựa trên điểm số đánh giá $Q(s, a)$ của các nước đi khả dĩ:
-\[ P(a_i | s) = \frac{e^{Q(s, a_i) / \tau}}{\sum_j e^{Q(s, a_j) / \tau}} \]
+Để khắc phục, Lingine sẽ tích hợp kỹ thuật lấy mẫu Softmax (Softmax Sampling) nhằm xác suất hóa các lựa chọn nước đi. Thay vì chỉ chọn giá trị lớn nhất (Argmax), thuật toán sẽ chuyển đổi điểm số $Q(s, a)$ của mọi nước đi hợp lệ thành một phân phối xác suất:
 
-Trong đó $\tau$ là tham số nhiệt độ (Temperature). Khi $\tau \to 0$, engine chọn nước đi tốt nhất; khi $\tau$ lớn hơn, engine sẽ ngẫu nhiên chọn các nước đi tốt khác nhau với xác suất tương ứng, tạo nên sự phong phú và tự nhiên trong phong cách chơi cờ giống con người.
+\begin{equation}
+P(a_i | s) = \frac{e^{Q(s, a_i) / \tau}}{\sum_j e^{Q(s, a_j) / \tau}}
+\end{equation}
+
+Trong đó, $\tau$ là tham số nhiệt độ (Temperature) đóng vai trò kiểm soát độ nhiễu. Khi $\tau \to 0$, hàm hội tụ về Argmax (chỉ đánh nước tốt nhất). Khi $\tau$ tăng dần, các nước đi yếu hơn cũng có xác suất được chọn, tạo ra lối chơi sáng tạo và khó đoán.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}
+        % Axes
+        \draw[thick, ->] (0,0) -- (8,0) node[right] {Nước đi (Chất lượng giảm dần)};
+        \draw[thick, ->] (0,0) -- (0,5) node[above] {Xác suất chọn $P(a_i)$};
+        
+        % Argmax (tau -> 0)
+        \draw[blue, ultra thick] (1, 4.5) -- (1, 0);
+        \fill[blue] (1, 4.5) circle (2.5pt);
+        \node[blue, right] at (1.1, 4.5) {$\tau \to 0$ (Argmax)};
+        
+        % Softmax moderate (tau = 0.5)
+        \draw[red, thick, smooth] plot coordinates {(0.5, 0.5) (1, 3.5) (2, 1.5) (3, 0.8) (4, 0.4) (6, 0.1)};
+        \node[red, right] at (2.1, 1.8) {$\tau = 0.5$ (Cân bằng)};
+        
+        % Softmax high (tau -> inf)
+        \draw[green!60!black, thick, dashed, smooth] plot coordinates {(0.5, 1.2) (1, 1.1) (3, 0.9) (5, 0.8) (7, 0.7)};
+        \node[green!60!black, right] at (5.1, 1.0) {$\tau \to \infty$ (Ngẫu nhiên)};
+        
+        % Labels on X-axis
+        \draw (1, 0.1) -- (1, -0.1) node[below] {Tốt nhất};
+        \draw (3, 0.1) -- (3, -0.1) node[below] {Tốt nhì};
+        \draw (5, 0.1) -- (5, -0.1) node[below] {Bình thường};
+    \end{tikzpicture}
+    \caption{Phân phối xác suất chọn nước đi thay đổi theo tham số nhiệt độ $\tau$}
+    \label{fig:softmax_sampling}
+\end{figure}
+
 
 \subsection{Tích hợp Mạng nơ-ron NNUE (Efficiently Updatable Neural Networks)}
 
-Hàm đánh giá hiện tại của Lingine là hàm tuyến tính kết hợp Material và PST. Mặc dù chạy nhanh nhưng hàm tuyến tính bỏ sót rất nhiều mối quan hệ phi tuyến tính phức tạp giữa các quân cờ (ví dụ mối tương tác giữa Xe, Pháo, Mã khi phối hợp tấn công).
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2cm,
+        neuron/.style={circle, draw, minimum size=0.8cm, inner sep=0pt},
+        active/.style={fill=red!30},
+        hidden/.style={fill=blue!20},
+        output/.style={fill=green!30}
+    ]
+        % Input Layer (Sparse)
+        \node[neuron] (i1) at (0, 3) {};
+        \node[neuron, active] (i2) at (0, 2) {};
+        \node[neuron] (i3) at (0, 1) {};
+        \node at (0, 0.3) {$\vdots$};
+        \node[neuron, active] (in) at (0, -1) {};
+        
+        \node[above=0.5cm of i1, text width=2.5cm, align=center] {Lớp đầu vào\\(Đặc trưng thưa)};
+        \node[left=0.2cm of i2] {Quân di chuyển $\to$};
+        
+        % Accumulator (Hidden Layer 1)
+        \node[neuron, hidden] (a1) at (4, 2.5) {};
+        \node[neuron, hidden] (a2) at (4, 1.5) {};
+        \node[neuron, hidden] (a3) at (4, 0.5) {};
+        \node at (4, -0.2) {$\vdots$};
+        \node[neuron, hidden] (am) at (4, -1) {};
+        
+        \node[above=1cm of a1, text width=3cm, align=center] {Bộ tích lũy\\(Cập nhật vi phân)};
+        
+        % Output Layer
+        \node[neuron, output] (out) at (8, 0.75) {};
+        \node[above=0.5cm of out, text width=2cm, align=center] {Điểm số đánh giá};
+        
+        % Connections Input -> Accumulator (Highlighting incremental)
+        \foreach \i in {i2, in} {
+            \foreach \a in {a1, a2, a3, am} {
+                \draw[->, thick, red] (\i) -- (\a);
+            }
+        }
+        \draw[->, gray, dashed] (i1) -- (a1);
+        \draw[->, gray, dashed] (i3) -- (a2);
+        
+        % Connections Accumulator -> Output
+        \foreach \a in {a1, a2, a3, am} {
+            \draw[->, thick, blue] (\a) -- (out);
+        }
+    \end{tikzpicture}
+    \caption{Cơ chế cập nhật vi phân của mạng NNUE}
+    \label{fig:nnue_architecture}
+\end{figure}
 
-Hướng phát triển đột phá là tích hợp cấu trúc mạng nơ-ron NNUE dạng nông (thường gồm một lớp ẩn kích thước 256 hoặc 512). Điểm đặc biệt của NNUE là lớp mạng đầu vào được cập nhật vi phân vô cùng nhanh chóng ngay trong quá trình thực hiện nước đi (\texttt{do\_move}/\texttt{undo\_move}) dựa trên sự dịch chuyển của quân cờ, giúp giữ nguyên tốc độ NPS cao của engine trong khi mang lại độ chính xác đánh giá thế trận vượt trội tương đương các đại kiện tướng quốc tế.
+Hàm đánh giá tĩnh của Lingine hiện đang dựa trên mô hình tuyến tính (Material + PST). Dù đem lại ưu thế về tốc độ xử lý, cấu trúc tuyến tính này không thể nắm bắt được những tương tác phi tuyến tính phức tạp trong cờ tướng (ví dụ: Xe-Pháo-Mã phối hợp).
+
+Thay thế hàm tĩnh bằng mạng nơ-ron NNUE dạng nông. Điểm làm nên sức mạnh của NNUE là \textit{kiến trúc lớp đầu vào cập nhật vi phân}. Thay vì tính toán lại toàn bộ bàn cờ từ đầu sau mỗi nước đi, hệ thống chỉ nhân ma trận cho các quân cờ vừa dịch chuyển (do\_move/undo\_move), giúp duy trì tốc độ duyệt (NPS) cực cao.
+
+
+\subsection{Tối ưu hóa tham số bằng thuật toán SPSA}
+
+Hàng trăm tham số tìm kiếm (Search Parameters) như hệ số cắt tỉa LMR, Futility margins vẫn đang phải tinh chỉnh thủ công. Không thể dùng Gradient Descent truyền thống vì đây là hệ thống hộp đen (không tính được đạo hàm).
+
+Áp dụng thuật toán \textit{Simultaneous Perturbation Stochastic Approximation (SPSA)}. Thuật toán sẽ tác động nhiễu loạn ngẫu nhiên lên toàn bộ vector tham số $\theta$ cùng lúc, tạo ra hai bộ tham số $\theta + \Delta$ và $\theta - \Delta$. Bằng cách cho hai phiên bản engine này tự đấu với nhau, hệ thống ước lượng được gradient và tự động cập nhật để tìm ra mốc cắt tỉa tối ưu nhất.
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2cm,
+        box/.style={rectangle, draw, rounded corners, minimum height=1.2cm, text centered, text width=3.8cm},
+        box_sq/.style={rectangle, draw, minimum height=1.2cm, text centered, text width=3.5cm},
+        arrow/.style={thick, ->, >=stealth}
+    ]
+        % Các node (hộp)
+        \node[box, fill=green!20, text width=4cm] (theta) at (0, 4) {Tham số hiện tại $\theta$};
+        
+        \node[box, fill=blue!10] (plus) at (-2.5, 2) {$\theta + c_k\Delta_k$};
+        \node[box, fill=blue!10] (minus) at (2.5, 2) {$\theta - c_k\Delta_k$};
+        
+        \node[box_sq, fill=orange!20] (game) at (0, 0) {Tự đấu\\(Engine Match)};
+        
+        \node[box, fill=pink!20, text width=4.5cm] (grad) at (0, -2) {Ước lượng\\Gradient $\hat{g}_k(\theta)$};
+        
+        % Các mũi tên đường đi xuống
+        \draw[arrow] (theta.south) -- (plus.north) node[midway, left, yshift=0.15cm] {+ Nhiễu $\Delta_k$};
+        \draw[arrow] (theta.south) -- (minus.north) node[midway, right, yshift=0.15cm] {- Nhiễu $\Delta_k$};
+        
+        \draw[arrow] (plus.south) -- (game.north west);
+        \draw[arrow] (minus.south) -- (game.north east);
+        
+        \draw[arrow] (game.south) -- (grad.north) node[midway, right=0.1cm] {Thắng/Thua/Hòa};
+        
+        % Mũi tên vòng lặp (Feedback loop)
+        \draw[arrow, rounded corners] (grad.west) -- (-4.8, -2) -- (-4.8, 4) -- (theta.west);
+        
+        % Label cho vòng lặp cập nhật
+        \node[anchor=south west, align=left] at (-5.0, 4.1) {Cập nhật $\theta_{k+1}$\\$\theta_k - a_k \hat{g}_k(\theta)$};
+        
+    \end{tikzpicture}
+    \caption{Chu trình tối ưu hóa tham số hộp đen bằng thuật toán SPSA}
+    \label{fig:spsa_flowchart}
+\end{figure}
