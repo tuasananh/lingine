@@ -62,6 +62,121 @@ Sơ đồ hoạt động của hệ thống được mô tả như sau:
     \end{itemize}
 \end{enumerate}
 
+\begin{figure}[htbp]
+\centering
+\definecolor{blueFill}{HTML}{E1EDFF}
+\definecolor{blueStroke}{HTML}{2B70E4}
+\definecolor{greenFill}{HTML}{E6F9EC}
+\definecolor{greenStroke}{HTML}{28A745}
+\definecolor{redFill}{HTML}{FFEBEB}
+\definecolor{redStroke}{HTML}{DC3545}
+\begin{tikzpicture}[
+    % --- Node Styles ---
+    blueNode/.style={
+        rectangle, 
+        draw=blueStroke, 
+        fill=blueFill, 
+        line width=2pt, 
+        rounded corners=4pt,
+        align=center,
+        inner sep=10pt,
+    },
+    greenNode/.style={
+        rectangle, 
+        draw=greenStroke, 
+        fill=greenFill, 
+        line width=2pt, 
+        rounded corners=4pt,
+        align=center,
+        inner sep=10pt,
+    },
+    redNode/.style={
+        rectangle, 
+        draw=redStroke, 
+        fill=redFill, 
+        line width=2pt, 
+        dashed,
+        rounded corners=4pt,
+        align=center,
+        inner sep=10pt,
+    },
+    % --- Fixed Cylinder Style ---
+    dbNode/.style={
+        cylinder, 
+        draw=greenStroke, 
+        fill=greenFill, 
+        line width=2pt, 
+        shape border rotate=90, 
+        align=center, 
+        inner sep=10pt,            % Reduced inner padding
+        aspect = 0.25
+    },
+    % --- Arrow Styles ---
+    arrow/.style={
+        -{Stealth[scale=1.2]}, 
+        line width=1.5pt, 
+        draw=black!80
+    },
+    dashedArrow/.style={
+        -{Stealth[scale=1.2]}, 
+        line width=1.5pt, 
+        dashed, 
+        draw=black!80
+    },
+    biArrow/.style={
+        {Stealth[scale=1.2]}-{Stealth[scale=1.2]}, 
+        line width=1.5pt, 
+        draw=black!80
+    }
+]
+
+    %% --- Nodes Placement ---
+    \node (GUI) [blueNode] at (0,-0.92) {GUI};
+    \node (ThreadA) [blueNode, right=of GUI, xshift=1.5cm] {Luồng A: Stdin Listener};
+    \node (Engine) [greenNode, below=of ThreadA] {Luồng B: UCI Engine};
+    
+    % Right Side Node
+    \node (State) [redNode, right=of ThreadA, xshift=1.5cm] {Cờ trạng\\thái};
+    
+    % Core Engine Stack
+    \node (ID) [greenNode, below=of Engine] {Iterative Deepening};
+    \node (Algo) [greenNode, below=of ID, xshift=1.5cm] {Negamax Alpha-Beta};
+    
+    % Bottom & Left Nodes
+    \node (Eval) [greenNode, below=of Algo] {Hàm đánh giá tĩnh};
+    \node (Trans) [dbNode, left=2.2cm of Algo] {Transposition\\Table}; % Adjusted spacing slightly for balance
+
+    %% --- Connections & Labels ---
+    % GUI -> ThreadA
+    \draw [arrow] (GUI) -- node[below, font=\small, align=center] {Lệnh\\qua stdin} (ThreadA);
+    
+    % ThreadA -> Engine
+    \draw [arrow] (ThreadA) -- node[left, font=\small] {Chuyển lệnh} (Engine);
+    
+    % Engine -> GUI (Loop back loop on the left side)
+    \draw [arrow] (Engine.west) .. controls +(-3.5,0) and +(0,0) .. node[font=\small, align=center, below, yshift=-0.25cm] {Trả về\\bestmove} (GUI.south);
+    
+    % ThreadA -> State
+    \draw [arrow] (ThreadA) -- node[below, font=\small, align=center] {Ngắt khẩn\\cấp} (State);
+    
+    % Engine -> ID -> Algo
+    \draw [arrow] (Engine) -- (ID);
+    \draw [arrow] (ID) -- (Algo);
+    
+    % State -> Algo (Dashed routing down to the side of Algo)
+    \draw [dashedArrow] (State.south) -- node[font=\small, align=left, right, xshift=0.2cm] {Đọc liên tục\\để dừng} (Algo.east);
+    
+    % Algo -> Eval
+    \draw [arrow] (Algo) -- node[midway, right, font=\small] {} (Eval);
+    
+    % Algo <-> Trans (Bidirectional)
+    \draw [biArrow] (Algo) -- node[midway, below, font=\small, align=center] {Lưu\\/Đọc thế} (Trans);
+
+\end{tikzpicture}
+\caption{Sơ đồ kiến trúc của Lingine}
+\end{figure}
+
+
 Kiến trúc 2 luồng này giúp giảm thiểu đáng kể overhead đồng bộ dữ liệu, tránh tình trạng giật cục khi khóa mutex, đồng thời đảm bảo thời gian phản hồi lệnh ngắt \texttt{stop} gần như tức thì.
 
 \subsection{Chức năng các tệp nguồn chính}
@@ -109,3 +224,54 @@ Mã nguồn của Lingine được cấu trúc mạch lạc thành các mô-đun
         \item \texttt{output.rs}: Định dạng và xuất dữ liệu phân tích ra stdout theo đúng chuẩn giao thức.
     \end{itemize}
 \end{itemize}
+
+\section{Minh họa giao diện hoạt động thực tế}
+
+Là một engine tuân thủ tiêu chuẩn UCI (Universal Chess Interface), Lingine hoạt động dưới dạng chương trình giao diện dòng lệnh (CLI). Khi kết nối vào các phần mềm giao diện đồ họa (như \textit{Fairy-Stockfish GUI} hay \textit{Sylvan}), engine giao tiếp ngầm bằng cách trao đổi văn bản qua luồng tiêu chuẩn (Standard Input/Output).
+
+Dưới đây là minh họa phiên làm việc thực tế của Lingine khi được khởi chạy và ra lệnh tìm kiếm trực tiếp trên Terminal:
+
+\begin{figure}[htbp]
+    \centering
+    \begin{tcolorbox}[
+        enhanced,
+        colback=black!80!white,
+        colframe=black!30!gray,
+        colupper=white,
+        fontupper=\ttfamily\footnotesize,
+        boxrule=1pt,
+        arc=3mm,
+        title={\texttt{Terminal}},
+        coltitle=white,
+        toptitle=1.5mm,
+        bottomtitle=1.5mm,
+        boxsep=2mm
+    ]
+    \textcolor{green!60!white}{>} ./lingine\\
+    \textcolor{gray!70}{uci}\\
+    \textcolor{gray!70}{id name Lingine}\\
+    \textcolor{gray!70}{id author tuasananh}\\
+    \textcolor{gray!70}{option name Hash type spin default 16 min 1 max 1024}\\
+    \textcolor{gray!70}{uciok}\\
+    \textcolor{white}{position startpos}\\
+    \textcolor{white}{go movetime 1000}\\
+    \textcolor{gray!70}{info: starting search}\\
+    \textcolor{gray!70}{info depth 1 seldepth 7 time 0 nodes 90 score cp 61 pv b0c2 hashfull 1}\\
+    \textcolor{gray!70}{info depth 2 seldepth 8 time 1 nodes 970 score cp 0 pv b0c2 b9c7 hashfull 2 nps 795417}\\
+    \textcolor{gray!70}{info depth 3 seldepth 8 time 2 nodes 2039 score cp 74 pv b0c2 b9c7 h0g2 hashfull 2 nps 880571}\\
+    \textcolor{gray!70}{info depth 4 seldepth 9 time 8 nodes 6989 score cp 3 pv c0e2 b9c7 b0d1 h9g7 hashfull 6 nps 858654}\\
+    \textcolor{gray!70}{info depth 5 seldepth 11 time 15 nodes 13078 score cp 90 pv c0e2 b9c7 b0d1 h9g7 d1f2 hashfull 10 nps 833477}\\
+    \textcolor{gray!70}{info depth 6 seldepth 12 time 42 nodes 36229 score cp 19 pv g3g4 h7e7 h0g2 h9g7 h2h1 i9h9 hashfull 22 nps 846546}\\
+    \textcolor{gray!70}{info depth 7 seldepth 12 time 46 nodes 39602 score cp 33 pv g3g4 b7e7 h0g2 b9c7 a0a1 a9b9 hashfull 24 nps 856469}\\
+    \textcolor{gray!70}{info depth 8 seldepth 13 time 80 nodes 69910 score cp 32 pv g3g4 b9c7 h0g2 h9g7 g2f4 c6c5 i0i1 i9i8 hashfull 43 nps 864914}\\
+    \textcolor{gray!70}{info depth 9 seldepth 14 time 95 nodes 83913 score cp 49 pv g3g4 b9c7 h0g2 h9g7 g2f4 i6i5 i0i1 h7h5 hashfull 49 nps 879492}\\
+    \textcolor{gray!70}{info depth 10 seldepth 22 time 520 nodes 452639 score cp 28 pv b0c2 g6g5 b2b4 c9e7 b4a4 b9a7 a0b0 a6a5 a4e4 d9e8 hashfull 193 nps 870089}\\
+    \textcolor{cyan!50!white}{bestmove b0c2}\\
+    \textcolor{white}{quit}\\
+    \textcolor{gray!70}{debug: quit}\\
+    \end{tcolorbox}
+    \caption{Giao diện dòng lệnh UCI của Lingine khi đang tính toán nước đi tốt nhất}
+    \label{fig:uci_terminal}
+\end{figure}
+
+Như được minh họa ở Hình \ref{fig:uci_terminal}, khi người dùng gửi lệnh thiết lập thế cờ khởi điểm (\texttt{position startpos}) và yêu cầu tìm kiếm trong thời gian 1 giây (\texttt{go movetime 1000}), Lingine bắt đầu vòng lặp \textit{Iterative Deepening}. Ở mỗi độ sâu, hệ thống liên tục trả về các thông báo \texttt{info} chứa thông tin thời gian (\texttt{time}), số nút đã duyệt (\texttt{nodes}), nhánh tốt nhất (\texttt{pv}), và tốc độ tìm kiếm (\texttt{nps}). Khi hết thời gian cho phép, engine đã đạt đến độ sâu 10 và phản hồi nước đi tốt nhất \texttt{bestmove b0c2} (Mã b0 nhảy sang c2) cho giao diện đồ họa tiếp nhận.
