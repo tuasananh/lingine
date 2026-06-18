@@ -259,7 +259,7 @@ Sự sụt giảm hơn $11\%$ của chỉ số MSE trên một tập dữ liệu
 
 Kết quả thực chiến cho thấy sự vượt trội hoàn toàn của hệ thống đánh giá mới. Chi tiết các chỉ số thống kê được trình bày trong Bảng~\ref{tab:engine_comparison}, Lingine 1.8.0 đạt tỷ lệ thắng áp đảo với điểm số $79.7\%$. Đặc biệt, sức mạnh tổng thể của engine gia tăng tới \textbf{+237.6 Elo} so với phiên bản trước, đi kèm với Chỉ số tin cậy vượt trội (\textit{Likelihood of Superiority - LOS}) đạt mức tuyệt đối $100.0\%$. 
 
-Thành quả này minh chứng rõ ràng cho sức mạnh của Machine Learning trong việc thay thế hoàn toàn các đánh giá cảm tính của con người, giúp động cơ cờ nâng tầm chiến thuật một cách đột phá.
+Thành quả này minh chứng rõ ràng cho sức mạnh của Machine Learning trong việc thay thế hoàn toàn các đánh giá cảm tính của con người, giúp engine cờ nâng tầm chiến thuật một cách đột phá.
 
 \begin{table}[htbp]
     \centering
@@ -408,7 +408,7 @@ Việc phân biệt rạch ròi ba loại nút này là cơ sở tối quan tr�
 
 \subsection{Quản lý thời gian}
 
-Trong các giải đấu cờ máy, việc quyết định khi nào nên dừng suy nghĩ quan trọng không kém việc động cơ tính toán như thế nào. Nếu dừng quá sớm, engine có thể đi những nước yếu do chưa nhìn đủ sâu; nếu nghĩ quá lâu, engine có thể bị xử thua vì hết thời gian. Mục tiêu của hệ thống quản lý thời gian là phân bổ quỹ thời gian còn lại của ván đấu một cách thông minh, ưu tiên đào sâu ở những thế cờ phức tạp nhưng vẫn đảm bảo tính an toàn tuyệt đối về mặt thời gian cho toàn bộ phần còn lại của trận đấu.
+Trong các giải đấu cờ máy, việc quyết định khi nào nên dừng suy nghĩ quan trọng không kém việc engine tính toán như thế nào. Nếu dừng quá sớm, engine có thể đi những nước yếu do chưa nhìn đủ sâu; nếu nghĩ quá lâu, engine có thể bị xử thua vì hết thời gian. Mục tiêu của hệ thống quản lý thời gian là phân bổ quỹ thời gian còn lại của ván đấu một cách thông minh, ưu tiên đào sâu ở những thế cờ phức tạp nhưng vẫn đảm bảo tính an toàn tuyệt đối về mặt thời gian cho toàn bộ phần còn lại của trận đấu.
 
 Để thực hiện điều này, Lingine chia ngân sách thời gian cho mỗi nước đi thành hai ngưỡng độc lập: Giới hạn mềm (\textit{Soft-Bound}) và Giới hạn cứng (\textit{Hard-Bound}), đồng thời luôn trừ hao một khoảng trễ an toàn $\text{TimeOverhead} = 15\text{ms}$ để bù đắp cho thời gian trễ khi giao tiếp qua giao thức UCI.
 
@@ -419,7 +419,7 @@ Trong các giải đấu cờ máy, việc quyết định khi nào nên dừng 
         \item Nếu không có giới hạn số nước đi cụ thể: Lingine sử dụng tham số phân bổ tĩnh. Gọi tổng quỹ thời gian cho một nước là $\text{Total} = \text{TimeLeft} + \text{Increment}$, hệ thống quy định Giới hạn mềm là $\text{Total} / 40$ và Giới hạn cứng tối đa là $\text{Total} / 8$.
     \end{itemize}
     
-    \item \textbf{Cơ chế Giới hạn mềm (Soft-Bound):} Giới hạn này được tích hợp trực tiếp vào vòng lặp làm sâu lặp dần (\textit{Iterative Deepening}). Ngay sau khi hoàn thành trọn vẹn việc tìm kiếm ở một độ sâu $d$, thuật toán sẽ gọi hàm kiểm tra nếu quỹ thời gian đã vượt ngưỡng mềm, engine nhận định rằng việc khởi tạo tìm kiếm ở độ sâu $d+1$ là quá rủi ro (vì độ sâu sau thường tốn thời gian theo cấp số nhân so với độ sâu trước). Khi đó, vòng lặp bị ngắt và engine lập tức chốt nước đi tốt nhất hiện tại để đảm bảo an toàn thời gian.
+    \item \textbf{Cơ chế Giới hạn mềm (Soft-Bound):} Giới hạn này được tích hợp trực tiếp vào vòng lặp tìm kiếm sâu dần (\textit{Iterative Deepening}). Ngay sau khi hoàn thành trọn vẹn việc tìm kiếm ở một độ sâu $d$, thuật toán sẽ gọi hàm kiểm tra nếu quỹ thời gian đã vượt ngưỡng mềm, engine nhận định rằng việc khởi tạo tìm kiếm ở độ sâu $d+1$ là quá rủi ro (vì độ sâu sau thường tốn thời gian theo cấp số nhân so với độ sâu trước). Khi đó, vòng lặp bị ngắt và engine lập tức chốt nước đi tốt nhất hiện tại để đảm bảo an toàn thời gian.
     
     \item \textbf{Cơ chế Giới hạn cứng (Hard-Bound):} Đây là ``công tắc khẩn cấp''. Trong lúc engine đang mắc kẹt sâu bên trong một nhánh rẽ khổng lồ của cây Negamax, nếu phát hiện vượt thời gian tối đa cho phép, cờ tín hiệu \texttt{keep\_running = false} sẽ được kích hoạt trên toàn hệ thống. Tính năng này ép toàn bộ các nút Alpha-Beta đang chạy dở dang phải thoái lui ngay lập tức, hủy bỏ nhánh đang xét để trả về kết quả an toàn trước khi rớt giờ.
 
@@ -438,9 +438,9 @@ Lingine gán điểm ưu tiên sắp xếp cho mỗi nước đi theo một tr�
     \item \textbf{Nước đi lịch sử:} Tích lũy điểm thưởng dựa trên lịch sử thành công của các nước đi không ăn quân trong quá khứ.
 \end{enumerate}
 
-\subsection{Iterative Deepening}
+\subsection{Tìm kiếm sâu dần (Iterative Deepening)}
 
-Thay vì ngay lập tức ra lệnh cho thuật toán tìm kiếm một mạch đến độ sâu tối đa $N$, động cơ sẽ duyệt lặp lại nhiều lần, bắt đầu từ độ sâu 1, sau đó là 2, 3... cho đến $N$. Quá trình này thoạt nhìn có vẻ lãng phí tính toán, nhưng thực tế lại mang đến lợi ích khổng lồ: ở mỗi độ sâu $d$, thuật toán sẽ lưu lại nước đi tốt nhất vào Bảng băm (TT Move). Khi duyệt đến độ sâu $d+1$, nước đi này sẽ được ưu tiên duyệt đầu tiên, giúp biên Alpha tăng vọt ngay từ sớm và tạo ra hiệu ứng cắt tỉa dây chuyền tối đa. Ngoài ra, nó giúp engine luôn có sẵn một nước đi tốt nhất để trả về trong trường hợp bị hết thời gian đột ngột.
+Thay vì ngay lập tức ra lệnh cho thuật toán tìm kiếm một mạch ở độ sâu tối đa $N$, engine sẽ duyệt lặp lại nhiều lần, bắt đầu từ độ sâu 1, sau đó là 2, 3... cho đến $N$. Quá trình này thoạt nhìn có vẻ lãng phí tính toán, nhưng thực tế lại mang đến lợi ích khổng lồ: ở mỗi độ sâu $d$, thuật toán sẽ lưu lại nước đi tốt nhất vào Bảng băm (TT Move). Khi duyệt đến độ sâu $d+1$, nước đi này sẽ được ưu tiên duyệt đầu tiên, giúp biên Alpha tăng vọt ngay từ sớm và tạo ra hiệu ứng cắt tỉa dây chuyền tối đa. Ngoài ra, nó giúp engine luôn có sẵn một nước đi tốt nhất để trả về trong trường hợp bị hết thời gian đột ngột.
 
 Lingine sử dụng một vòng lặp \texttt{while} tăng dần độ sâu lên đến \texttt{max\_depth}. Tại mỗi vòng lặp, engine cập nhật trung gian kết quả về giao diện người dùng thông qua giao thức UCI. Quan trọng nhất, engine liên tục kiểm tra giới hạn thời gian mềm. Nếu thuật toán nhận thấy không còn đủ thời gian an toàn để hoàn thành vòng lặp tiếp theo, nó sẽ tự động ngắt sớm và chốt nước đi tốt nhất của độ sâu vừa hoàn thành.
 

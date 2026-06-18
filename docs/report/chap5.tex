@@ -40,15 +40,15 @@ Trong bài đo lường thực tế tại thế cờ khởi đầu với độ s
 
 \subsection{Scripts và Môi trường Kiểm thử}
 
-Mỗi phiên bản động cơ cờ khi phát triển đều được đưa qua một quy trình kiểm định nghiêm ngặt gồm 3 giai đoạn đối đầu độc lập:
+Mỗi phiên bản engine cờ khi phát triển đều được đưa qua một quy trình kiểm định nghiêm ngặt gồm 3 giai đoạn đối đầu độc lập:
 
 \begin{enumerate}
-    \item \textbf{Giai đoạn 1 (Gauntlet Performance):} Phiên bản thử nghiệm sẽ thi đấu một giải Gauntlet với tổng cộng 3000 ván đấu chống lại một tập hợp các đối thủ chuẩn là \textit{Fairy-Stockfish}. \textit{Fairy-Stockfish} được giới hạn sức mạnh thi đấu ở 6 cấp độ ELO cố định: FS-1200, FS-1400, FS-1600, FS-1800, FS-2000, và FS-2200. Với mỗi đối thủ, động cơ cờ thi đấu đúng 500 ván, luân phiên cầm quân Đỏ (đi trước) và quân Đen (đi sau) để triệt tiêu lợi thế màu quân.
+    \item \textbf{Giai đoạn 1 (Gauntlet Performance):} Phiên bản thử nghiệm sẽ thi đấu một giải Gauntlet với tổng cộng 3000 ván đấu chống lại một tập hợp các đối thủ chuẩn là \textit{Fairy-Stockfish}. \textit{Fairy-Stockfish} được giới hạn sức mạnh thi đấu ở 6 cấp độ ELO cố định: FS-1200, FS-1400, FS-1600, FS-1800, FS-2000, và FS-2200. Với mỗi đối thủ, engine cờ thi đấu đúng 500 ván, luân phiên cầm quân Đỏ (đi trước) và quân Đen (đi sau) để triệt tiêu lợi thế màu quân.
     \item \textbf{Giai đoạn 2 (Neighbor Match):} Đối đầu trực tiếp giữa phiên bản hiện tại ($N$) và phiên bản tiền nhiệm gần nhất ($N-1$) trong 1000 ván đấu để xác định mức cải tiến ELO tương đối trực tiếp.
     \item \textbf{Giai đoạn 3 (Base Match):} Đối đầu trực tiếp giữa phiên bản hiện tại ($N$) và phiên bản sơ khai ($1.0.0$) trong 1000 ván đấu để đo lường tổng tiến bộ lũy kế.
 \end{enumerate}
 
-Toàn bộ các trận đấu được chạy với thiết lập kiểm soát thời gian chặt chẽ là 3 giây khởi đầu và tích lũy thêm 0.03 giây sau mỗi nước đi. Môi trường phần cứng được chuẩn hóa để đảm bảo tính đồng đều giữa các lượt chạy. Việc sử dụng cơ sở dữ liệu khai cuộc \textit{Masters Opening Database} với 40,711 ván đấu của các danh thủ cờ tướng giúp tạo ra các vị trí ban đầu ngẫu nhiên, tránh việc động cơ cờ lặp lại cùng một ván cờ dẫn đến sai lệch kết quả thống kê.
+Toàn bộ các trận đấu được chạy với thiết lập kiểm soát thời gian chặt chẽ là 3 giây khởi đầu và tích lũy thêm 0.03 giây sau mỗi nước đi. Môi trường phần cứng được chuẩn hóa để đảm bảo tính đồng đều giữa các lượt chạy. Việc sử dụng cơ sở dữ liệu khai cuộc \textit{Masters Opening Database} với 40,711 ván đấu của các danh thủ cờ tướng giúp tạo ra các vị trí ban đầu ngẫu nhiên, tránh việc engine cờ lặp lại cùng một ván cờ dẫn đến sai lệch kết quả thống kê.
 
 \subsection{Mô hình Ước lượng ELO bằng MLE}
 
@@ -108,7 +108,7 @@ Tiến trình phát triển của Lingine có thể chia làm ba thời kỳ ch�
 \begin{enumerate}
     \item \textbf{Thời kỳ Xây dựng nền móng (v1.0.0 -- v1.4.0):} Tập trung vào tính đúng đắn của luật cờ tướng và kiến trúc cơ bản. Việc bổ sung \textit{Transposition Table} (v1.2.0) giúp lưu trữ các thế cờ đã duyệt, loại bỏ việc tính toán trùng lặp và đem lại mức tăng ELO ấn tượng (+96.2 ELO). Kỹ thuật sắp xếp nước đi (\textit{Move Ordering}) ở v1.4.0 giúp tối ưu hóa thứ tự nhánh Alpha-Beta, nâng hiệu suất cắt tỉa rõ rệt (+69.4 ELO).
     \item \textbf{Thời kỳ Ổn định và Dọn dẹp (v1.6.0 -- v1.6.5):} Đây là giai đoạn tối ưu mã nguồn. Việc tích hợp các phần mở rộng độ sâu tìm kiếm (\textit{Extensions}) ở v1.6.0 đưa ELO vượt ngưỡng 1900 (+80.6 ELO). Trong các bản phụ v1.6.2 và v1.6.3, ELO suy giảm nhẹ do các thay đổi cấu trúc dữ liệu và thử nghiệm kiểu dữ liệu nông để tiết kiệm bộ nhớ gặp lỗi logic tiềm ẩn hoặc gây chậm tốc độ duyệt. Tuy nhiên, nhóm đã nhanh chóng khắc phục ở v1.6.4 và v1.6.5 bằng việc đưa TT vào \textit{Quiescence Search} (+33.1 ELO).
-    \item \textbf{Thời kỳ Cắt tỉa nâng cao và Tự động hóa tối ưu (v1.7.0 -- v1.9.0):} Trực tiếp đưa động cơ cờ vượt qua mốc ELO 2000 và 2200. Các thuật toán cắt tỉa hiện đại như \textit{Null Move Pruning} và \textit{Late Move Reductions} (v1.7.0) cho phép động cơ bỏ qua các nhánh tìm kiếm vô vọng, tập trung tài nguyên vào các nhánh PV then chốt (+152.2 ELO). Phiên bản v1.9.0 hoàn thiện hóa kỹ thuật cắt tỉa với một loạt cải tiến nâng cao như \textit{Reverse Futility Pruning} (RFP) và \textit{Late Move Pruning} (LMP), tăng thêm +127.4 ELO.
+    \item \textbf{Thời kỳ Cắt tỉa nâng cao và Tự động hóa tối ưu (v1.7.0 -- v1.9.0):} Trực tiếp đưa engine cờ vượt qua mốc ELO 2000 và 2200. Các thuật toán cắt tỉa hiện đại như \textit{Null Move Pruning} và \textit{Late Move Reductions} (v1.7.0) cho phép engine bỏ qua các nhánh tìm kiếm vô vọng, tập trung tài nguyên vào các nhánh PV then chốt (+152.2 ELO). Phiên bản v1.9.0 hoàn thiện hóa kỹ thuật cắt tỉa với một loạt cải tiến nâng cao như \textit{Reverse Futility Pruning} (RFP) và \textit{Late Move Pruning} (LMP), tăng thêm +127.4 ELO.
 \end{enumerate}
 
 \subsection{Phân tích các Bước Nhảy ELO Lớn}
@@ -119,7 +119,7 @@ Trong lịch sử phát triển, có hai bước nhảy ELO đột phá, đóng 
     \item \textbf{Bước nhảy 2 (v1.8.0: Texel Tuning \& Evaluation Bonuses, +237.6 ELO):} Mặc dù PST giúp định vị quân cờ tốt, các giá trị trong bảng PST và trọng số đánh giá ban đầu được xác định thủ công dựa trên cảm quan của con người, dẫn đến sự thiếu chính xác và mất cân đối ở các giai đoạn tàn cuộc. Thuật toán \textit{Texel Tuning} sử dụng phương pháp tối ưu hóa phi tuyến tính để tự động căn chỉnh các tham số dựa trên dữ liệu hàng ngàn ván đấu thực tế. Kết hợp với việc bổ sung điểm thưởng cơ động (\textit{Mobility Bonus}) và quân phòng thủ bảo vệ Tướng (\textit{Defender Bonus}), Lingine đã học được cách phối hợp quân cờ phức tạp, giúp tăng vượt bậc 237.6 ELO trực tiếp khi đối đầu phiên bản v1.7.0.
 \end{itemize}
 
-Sự thành công của hai bước nhảy này chứng minh rằng trong thiết kế động cơ cờ tướng, việc cải tiến độ chính xác của hàm đánh giá tĩnh (\textit{Evaluation Function}) luôn đem lại hiệu quả tăng sức mạnh ELO vượt trội so với việc chỉ tập trung tối ưu hóa chiều sâu tìm kiếm (\textit{Search Function}).
+Sự thành công của hai bước nhảy này chứng minh rằng trong thiết kế engine cờ tướng, việc cải tiến độ chính xác của hàm đánh giá tĩnh (\textit{Evaluation Function}) luôn đem lại hiệu quả tăng sức mạnh ELO vượt trội so với việc chỉ tập trung tối ưu hóa chiều sâu tìm kiếm (\textit{Search Function}).
 
 \section{Đánh giá chi tiết phiên bản mới nhất v1.9.0}
 
