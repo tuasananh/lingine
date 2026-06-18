@@ -1,0 +1,59 @@
+\chapter{Kết luận và Hướng phát triển}
+
+\section{Các vấn đề thách thức và Giải pháp}
+
+Trong quá trình thiết kế và phát triển engine cờ tướng Lingine, nhóm nghiên cứu đã đối mặt và giải quyết thành công một số thách thức kỹ thuật lớn:
+
+\begin{enumerate}
+    \item \textbf{Hiệu ứng chân trời (Horizon Effect):}
+    \begin{itemize}
+        \item \textit{Thách thức:} Xảy ra khi engine phát hiện một đòn chiến thuật bất lợi (ví dụ bị bắt Xe) ở giới hạn độ sâu tìm kiếm. Để trì hoãn việc này ra sau ``chân trời'' tìm kiếm, engine có thể thực hiện các nước đi thí quân vô nghĩa nhằm kéo dài độ sâu, dẫn đến đánh giá sai lầm nghiêm trọng.
+        \textit{Giải pháp:} Triển khai bộ tìm kiếm tĩnh Quiescence Search kết hợp với kiểm tra chiếu tướng mở rộng (Check Extensions). Quiescence Search tiếp tục duyệt tất cả các nước đi ăn quân cho đến khi thế trận hoàn toàn bình ổn tĩnh, đảm bảo điểm số trả về phản ánh chính xác thực tế thế cờ.
+    \end{itemize}
+    \item \textbf{Tranh chấp đồng bộ hóa trong giao thức UCI:}
+    \begin{itemize}
+        \item \textit{Thách thức:} Lệnh ngắt \texttt{stop} từ người dùng có thể gửi đến bất kỳ lúc nào qua luồng vào chuẩn khi engine đang tính toán sâu. Nếu sử dụng các cơ chế đồng bộ luồng chặn hoặc khóa Mutex truyền thống sẽ gây trễ hoặc làm treo toàn bộ ứng dụng.
+        \item \textit{Giải pháp:} Áp dụng biến nguyên tử \texttt{AtomicBool} chia sẻ giữa luồng đọc lệnh và luồng tìm kiếm. Thao tác đọc ghi bất đồng bộ không chặn giúp dừng tìm kiếm tức thời trong thời gian dưới 1 mili-giây mà không gây ra hiện tượng nghẽn luồng.
+    \end{itemize}
+\end{enumerate}
+
+\section{Công nghệ và Tài nguyên sử dụng}
+
+Dự án Lingine được xây dựng và kiểm thử dựa trên các công nghệ và tài nguyên mã nguồn mở hiện đại:
+\begin{itemize}
+    \item \textbf{Rust Toolchain:} Trình biên dịch \texttt{rustc} và công cụ quản lý dự án \texttt{cargo}. Chúng tôi tận dụng tối đa các tối ưu hóa biên dịch của Cargo thông qua cấu hình biên dịch \texttt{opt-level = 3} và kích hoạt các chỉ thị tập lệnh CPU vector hiện đại (\texttt{-C target-cpu=native}).
+    \item \textbf{Thư viện \texttt{arrayvec}:} Cho phép lưu trữ danh sách nước đi (\texttt{MoveList}) trong bộ nhớ Stack cố định thay vì bộ nhớ Heap động, tránh overhead cấp phát bộ nhớ khi sinh hàng triệu nước đi mỗi giây.
+    \item \textbf{Python Suite:} Các kịch bản Python tự động thiết lập môi trường (\texttt{setup\_}\allowbreak\texttt{tools.py}) và tổ chức đấu giải ước lượng Elo (\texttt{run\_}\allowbreak\texttt{match.py}, \texttt{run\_}\allowbreak\texttt{gauntlet.py}, \texttt{run\_}\allowbreak\texttt{historical\_}\allowbreak\texttt{evals.py}).
+    \item \textbf{Trình quản lý Sylvan:} Công cụ \textit{Sylvan} được sử dụng làm giao diện người dùng đồ họa (GUI) để kiểm thử thủ công và \textit{Sylvan-CLI} đóng vai trò làm bộ điều phối giải đấu thông qua giao thức UCI chuẩn mực.
+    \item \textbf{Các động cơ cờ tướng đối chiếu:} \textit{Fairy-Stockfish} và \textit{Pikafish} làm các đối thủ có giới hạn sức mạnh chuẩn để chạy giải đấu ước lượng ELO và là công cụ kiểm thử tính đúng đắn của luật chơi.
+    \item \textbf{Dự án cờ vua mã nguồn mở bằng Rust:} Tham khảo cấu trúc kiến trúc mã nguồn tối ưu hiệu năng từ hai dự án \textit{Reckless} và \textit{Viridithas} viết bằng Rust.
+\end{itemize}
+
+\section{Kết luận}
+
+Dự án nghiên cứu thiết kế và triển khai engine cờ tướng Lingine đã hoàn thành đầy đủ tất cả các mục tiêu đề ra ban đầu:
+\begin{itemize}
+    \item Xây dựng thành công một engine cờ tướng hoàn chỉnh bằng ngôn ngữ Rust, đạt độ chính xác luật chơi tuyệt đối được xác minh qua các bộ kiểm thử PERFT chuẩn quốc tế.
+    \item Triển khai cấu trúc dữ liệu Bitboard 128-bit kết hợp với Magic Bitboards giúp tối ưu hóa cực đoan tốc độ sinh nước đi, đạt hiệu suất xử lý hàng triệu nút trạng thái trên giây.
+    \item Tích hợp hàm đánh giá tĩnh tapered score hiện đại, tự động tối ưu hóa các tham số thông qua thuật toán Texel Tuning.
+    \item Triển khai bộ thuật toán tìm kiếm nâng cao Negamax tích hợp PVS, bảng băm TT và các kỹ thuật tỉa nhánh hiện đại giúp tăng độ sâu chiến thuật và đạt mức Elo thi đấu ước lượng tối đa khoảng 2244.
+\end{itemize}
+
+\section{Hướng phát triển tương lai}
+
+Để tiếp tục nâng cao sức mạnh và tính thực tiễn của engine, nhóm phát triển đề xuất hai hướng nghiên cứu trọng tâm tiếp theo:
+
+\subsection{Tăng tính đa dạng trong lối chơi bằng Softmax Sampling}
+
+Hiện tại, engine luôn chọn nước đi tốt nhất tuyệt đối có điểm số cao nhất (\texttt{bestmove}). Trong đấu tập hoặc giai đoạn khai cuộc, điều này làm lối chơi của engine dễ bị bắt bài và rập khuôn. 
+
+Hướng cải tiến là áp dụng lấy mẫu xác suất Softmax dựa trên điểm số đánh giá $Q(s, a)$ của các nước đi khả dĩ:
+\[ P(a_i | s) = \frac{e^{Q(s, a_i) / \tau}}{\sum_j e^{Q(s, a_j) / \tau}} \]
+
+Trong đó $\tau$ là tham số nhiệt độ (Temperature). Khi $\tau \to 0$, engine chọn nước đi tốt nhất; khi $\tau$ lớn hơn, engine sẽ ngẫu nhiên chọn các nước đi tốt khác nhau với xác suất tương ứng, tạo nên sự phong phú và tự nhiên trong phong cách chơi cờ giống con người.
+
+\subsection{Tích hợp Mạng nơ-ron NNUE (Efficiently Updatable Neural Networks)}
+
+Hàm đánh giá hiện tại của Lingine là hàm tuyến tính kết hợp Material và PST. Mặc dù chạy nhanh nhưng hàm tuyến tính bỏ sót rất nhiều mối quan hệ phi tuyến tính phức tạp giữa các quân cờ (ví dụ mối tương tác giữa Xe, Pháo, Mã khi phối hợp tấn công).
+
+Hướng phát triển đột phá là tích hợp cấu trúc mạng nơ-ron NNUE dạng nông (thường gồm một lớp ẩn kích thước 256 hoặc 512). Điểm đặc biệt của NNUE là lớp mạng đầu vào được cập nhật vi phân vô cùng nhanh chóng ngay trong quá trình thực hiện nước đi (\texttt{do\_move}/\texttt{undo\_move}) dựa trên sự dịch chuyển của quân cờ, giúp giữ nguyên tốc độ NPS cao của engine trong khi mang lại độ chính xác đánh giá thế trận vượt trội tương đương các đại kiện tướng quốc tế.

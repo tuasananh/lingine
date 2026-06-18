@@ -1,0 +1,559 @@
+\chapter{Biểu diễn tri thức và Trạng thái}
+
+\section{Định nghĩa không gian trạng thái}
+
+Trạng thái toàn cục $S$ của một ván cờ tướng tại một thời điểm được định nghĩa chính thức bởi bộ bốn thành phần:
+\[ S = \langle B, p, c_h, h \rangle \]
+
+Trong đó:
+\begin{itemize}
+    \item $B$ (Board) đại diện cho phân bố các quân cờ trên bàn lưới kích thước $10 \times 9 = 90$ ô. Mỗi ô cờ tại vị trí $sq \in [0, 89]$ có thể trống hoặc chứa một trong 14 loại quân cờ thực tế (Tướng, Sĩ, Tượng, Xe, Pháo, Mã, Tốt cho mỗi bên Đỏ và Đen).
+    \item $p$ (Player) đại diện cho bên đi tiếp theo, $p \in \{\text{Đỏ}, \text{Đen}\}$.
+    \item $c_h$ (Count Half-move) là số nửa nước đi trôi qua kể từ nước đi không có bắt quân cuối cùng. Đây là bộ đếm phục vụ cho việc thực thi luật hòa cờ 60 nước.
+    \item $h$ (History) là danh sách lịch sử lưu trữ toàn bộ trạng thái di chuyển trước đó cùng các thông tin bắt quân, hỗ trợ hoàn tác nước đi và phát hiện các trường hợp lặp lại trạng thái.
+\end{itemize}
+
+\section{Kỹ thuật biểu diễn trạng thái trong Lingine}
+
+Để hiện thực hóa mô hình toán học trên với hiệu năng cao nhất, Lingine định nghĩa cấu trúc dữ liệu trung tâm \texttt{Position} và cấu trúc thông tin phụ trợ \texttt{StateInfo} trong tệp \url{src/core/position/mod.rs}:
+
+\begin{lstlisting}[language=Rust, caption=Cấu trúc Position trong Lingine]
+/// Encapsulates the complete game board representation, bitboards, turn
+/// tracking, ply count, and incremental state histories for the engine.
+#[derive(Clone)]
+pub struct Position {
+    /// Flat 90-square array mapping square index (0 to 89) to the Piece
+    /// occupying it.
+    board: [Option<Piece>; Square::COUNT], // 1 * 90 = 90 bytes
+    /// Precomputed bitboards showing piece placements grouped by `PieceType`.
+    bitboard_by_type: [Bitboard; PieceType::COUNT], // 7 * 16 = 112 bytes
+    /// Precomputed bitboards showing piece placements grouped by `Color`.
+    bitboard_by_color: [Bitboard; Side::COUNT], // 2 * 16 = 32 bytes
+    /// Active count of each piece category on the board.
+    piece_count: [u8; Piece::COUNT], // 15 bytes
+    /// Current state of position
+    state: StateInfo, // 224 bytes
+    /// Stack tracking previous move parameter histories for undoing moves.
+    history: Vec<StateInfo>, // ptr (8) + size (8) + cap(8) = 24 bytes
+    /// Total moves played in the game so far (Red = 0, Black = 1, Red's
+    /// next = 2, etc.).
+    game_ply: u16, // 2 bytes
+    /// Palace coordinates of both players' Generals (Kings) for faster check
+    /// detection.
+    king_squares: [Square; Side::COUNT], // 2 bytes
+}
+\end{lstlisting}
+
+Để tiết kiệm thời gian tính toán lại thế cờ trong quá trình tìm kiếm sâu, các dữ liệu động phát sinh sau mỗi nước đi được đóng gói riêng vào cấu trúc \texttt{StateInfo}:
+
+\begin{lstlisting}[language=Rust, caption=Cấu trúc StateInfo trong Lingine]
+/// Represents search state parameters that must be saved on a stack,
+/// allowing incremental undo_move restorations.
+#[derive(Clone, Copy, Debug)]
+struct StateInfo {
+    /// The last move played to reach this state.
+    pub last_move: Option<Move>,
+    /// The piece captured during this move, or `None` if it was quiet.
+    pub captured_piece: Option<Piece>,
+    /// The prior Zobrist position hash value before the move occurred.
+    pub zobrist: u64,
+    /// Halfmove clock / 60-rule counter (increments on quiet moves, resets to 0
+    /// on captures/pawn moves).
+    pub sixtymove_clock: u16,
+    /// Whether the side to move was in check in this position state.
+    pub in_check: bool,
+    /// Precalculated incremental mid- and end-game score (from Red's
+    /// perspective)
+    pub score: PackedScore,
+    /// Precalculated incremental game phase
+    pub phase: u8,
+    /// Checker pieces checking the King of the side to move.
+    pub checkers: Bitboard,
+    /// Pinned pieces (blockers) for both sides' kings.
+    pub blockers_for_king: [Bitboard; Side::COUNT],
+    /// The slider pieces pinning other pieces for both sides' kings.
+    pub pinners: [Bitboard; Side::COUNT],
+    /// Check squares for each piece type of the side to move (against the
+    /// opponent king).
+    pub check_squares: [Bitboard; PieceType::COUNT],
+    /// Whether we need a full check validation.
+    pub need_full_check: bool,
+    /// Number of plies played since the last null move.
+    pub plies_since_null: u16,
+}
+\end{lstlisting}
+
+\subsection{Biểu diễn bàn cờ bằng Bitboard 128-bit}
+
+Do bàn cờ tướng có kích thước $10 \times 9 = 90$ ô, cấu trúc Bitboard chuẩn 64-bit của cờ vua ($8 \times 8 = 64$ ô) là hoàn toàn không đủ. Lingine đã phát triển một giải pháp Bitboard dựa trên kiểu số nguyên không dấu 128-bit (\texttt{u128}), trong đó 90 bit đầu tiên được gán tương ứng cho 90 ô cờ từ vị trí $0$ (a1) tới $89$ (i10):
+\[ \text{Bitboard} = \sum_{sq=0}^{89} b_{sq} \cdot 2^{sq} \quad (\text{với } b_{sq} \in \{0, 1\}) \]
+
+Cấu trúc \texttt{Bitboard} được cài đặt trong tệp \url{src/core/bitboard.rs} như sau:
+
+\begin{lstlisting}[language=Rust, caption=Cấu trúc Bitboard trong Lingine]
+#[derive(
+    BitAnd,
+    BitAndAssign,
+    BitOr,
+    BitOrAssign,
+    BitXor,
+    BitXorAssign,
+    Not,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+)]
+pub struct Bitboard(u128);
+
+impl Bitboard {
+    /// Creates a new, completely empty bitboard (all bits set to 0).
+    #[inline]
+    pub const fn new() -> Self {
+        Self(0)
+    }
+
+    /// Make a bitboard directly from a raw `u128` value.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the provided `u128` value only has
+    /// bits set in the range 0..89, as bits 90 to 127 are unused and
+    /// may lead to undefined behavior
+    #[inline]
+    pub const unsafe fn from_raw(bitboard: u128) -> Self {
+        Self(bitboard)
+    }
+
+    /// Retrieves the raw `u128` value of the bitboard, useful for
+    /// low-level operations or debugging.
+    #[inline]
+    pub const fn raw(&self) -> u128 {
+        self.0
+    }
+
+    /// Checks if the bitboard is completely empty (no active squares).
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    /// Verifies if a given square bit is active (set to 1) in the bitboard.
+    #[inline]
+    pub const fn is_occupied(&self, square: Square) -> bool {
+        (self.0 & (1u128 << (square as u8))) != 0
+    }
+
+    /// Checks if this board (set of squares) contains the square
+    #[inline]
+    pub const fn contains(&self, square: Square) -> bool {
+        self.is_occupied(square)
+    }
+
+    /// Activates (sets to 1) the bit corresponding to the given square.
+    #[inline]
+    pub const fn set_bit(&mut self, square: Square) {
+        self.0 |= 1u128 << (square as u8);
+    }
+
+    /// Deactivates (clears to 0) the bit corresponding to the given square.
+    #[inline]
+    pub const fn clear_bit(&mut self, square: Square) {
+        self.0 &= !(1u128 << (square as u8));
+    }
+
+    /// Returns the number of active squares (bits set to 1) in the bitboard.
+    #[inline]
+    pub const fn count_ones(&self) -> u32 {
+        self.0.count_ones()
+    }
+
+    /// Pops (extracts and clears) the Least Significant Bit (LSB) from
+    /// the bitboard, returning the corresponding `Square`. Returns
+    /// `None` if the bitboard is empty. Used for rapid, zero-overhead
+    /// sequence generation and iterator-like popping of pieces.
+    #[inline]
+    pub const fn pop_lsb(&mut self) -> Option<Square> {
+        if self.0 == 0 {
+            None
+        } else {
+            let lsb = self.0.trailing_zeros() as u8;
+            self.0 &= self.0 - 1; // Clears the lowest set bit
+            Some(unsafe { Square::from_repr_unchecked(lsb) })
+        }
+    }
+
+    /// A const-compatible bitwise OR operator for building compile-time
+    /// constants lookup tables.
+    #[inline]
+    pub const fn const_or(&self, b: Self) -> Self {
+        Self(self.0 | b.0)
+    }
+
+    /// A const-compatible bitwise AND operator for building compile-time
+    /// constants
+    #[inline]
+    pub const fn const_and(&self, b: Self) -> Self {
+        Self(self.0 & b.0)
+    }
+
+    #[inline]
+    pub const fn from_square(s: Square) -> Self {
+        Self(1u128 << (s as u8))
+    }
+
+    /// Constructs a bitboard with all bits active along the specified
+    /// vertical column (`File`).
+    #[inline]
+    pub const fn from_file(f: File) -> Self {
+        let mut bits = 0u128;
+        let mut r = 0u8;
+        let f = f as u8;
+
+        while r < Rank::COUNT as u8 {
+            let square_index = (r * File::COUNT as u8) + f;
+            bits |= 1u128 << square_index;
+            r += 1;
+        }
+
+        Self(bits)
+    }
+
+    /// Constructs a bitboard with all bits active along the specified
+    /// horizontal row (`Rank`).
+    #[inline]
+    pub const fn from_rank(r: Rank) -> Self {
+        Self(0x1FFu128 << (r as u8 * 9))
+    }
+
+    /// Returns a precomputed bitboard covering one half of the board
+    /// (5 ranks) for a given player:
+    #[inline]
+    pub const fn side(side: Side) -> Self {
+        match side {
+            Side::Red => Self::from_rank(Rank::R0)
+                .const_or(Self::from_rank(Rank::R1))
+                .const_or(Self::from_rank(Rank::R2))
+                .const_or(Self::from_rank(Rank::R3))
+                .const_or(Self::from_rank(Rank::R4)),
+            Side::Black => Self::from_rank(Rank::R5)
+                .const_or(Self::from_rank(Rank::R6))
+                .const_or(Self::from_rank(Rank::R7))
+                .const_or(Self::from_rank(Rank::R8))
+                .const_or(Self::from_rank(Rank::R9)),
+        }
+    }
+
+    /// Returns a precomputed bitboard covering the palace of the given player
+    #[inline]
+    pub const fn palace(side: Side) -> Self {
+        let ranks = match side {
+            Side::Red => Self::from_rank(Rank::R0)
+                .const_or(Self::from_rank(Rank::R1))
+                .const_or(Self::from_rank(Rank::R2)),
+            Side::Black => Self::from_rank(Rank::R7)
+                .const_or(Self::from_rank(Rank::R8))
+                .const_or(Self::from_rank(Rank::R9)),
+        };
+
+        ranks.const_and(
+            Self::from_file(File::FD)
+                .const_or(Self::from_file(File::FE))
+                .const_or(Self::from_file(File::FF)),
+        )
+    }
+
+    pub const PALACE: Self = Self::palace(Side::Red).const_or(Self::palace(Side::Black));
+}
+\end{lstlisting}
+
+Việc sử dụng \texttt{u128} cho phép CPU thực hiện các phép tính logic bit song song trên toàn bộ 90 ô cờ chỉ bằng một chỉ thị máy duy nhất. Nhờ cơ chế \texttt{pop\_lsb} sử dụng lệnh assembly \texttt{TZCNT} của vi xử lý x86-64 thông qua hàm \texttt{trailing\_zeros()}, việc duyệt qua tất cả các quân cờ đang hoạt động đạt tốc độ tối đa.
+
+Trong \texttt{Position}, ta lưu thành phần $B$ bằng các biến:
+
+\begin{itemize}
+  \item \texttt{board}: Mảng 90 phần tử chứa quân cờ hiện tại ở mỗi vị trí trên bàn cờ.
+  \item \texttt{bitboard\_by\_type}: Mảng có 7 phần tử tương ứng với 7 quân cờ, mỗi phần tử là một Bitboard thể hiện vị trí của quân cờ đó ở thế cờ hiện tại.
+  \item \texttt{bitboard\_by\_color}: Mảng có 2 phần tử tương ứng với 2 người chơi, mỗi phần tử là một Bitboard thể hiện vị trí của quân cờ của người chơi đó ở thế cờ hiện tại.
+\end{itemize}
+
+\subsection{Biểu diễn các thành phần lượt đi và lịch sử}
+
+\begin{itemize}
+    \item \textbf{Lượt đi ($p$):} Được biểu diễn bằng kiểu \texttt{Side} gồm hai giá trị \texttt{Side::Red} và \texttt{Side::Black}. Các phương thức đối lập \texttt{Side::opposite()} giúp đổi lượt nhanh bằng phép toán số học đơn giản.
+    \item \textbf{Bộ đếm luật hòa cờ ($c_h$):} Được lưu trong trường \texttt{sixtymove\_clock: u16}. Mỗi nước đi quiet (không ăn quân) sẽ tăng bộ đếm lên 1. Nếu có quân bị bắt, bộ đếm lập tức reset về 0. Khi giá trị đạt 120 (tương đương 60 nước đi đầy đủ của cả hai bên), engine sẽ nhận diện thế hòa.
+    \item \textbf{Lịch sử ($h$):} Lưu trữ trong stack \texttt{history: Vec<StateInfo>}. Mỗi khi thực hiện nước đi thông qua \texttt{do\_move()}, trạng thái \texttt{StateInfo} cũ được đẩy vào \texttt{history}. Khi hoàn tác qua \texttt{undo\_move()}, trạng thái chỉ cần pop từ stack ra để khôi phục nhanh chóng trong thời gian $O(1)$ mà không cần tính toán lại từ đầu.
+\end{itemize}
+
+\section{Nén dữ liệu nước đi 16-bit}
+
+Trong quá trình duyệt cây tìm kiếm, hàng triệu nước đi được tạo ra và truyền qua lại giữa các hàm. Nếu sử dụng các cấu trúc dữ liệu cồng kềnh, chi phí cấp phát bộ nhớ và truyền tham số sẽ làm chậm đáng kể tốc độ của engine. Lingine giải quyết triệt để vấn đề này bằng cách nén nước đi thành một số nguyên không dấu 16-bit (\texttt{u16}) duy nhất:
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{ccl}
+        \toprule
+        \textbf{Các bit} & \textbf{Khoảng giá trị} & \textbf{Ý nghĩa} \\
+        \midrule
+        0 -- 6 & 0 .. 89 & Chỉ số ô đích (To Square) -- Cần 7 bit ($2^7 = 128$) \\
+        7 -- 13 & 0 .. 89 & Chỉ số ô xuất phát (From Square) -- Cần 7 bit \\
+        14 -- 15 & 0 .. 3 & Không được sử dụng \\
+        \bottomrule
+    \end{tabular}
+    \caption{Cấu trúc mã hóa nước đi 16-bit trong Lingine}
+\end{table}
+
+Cấu trúc \texttt{Move} được cài đặt trong tệp \url{src/core/types/move.rs} như sau:
+
+\begin{lstlisting}[language=Rust, caption=Cấu trúc Move trong Lingine]
+/// A compact 16-bit move representation designed for performance:
+///
+/// * **Bits 0 - 6**: Destination square (0 to 89, fits in 7 bits since
+///   $2^7=128$).
+/// * **Bits 7 - 13**: Origin square (0 to 89, fits in 7 bits).
+/// * **Bits 14 - 15**: Reserved.
+///
+/// The move is guaranteed to be non-zero, so we can use NonZeroU16 for
+/// better optimization when using Option<Move>.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Move(NonZeroU16);
+
+impl Move {
+    /// Constructs a basic quiet or capture move from an origin and
+    /// destination square.
+    #[inline]
+    pub const fn new(from: Square, to: Square) -> Self {
+        assert!(
+            from as u16 != to as u16,
+            "Move cannot have the same origin and destination square"
+        );
+        Self(unsafe { NonZeroU16::new_unchecked((to as u16) | ((from as u16) << 7)) })
+    }
+
+    /// Extracts the starting square index by shifting past the
+    /// destination bits.
+    #[inline]
+    pub const fn from(&self) -> Square {
+        unsafe { std::mem::transmute(((self.0.get() >> 7) & 0x7F) as u8) }
+    }
+
+    /// Extracts the target square index by masking the lower 7 bits.
+    #[inline]
+    pub const fn to(&self) -> Square {
+        unsafe { std::mem::transmute((self.0.get() & 0x7F) as u8) }
+    }
+
+    /// Converts the move into its UCI string format
+    pub fn to_uci_string(&self) -> String {
+        let from = self.from();
+        let to = self.to();
+        let from_file = (b'a' + from.file() as u8) as char;
+        let from_rank = (b'0' + from.rank() as u8) as char;
+        let to_file = (b'a' + to.file() as u8) as char;
+        let to_rank = (b'0' + to.rank() as u8) as char;
+        format!("{}{}{}{}", from_file, from_rank, to_file, to_rank)
+    }
+}
+\end{lstlisting}
+
+\subsection{Ví dụ minh họa}
+Giả sử ta cần mã hóa nước đi di chuyển quân Xe từ ô xuất phát $h2$ (chỉ số 16, nhị phân \texttt{0010000}) đến ô đích $e2$ (chỉ số 13, nhị phân \texttt{0001101}):
+\begin{itemize}
+    \item Chỉ số ô đi (From): $16 \ll 7 = 2048$ (nhị phân \texttt{00001000 00000000})
+    \item Chỉ số ô đến (To): $13$ (nhị phân \texttt{00000000 00001101})
+    \item Giá trị nước đi mã hóa: $\text{Move} = 2048 \lor 13 = 2061$ (thập lục phân \texttt{0x080D})
+\end{itemize}
+
+Nhờ kích thước cực nhỏ (2 bytes), dữ liệu nước đi có thể nằm gọn trong các thanh ghi CPU và truyền trực tiếp bằng trị số, tránh tối đa việc truy xuất bộ nhớ RAM và tận dụng tối ưu bộ nhớ đệm L1 Cache.
+
+\section{Định danh trạng thái bằng Zobrist Hashing}
+
+Mã băm Zobrist (Zobrist Hashing) là một kỹ thuật giúp chuyển đổi một thế cờ có kích thước bất kỳ thành một dãy số có độ dài cố định, với tỷ lệ phân bổ đồng đều trên tất cả các giá trị có thể xảy ra, được phát minh bởi Albert Zobrist. 
+
+Mục đích chính của Zobrist Hashing trong Lingine là tạo ra một chỉ số gần như độc nhất cho bất kỳ thế cờ nào, đi kèm một yêu cầu rất quan trọng: hai thế cờ tương tự nhau phải tạo ra hai chỉ số hoàn toàn khác biệt. Các chỉ số này được sử dụng để giúp các bảng băm hoạt động nhanh hơn và tiết kiệm không gian lưu trữ hơn.
+
+Trong Lingine, mã băm Zobrist Hashing giúp kiểm tra lặp thế cờ cực nhanh và làm khóa tra bảng chuyển vị.
+
+\subsection{Công thức băm}
+
+Mã băm của trạng thái thế cờ $S_0$ được tính bằng:
+\[ \text{Hash}(S_0) = Z_{side} \oplus \left( \bigoplus_{sq=0}^{89} Z_{piece(sq), sq} \right) \]
+
+Trong đó:
+\begin{itemize}
+    \item $Z_{side}$ là $0$ nếu bên đi là Đỏ, hoặc một giá trị ngẫu nhiên 64-bit nếu bên đi là Đen.
+    \item $Z_{piece(sq), sq}$ là giá trị ngẫu nhiên 64-bit tương ứng với quân cờ đang ngự trị tại ô $sq$. Nếu ô $sq$ trống thì giá trị này bằng $0$.
+\end{itemize}
+
+\subsection{Khởi tạo bảng băm ngẫu nhiên tĩnh tại thời điểm biên dịch}
+
+Để đảm bảo tính nhất quán và tốc độ tối đa, toàn bộ bảng mã ngẫu nhiên Zobrist được tính toán trực tiếp tại thời điểm biên dịch (Compile-time) thông qua cơ chế \texttt{const fn} của Rust. Nhóm phát triển đã chọn Seed cho bộ sinh số ngẫu nhiên dựa trên việc thực hiện phép toán XOR mã số sinh viên của cả 3 thành viên trong nhóm:
+\[ \text{SEED} = 202416124 \oplus 202400076 \oplus 2416167 = 203875323 \]
+
+Cài đặt cụ thể trong file \url{src/core/position/zobrist\_table.rs}:
+
+\begin{lstlisting}[language=Rust, caption=Khởi tạo Zobrist Table tĩnh tại thời điểm biên dịch]
+/// Holds Zobrist random numbers used for fast, incremental position
+/// hashing. Positional hashes are updated via XOR operations during
+/// do_move/undo_move, entirely avoiding full-board hash recalculations.
+pub(super) struct ZobristTable {
+    /// Random keys for every piece type on every one of the 90 squares:
+    /// Categorized as `pieces[piece_index][square_index]`.
+    pub pieces: [[u64; Square::COUNT]; Piece::COUNT],
+    /// XOR'ed into the hash if it is Black's turn to move.
+    pub side: u64,
+}
+
+pub(super) static ZOBRIST: ZobristTable = {
+    const SEED: u64 = 202416124 ^ 202400076 ^ 2416167;
+    let mut pieces = [[0u64; Square::COUNT]; Piece::COUNT];
+    let mut piece_idx = 0;
+
+    const fn gen_next(mut value: u64) -> u64 {
+        value = value
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        value
+    }
+
+    let mut value = SEED;
+    while piece_idx < Piece::COUNT {
+        let mut square_idx = 0;
+        while square_idx < Square::COUNT {
+            value = gen_next(value);
+            pieces[piece_idx][square_idx] = value;
+            square_idx += 1;
+        }
+        piece_idx += 1;
+    }
+    let side = gen_next(value);
+    ZobristTable { pieces, side }
+};
+\end{lstlisting}
+
+\subsection{Cập nhật vi phân trạng thái \texorpdfstring{$O(1)$}{O(1)}}
+
+Khi di chuyển quân cờ, mã băm Zobrist không cần phải quét duyệt lại toàn bộ bàn cờ. Nhờ tính chất của phép XOR ($A \oplus A = 0$ và $0 \oplus B = B$), ta có thể cập nhật vi phân mã băm chỉ bằng các phép XOR tại các vị trí thay đổi.
+
+Ví dụ, khi thực hiện một nước đi dịch chuyển một quân \texttt{piece} từ ô \texttt{from} đến ô \texttt{to}, mã băm thay đổi như sau:
+
+\begin{lstlisting}[language=Rust, caption=Cập nhật vi phân Zobrist trong do\_move]
+// Remove piece from the starting square
+hash ^= ZOBRIST.pieces[piece][from];
+// Put the piece at the ending square
+hash ^= ZOBRIST.pieces[piece][to];
+// If there exist a piece at the ending square, remove it from the board
+if let Some(captured) = captured_piece {
+    hash ^= ZOBRIST.pieces[captured][to];
+}
+// Change the side to move
+hash ^= ZOBRIST.side;
+\end{lstlisting}
+
+Cơ chế cập nhật vi phân này biến thao tác tính toán mã băm từ độ phức tạp $O(N)$ (với $N=90$ ô cờ) về độ phức tạp $O(1)$ chỉ với 3 đến 4 phép XOR cơ bản, tiết kiệm tối đa tài nguyên CPU.
+
+\section{Bộ phân xử luật cờ tướng và phát hiện lặp trạng thái}
+
+Luật chơi cờ tướng Việt Nam và quốc tế có điểm khác biệt rất lớn so với cờ vua trong việc xử lý các trạng thái lặp lại thế trận. Trong cờ vua, nếu một thế trận lặp lại 3 lần (Threefold Repetition), ván đấu lập tức được xử hòa. Tuy nhiên, trong cờ tướng, luật chơi nghiêm cấm các hành vi mang tính chất cưỡng đoạt hoặc quấy rối vô hạn:
+\begin{itemize}
+    \item \textbf{Chiếu dai (Perpetual Check):} Một bên liên tục chiếu tướng đối phương mà không thay đổi phương án tấn công. Bên chiếu dai bắt buộc phải thay đổi nước đi, nếu không sẽ bị xử thua.
+    \item \textbf{Đuổi dai (Perpetual Chase):} Một bên liên tục sử dụng các quân tấn công (Xe, Mã, Pháo, Tốt đã qua sông) để uy hiếp, bắt một quân cờ của đối phương một cách lặp đi lặp lại. Bên đuổi dai cũng bị cấm và sẽ bị xử thua nếu không đổi nước đi.
+    \item \textbf{Lặp nước bình thường:} Các tình huống hai bên luân phiên đổi nước đi tự vệ, hoặc quấy rối lẫn nhau (không vi phạm chiếu dai hay đuổi dai) sẽ được xử hòa.
+\end{itemize}
+
+Lingine tích hợp bộ trọng tài luật trong tệp \url{src/core/position/rule\_judge.rs}. Để phát hiện lặp lại thế trận, hệ thống lưu trữ toàn bộ lịch sử các mã băm Zobrist trong danh sách \texttt{history}. Khi tìm kiếm, engine sẽ duyệt ngược lịch sử để tìm các mã băm trùng lặp. Khi phát hiện trùng lặp thế trận ở nửa nước đi thứ $i$, bộ trọng tài sẽ kích hoạt giải thuật kiểm tra đuổi bắt (\texttt{chased}) để xác định hành vi của bên đi.
+
+Giải thuật kiểm tra đuổi bắt sẽ thực hiện di chuyển thử nghiệm ảo trên bàn cờ. Nếu quân tấn công có giá trị thấp hơn hoặc bằng quân bị tấn công, hoặc quân bị tấn công đang đứng ở vị trí không được bảo vệ, nước đi đó sẽ được phân loại là hành vi ``Đuổi'' (\texttt{Chase}). Nếu một bên thực hiện liên tiếp các nước đi chiếu hoặc đuổi lặp lại trong chu kỳ thế trận, bộ trọng tài sẽ trả về điểm số phạt thua đối với bên vi phạm:
+\begin{itemize}
+    \item Nếu bên đi phạm luật chiếu dai hoặc đuổi dai: Trả về điểm số bị chiếu bí sau $d$ nước đi (\texttt{mated\_in(ply)}).
+    \item Nếu đối thủ phạm luật: Trả về điểm số chiếu bí đối thủ (\texttt{mate\_in(ply)}).
+    \item Nếu lặp nước hòa hợp lệ: Trả về điểm số hòa cờ (\texttt{score::ZERO}).
+\end{itemize}
+
+\section{Thiết kế bảng chuyển vị Transposition Table}
+
+Bảng chuyển vị (Transposition Table) là bộ nhớ đệm cực kỳ quan trọng giúp ghi nhớ kết quả đánh giá và nước đi tốt nhất tại các nút đã duyệt. Do cây tìm kiếm cờ tướng có rất nhiều đường dẫn trùng lặp (hoán vị nước đi, ví dụ đi Xe trước rồi đi Mã sau so với đi Mã trước Xe sau), bảng chuyển vị giúp cắt tỉa các nhánh cờ trùng lặp này ngay tại gốc.
+
+\subsection{Cấu trúc dữ liệu tối ưu hóa bộ nhớ đệm}
+
+Để tối ưu hóa việc truy xuất bộ nhớ, cấu trúc lưu trữ của bảng băm \texttt{Storage} được thiết kế với kích thước cực kỳ nhỏ gọn, vừa vặn đúng 16 byte (128 bit). Điều này giúp các entry nằm thẳng hàng trong các đường truyền cache line của CPU, giảm thiểu tối đa hiện tượng cache miss:
+
+\begin{lstlisting}[language=Rust, caption=Cấu trúc Storage 16-byte của bảng băm TT]
+#[derive(Clone, Debug)]
+struct Storage {
+    /// Zobrist board hash key.
+    pub key: Key, // 8 bytes
+    /// The evaluation score (may be relative to mate).
+    pub score: Score, // 4 bytes
+    /// The best move found at this position.
+    pub best_move: Option<Move>, // 2 bytes
+    /// The type of bound and age this entry represents.
+    /// The lower 2 bits encode the bound type.
+    pub flags: Flags, // 1 byte
+    /// The search depth this score was evaluated to.
+    /// Negative depth is Quiescence search, non-negative is regular 
+    /// search depth.
+    pub depth: i8, // 1 byte
+}
+\end{lstlisting}
+
+Nhờ sử dụng kiểu dữ liệu nguyên tử \texttt{NonZeroU8} cho \texttt{flags}, trình biên dịch Rust thực hiện tối ưu hóa ngách (niche optimization) để nén toàn bộ thực thể \texttt{Option<Storage>} vào đúng 16 byte mà không cần thêm byte padding nào.
+
+\subsection{Chính sách thay thế của bảng chuyển vị}
+
+Khi xảy ra va chạm chỉ số bảng băm (hai thế cờ khác nhau ánh xạ vào cùng một chỉ số trong bảng), Lingine áp dụng chính sách thay thế kết hợp \textbf{Độ sâu} (Depth-preferred) và \textbf{Tuổi} (Age-preferred):
+\begin{itemize}
+    \item \textbf{Độ sâu:} Các kết quả tìm kiếm ở độ sâu lớn hơn chứa nhiều thông tin chiến thuật hơn, do đó được ưu tiên giữ lại.
+    \item \textbf{Tuổi (Age):} Mỗi lần thực hiện tìm kiếm mới ở nước đi tiếp theo, chỉ số tuổi của bảng băm (\texttt{age}) tăng lên. Các entry quá cũ (từ các nước đi trước đó) sẽ giảm giá trị tham chiếu và dễ bị ghi đè hơn.
+\end{itemize}
+
+Công thức kiểm tra điều kiện ghi đè entry trong \url{src\\search\\transposition\_table.rs} được cài đặt như sau:
+\begin{lstlisting}[language=Rust]
+/// Stores search details into the Transposition Table using a
+/// Depth-Preferred and Age-Preferred replacement strategy.
+#[inline]
+pub fn store(&mut self, key: Key, ply: u8, value: Entry) {
+    if self.table.is_empty() {
+        return;
+    }
+    let index = (key as usize) & self.size_mask;
+
+    if let Some(existing) = self.table[index].as_ref() {
+        let is_better =
+            value.depth >= existing.depth - self.relative_age(existing.flags.age()) as i8;
+        if !is_better {
+            return; // Reject the new entry if it's not better than the existing one
+        }
+    }
+
+    self.table[index] = Some(Storage {
+        key,
+        score: score::ply_independent(value.score, ply),
+        best_move: value.best_move,
+        flags: Flags {
+            data: unsafe { NonZeroU8::new_unchecked(value.bound as u8) | (self.age << 2) },
+        },
+        depth: value.depth,
+    });
+}
+\end{lstlisting}
+
+\subsection{Chuyển đổi điểm số Mate phụ thuộc độ sâu (Mate Distance Pruning)}
+
+Một vấn đề kỹ thuật phức tạp khi sử dụng bảng băm là việc lưu trữ điểm số chiếu hết (Mate score). Điểm số chiếu hết trả về từ bộ tìm kiếm luôn phụ thuộc vào số nước đi từ gốc tới vị trí đó ($ply$). Nếu ta lưu trực tiếp điểm số này vào bảng chuyển vị, khi một nhánh tìm kiếm khác ở độ sâu khác truy vấn trúng entry này, điểm số chiếu hết sẽ bị lệch nước đi.
+
+Lingine giải quyết triệt để bằng cách chuẩn hóa điểm số trước khi lưu và khôi phục khi truy vấn:
+\begin{itemize}
+    \item \textbf{Khi lưu (Store):} Chuyển đổi điểm số từ phụ thuộc ply sang độc lập ply:
+    \[ \text{Score}_{\text{TT}} = \begin{cases} 
+      \text{Score} + ply & (\text{nếu thắng chiếu hết}) \\
+      \text{Score} - ply & (\text{nếu thua chiếu hết}) 
+   \end{cases} \]
+    \item \textbf{Khi truy vấn (Probe):} Khôi phục lại điểm số tương thích với ply hiện tại:
+    \[ \text{Score}_{\text{Search}} = \begin{cases} 
+      \text{Score}_{\text{TT}} - ply & (\text{nếu thắng chiếu hết}) \\
+      \text{Score}_{\text{TT}} + ply & (\text{nếu thua chiếu hết}) 
+   \end{cases} \]
+\end{itemize}

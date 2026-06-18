@@ -1,0 +1,200 @@
+\chapter{Trình diễn và Đánh giá Hệ thống}
+
+\section{Kiểm thử bộ sinh nước đi bằng PERFT}
+
+Để đảm bảo tính chính xác tuyệt đối của bộ sinh nước đi (\textit{Move Generator}), vốn là nền tảng quyết định sự đúng luật của toàn bộ hệ thống, chúng tôi sử dụng phương pháp kiểm thử PERFT (\textit{Performance Test}), so sánh với kết quả được công nhận ở trên Internet. Giải thuật PERFT thực hiện duyệt cây trò chơi ở độ sâu $d$ bằng cách sinh tất cả các nước đi hợp lệ từ thế trận ban đầu và đếm tổng số nút lá ở cuối cây.
+
+Kết quả số lượng nút lá đếm được của Lingine được đối chiếu trực tiếp với hệ thống 11 thế cờ chuẩn mực (bao phủ mọi kịch bản góc cạnh của luật cờ tướng) được thừa nhận rộng rãi bởi cộng đồng lập trình cờ. Một phần dữ liệu đối chiếu được trình bày trong Bảng~\ref{tab:perft_results}:
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{crrrr}
+        \toprule
+        \textbf{Độ sâu} & \textbf{Số nút} & \textbf{Chiếu} & \textbf{Ăn quân} & \textbf{Chiếu bí} \\
+        \midrule
+        1 & 44 & 0 & 2 & 0 \\
+        2 & 1,920 & 6 & 72 & 0 \\
+        3 & 79,666 & 384 & 3,159 & 0 \\
+        4 & 3,290,240 & 19,380 & 115,365 & 0 \\
+        5 & 133,312,995 & 953,251 & 4,917,734 & 0 \\
+        6 & 5,392,831,844 & 39,288,662 & 185,194,510 & 584 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Kết quả kiểm thử chi tiết PERFT của Lingine tại thế cờ khởi đầu}
+    \label{tab:perft_results}
+\end{table}
+
+Toàn bộ 11 bài kiểm thử PERFT với các hình thế đặc thù được cấu hình sẵn trong tập tin \texttt{perft\_positions.txt} đều vượt qua bài test với tỷ lệ chính xác 100\% (trạng thái xanh hoàn toàn trên hệ thống \texttt{cargo test} thông qua lệnh \texttt{cargo run --release --bin perft}). Điều này khẳng định tính đúng đắn không sai lệch của logic sinh nước đi cho tất cả các quân cờ, bao gồm cả các luật cực kỳ phức tạp như Mã bị cản chân, Pháo lộn ngòi kép hay Tướng lộ mặt.
+
+\subsubsection{Hiệu năng và Tốc độ sinh nước đi:}
+
+Không chỉ dừng lại ở tính chính xác, Lingine còn thể hiện hiệu năng xử lý ở mức cực hạn nhờ kiến trúc bàn cờ \textit{Bitboard} và kỹ thuật tra cứu bảng tĩnh (\textit{Magic Bitboards}). 
+
+Trong bài đo lường thực tế tại thế cờ khởi đầu với độ sâu $d=6$, hệ thống đã duyệt qua tổng cộng $\mathbf{5\,392\,831\,844}$ nút. Quá trình này không chỉ đơn thuần đếm tổng số lượng mà còn bóc tách và phân loại thành công $185\,194\,510$ nước ăn quân, $39\,288\,662$ nước chiếu tướng và $584$ thế chiếu bí. 
+
+Đáng chú ý, trên Laptop với CPU Intel Core i9-13900HX, xung nhịp đơn là 2.2GHz, Turbo Boost tối đa 5.4GHz, toàn bộ quá trình duyệt hơn 5.3 tỷ trạng thái phức tạp này chỉ mất vỏn vẹn \textbf{54.65 giây} để hoàn thành. Mặc dù cây trò chơi bùng nổ theo cấp số nhân, tốc độ sinh nước đi trung bình của Lingine vẫn duy trì ổn định ở ngưỡng \textbf{98.68 triệu nút mỗi giây}. Con số khổng lồ xấp xỉ 100 triệu nút/giây này là minh chứng rõ ràng nhất cho sự thành công của việc loại bỏ hoàn toàn các vòng lặp quét tia truyền thống, thay thế bằng các phép toán thao tác bit song song hóa trên các thanh ghi 64-bit của CPU.
+
+\section{Phương pháp đánh giá sức mạnh chơi cờ}
+
+Để đánh giá sức mạnh thi đấu của các phiên bản Lingine một cách chính xác, khách quan và khoa học, nhóm phát triển đã xây dựng một hệ thống tự động hóa kiểm thử hiệu năng và ước lượng điểm ELO. Hệ thống này bao gồm các scripts kiểm thử tự động (\texttt{run\_match.py}, \texttt{run\_gauntlet.py}, \texttt{run\_historical\_evals.py}) và giao thức phối hợp với trình quản lý giải đấu \texttt{sylvan-cli} dành cho cờ tướng.
+
+\subsection{Scripts và Môi trường Kiểm thử}
+
+Mỗi phiên bản động cơ cờ khi phát triển đều được đưa qua một quy trình kiểm định nghiêm ngặt gồm 3 giai đoạn đối đầu độc lập:
+
+\begin{enumerate}
+    \item \textbf{Giai đoạn 1 (Gauntlet Performance):} Phiên bản thử nghiệm sẽ thi đấu một giải Gauntlet với tổng cộng 3000 ván đấu chống lại một tập hợp các đối thủ chuẩn là \textit{Fairy-Stockfish}. \textit{Fairy-Stockfish} được giới hạn sức mạnh thi đấu ở 6 cấp độ ELO cố định: FS-1200, FS-1400, FS-1600, FS-1800, FS-2000, và FS-2200. Với mỗi đối thủ, động cơ cờ thi đấu đúng 500 ván, luân phiên cầm quân Đỏ (đi trước) và quân Đen (đi sau) để triệt tiêu lợi thế màu quân.
+    \item \textbf{Giai đoạn 2 (Neighbor Match):} Đối đầu trực tiếp giữa phiên bản hiện tại ($N$) và phiên bản tiền nhiệm gần nhất ($N-1$) trong 1000 ván đấu để xác định mức cải tiến ELO tương đối trực tiếp.
+    \item \textbf{Giai đoạn 3 (Base Match):} Đối đầu trực tiếp giữa phiên bản hiện tại ($N$) và phiên bản sơ khai ($1.0.0$) trong 1000 ván đấu để đo lường tổng tiến bộ lũy kế.
+\end{enumerate}
+
+Toàn bộ các trận đấu được chạy với thiết lập kiểm soát thời gian chặt chẽ là 3 giây khởi đầu và tích lũy thêm 0.03 giây sau mỗi nước đi. Môi trường phần cứng được chuẩn hóa để đảm bảo tính đồng đều giữa các lượt chạy. Việc sử dụng cơ sở dữ liệu khai cuộc \textit{Masters Opening Database} với 40,711 ván đấu của các danh thủ cờ tướng giúp tạo ra các vị trí ban đầu ngẫu nhiên, tránh việc động cơ cờ lặp lại cùng một ván cờ dẫn đến sai lệch kết quả thống kê.
+
+\subsection{Mô hình Ước lượng ELO bằng MLE}
+
+Ước lượng sức mạnh ELO tuyệt đối từ kết quả đối đầu của giải Gauntlet và ELO tương đối từ các trận đối đầu trực tiếp được thực hiện thông qua mô hình toán học Bradley-Terry. Mô hình này giả định rằng mỗi tác tử $i$ sở hữu một tham số sức mạnh ẩn $\beta_i$. Xác suất để tác tử $i$ đánh bại tác tử $j$ được xác định bởi hàm logistic:
+\[ P(i > j) = \frac{e^{\beta_i}}{e^{\beta_i} + e^{\beta_j}} = \frac{1}{1 + 10^{(ELO_j - ELO_i)/400}} \]
+
+Trong đó, điểm số ELO của tác tử $i$ liên hệ với tham số $\beta_i$ qua công thức $ELO_i = \beta_i \times \frac{400}{\ln(10)}$. Kết quả của một ván đấu được quy đổi với thắng bằng $1.0$, hòa bằng $0.5$ và thua bằng $0$.
+
+Với tập hợp kết quả của $M$ ván đấu giữa các tác tử, hàm hợp lý (\textit{Likelihood Function}) của mô hình được định nghĩa là:
+\[ L(\boldsymbol{\beta}) = \prod_{k=1}^{M} P(w_k > l_k) \]
+
+Trong đó $w_k$ và $l_k$ lần lượt là tác tử thắng (hoặc hòa) và thua trong ván đấu thứ $k$. Phương pháp ước lượng hợp lý cực đại (\textit{Maximum Likelihood Estimation - MLE}) được sử dụng để tìm bộ tham số ELO tối ưu sao cho cực đại hóa hàm hợp lý trên:
+\[ \boldsymbol{ELO}^* = \arg\max_{\boldsymbol{ELO}} \ln L(\boldsymbol{ELO}) \]
+
+Sai số tiêu chuẩn (\textit{Standard Error - $\sigma$}) và khoảng tin cậy 95\% (\textit{95\% Confidence Interval}) của giá trị ELO ước lượng được tính toán từ ma trận thông tin Fisher nghịch đảo của hàm hợp lý tại điểm tối ưu, đảm bảo độ tin cậy khoa học cao cho các số liệu thống kê. Do các trận đấu diễn ra độc lập trong các môi trường thi đấu khác nhau, điểm ELO tuyệt đối và chênh lệch ELO tương đối được tối ưu hóa trên các tập mẫu khác nhau, dẫn đến các sai số thống kê nhỏ giữa chúng nhưng vẫn phản ánh tính nhất quán cao về mặt xu hướng.
+
+\section{Lịch sử phát triển và Tiến trình tăng trưởng Elo}
+
+Trải qua chu kỳ phát triển liên tục, Lingine đã có những bước tiến vượt bậc về mặt trình độ chơi cờ. Từ một phiên bản thô sơ ở v1.0.0 chỉ có sức mạnh tương đương người mới học chơi cờ tướng (khoảng 1465 ELO), Lingine v1.9.0 đã đạt ngưỡng 2244 ELO tuyệt đối trên thang đo Gauntlet, vươn lên cấp độ tương đương các kiện tướng hàng đầu trên nền tảng Playstrategy.
+
+\subsection{Bảng tổng hợp tiến trình 15 phiên bản}
+
+Bảng~\ref{tab:elo_progression} trình bày chi tiết sự tiến hóa của Lingine qua các mốc phiên bản bao gồm cả điểm ELO tuyệt đối và các cải tiến kỹ thuật chính:
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabular}{ccccp{5.5cm}}
+        \toprule
+        Phiên bản & ELO uớc lượng & Diff/Trước & Diff/Gốc & Các cải tiến cốt lõi \\
+        \midrule
+        1.0.0  & 1465 & N/A & N/A & Sinh nước đi Bitboard, Negamax Fail-soft, Quiescence Search, Đánh giá vật chất cơ bản. \\
+        1.1.0  & 1460 & -9.0 & -2.1 & Sửa đổi và hoàn thiện luật cờ tướng (Cản Mã, Tướng lộ mặt, Sĩ Tượng cung). \\
+        1.2.0  & 1567 & +96.2 & +85.0 & Triển khai bảng đảo vị trí (\textit{Transposition Table - TT}). \\
+        1.3.0  & 1572 & +20.2 & +100.3 & Áp dụng kỹ thuật Cửa sổ vọng tưởng (\textit{Aspiration Window}). \\
+        1.4.0  & 1612 & +69.4 & +145.5 & Sắp xếp nước đi với \textit{Killer Moves} và \textit{History Heuristics}. \\
+        1.5.0  & 1854 & +358.8 & +556.7 & Tích hợp bảng lịch sử vị trí quân cờ (\textit{Piece-Square Tables - PST}). \\
+        1.6.0  & 1916 & +80.6 & +640.0 & Tìm kiếm mở rộng: \textit{Check}, \textit{Singular}, \textit{One-Reply Extensions}. \\
+        1.6.1  & 1919 & +34.5 & +632.9 & Tái cấu trúc mã nguồn và sửa các lỗi nhỏ. \\
+        1.6.2  & 1912 & -17.7 & +576.2 & Định dạng phong cách mã nguồn, thêm thông tin PV/seldepth/hashfull. \\
+        1.6.3  & 1902 & -4.5 & +561.4 & Tái cấu trúc, dọn dẹp luồng tìm kiếm, thử nghiệm kiểu dữ liệu i16/i8. \\
+        1.6.4  & 1920 & +19.5 & +613.0 & Khôi phục và tối ưu hóa các thử nghiệm cắt tỉa tìm kiếm. \\
+        1.6.5  & 1936 & +33.1 & +640.0 & Cải thiện cấu trúc dự án, TT trong \textit{Quiescence Search}. \\
+        1.7.0  & 2027 & +152.2 & +536.9 & \textit{Tapered Evaluation}, \textit{Principal Variation Search} (PVS), LMR, \textit{Null Move Pruning}. \\
+        1.8.0  & 2189 & +237.6 & +619.4 & \textit{Mobility Bonus}, \textit{Defender Bonus}, tối ưu hóa tham số bằng \textit{Texel Tuning}. \\
+        1.9.0  & 2244 & +127.4 & +651.3 & \textit{Aspiration Window Fail-high Reductions}, RFP, \textit{Futility Pruning}, LMP, IIR. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Tiến trình phát triển và tăng trưởng sức mạnh ELO của Lingine}
+    \label{tab:elo_progression}
+\end{table}
+
+\subsection{Phân tích các cột mốc lịch sử}
+
+Tiến trình phát triển của Lingine có thể chia làm ba thời kỳ chính với các đặc thù công nghệ riêng biệt:
+\begin{enumerate}
+    \item \textbf{Thời kỳ Xây dựng nền móng (v1.0.0 -- v1.4.0):} Tập trung vào tính đúng đắn của luật cờ tướng và kiến trúc cơ bản. Việc bổ sung \textit{Transposition Table} (v1.2.0) giúp lưu trữ các thế cờ đã duyệt, loại bỏ việc tính toán trùng lặp và đem lại mức tăng ELO ấn tượng (+96.2 ELO). Kỹ thuật sắp xếp nước đi (\textit{Move Ordering}) ở v1.4.0 giúp tối ưu hóa thứ tự nhánh Alpha-Beta, nâng hiệu suất cắt tỉa rõ rệt (+69.4 ELO).
+    \item \textbf{Thời kỳ Ổn định và Dọn dẹp (v1.6.0 -- v1.6.5):} Đây là giai đoạn tối ưu mã nguồn. Việc tích hợp các phần mở rộng độ sâu tìm kiếm (\textit{Extensions}) ở v1.6.0 đưa ELO vượt ngưỡng 1900 (+80.6 ELO). Trong các bản phụ v1.6.2 và v1.6.3, ELO suy giảm nhẹ do các thay đổi cấu trúc dữ liệu và thử nghiệm kiểu dữ liệu nông để tiết kiệm bộ nhớ gặp lỗi logic tiềm ẩn hoặc gây chậm tốc độ duyệt. Tuy nhiên, nhóm đã nhanh chóng khắc phục ở v1.6.4 và v1.6.5 bằng việc đưa TT vào \textit{Quiescence Search} (+33.1 ELO).
+    \item \textbf{Thời kỳ Cắt tỉa nâng cao và Tự động hóa tối ưu (v1.7.0 -- v1.9.0):} Trực tiếp đưa động cơ cờ vượt qua mốc ELO 2000 và 2200. Các thuật toán cắt tỉa hiện đại như \textit{Null Move Pruning} và \textit{Late Move Reductions} (v1.7.0) cho phép động cơ bỏ qua các nhánh tìm kiếm vô vọng, tập trung tài nguyên vào các nhánh PV then chốt (+152.2 ELO). Phiên bản v1.9.0 hoàn thiện hóa kỹ thuật cắt tỉa với một loạt cải tiến nâng cao như \textit{Reverse Futility Pruning} (RFP) và \textit{Late Move Pruning} (LMP), tăng thêm +127.4 ELO.
+\end{enumerate}
+
+\subsection{Phân tích các Bước Nhảy ELO Lớn}
+
+Trong lịch sử phát triển, có hai bước nhảy ELO đột phá, đóng góp phần lớn sức mạnh cho Lingine:
+\begin{itemize}
+    \item \textbf{Bước nhảy 1 (v1.5.0: Piece-Square Tables -- PST, +358.8 ELO):} Đây là mức tăng trưởng ELO đơn lẻ lớn nhất. Phiên bản v1.0.0 đến v1.4.0 chỉ đánh giá thế trận dựa trên tổng giá trị vật chất của các quân cờ hiện diện trên bàn (ví dụ Xe = 900, Pháo = 450...). Điều này khiến tác tử chơi vô hồn, không biết đưa Xe chiếm lộ đẹp, không biết đẩy Tốt qua sông hay không giữ vững Tướng ở trung lộ. PST đã gán giá trị định vị cho từng quân cờ tại từng tọa độ cụ thể. Sự thay đổi từ hàm đánh giá tĩnh thô sơ sang hàm đánh giá kết hợp vị trí đã thay đổi hoàn toàn chất lượng nước đi, làm tăng vọt sức mạnh chơi cờ của Lingine thêm hơn 350 ELO chỉ trong một bản cập nhật.
+    \item \textbf{Bước nhảy 2 (v1.8.0: Texel Tuning \& Evaluation Bonuses, +237.6 ELO):} Mặc dù PST giúp định vị quân cờ tốt, các giá trị trong bảng PST và trọng số đánh giá ban đầu được xác định thủ công dựa trên cảm quan của con người, dẫn đến sự thiếu chính xác và mất cân đối ở các giai đoạn tàn cuộc. Thuật toán \textit{Texel Tuning} sử dụng phương pháp tối ưu hóa phi tuyến tính để tự động căn chỉnh các tham số dựa trên dữ liệu hàng ngàn ván đấu thực tế. Kết hợp với việc bổ sung điểm thưởng cơ động (\textit{Mobility Bonus}) và quân phòng thủ bảo vệ Tướng (\textit{Defender Bonus}), Lingine đã học được cách phối hợp quân cờ phức tạp, giúp tăng vượt bậc 237.6 ELO trực tiếp khi đối đầu phiên bản v1.7.0.
+\end{itemize}
+
+Sự thành công của hai bước nhảy này chứng minh rằng trong thiết kế động cơ cờ tướng, việc cải tiến độ chính xác của hàm đánh giá tĩnh (\textit{Evaluation Function}) luôn đem lại hiệu quả tăng sức mạnh ELO vượt trội so với việc chỉ tập trung tối ưu hóa chiều sâu tìm kiếm (\textit{Search Function}).
+
+\section{Đánh giá chi tiết phiên bản mới nhất v1.9.0}
+
+Phiên bản Lingine v1.9.0 là đỉnh cao công nghệ hiện tại của dự án, tích hợp đầy đủ các giải thuật tìm kiếm cắt tỉa hiện đại nhất và hàm đánh giá được tinh chỉnh tối ưu. Để có cái nhìn toàn diện về sức mạnh của phiên bản này, chúng tôi phân tích kết quả thu được từ ba giai đoạn kiểm thử độc lập.
+
+\subsection{Đánh giá Gauntlet (Phase 1)}
+
+Trong giải Gauntlet gồm 3000 ván đấu với 6 cấp độ Fairy-Stockfish, Lingine v1.9.0 đạt điểm ELO ước lượng tối ưu là \textbf{2244 ELO} với sai số tiêu chuẩn cực nhỏ $\pm 10.9$ ELO. Khoảng tin cậy 95\% dao động trong ngưỡng từ 2222 đến 2265 ELO. Tỷ lệ ghi điểm tổng thể cực kỳ ấn tượng đạt \textbf{87.6\%} với 2597 trận thắng, 65 trận hòa và 338 trận thua.
+
+Bảng~\ref{tab:gauntlet_190} chi tiết hóa kết quả đối đầu của Lingine v1.9.0 trước từng đối thủ baseline:
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \begin{tabular}{lcrrrrrr}
+        \toprule
+        \textbf{Đối thủ} & \textbf{ELO} & \textbf{Số ván} & \textbf{Thắng} & \textbf{Hòa} & \textbf{Thua} & \textbf{Tỷ lệ điểm} & \textbf{ELO ước lượng} \\
+        \midrule
+        FS-1200 & 1200 & 500 & 493 & 2 & 5 & 98.8\% & 1966 ELO \\
+        FS-1400 & 1400 & 500 & 497 & 0 & 3 & 99.4\% & 2288 ELO \\
+        FS-1600 & 1600 & 500 & 488 & 4 & 8 & 98.0\% & 2276 ELO \\
+        FS-1800 & 1800 & 500 & 473 & 7 & 20 & 95.3\% & 2323 ELO \\
+        FS-2000 & 2000 & 500 & 381 & 17 & 102 & 77.9\% & 2219 ELO \\
+        FS-2200 & 2200 & 500 & 265 & 35 & 200 & 56.5\% & 2245 ELO \\
+        \midrule
+         & — & \textbf{3000} & \textbf{2597} & \textbf{65} & \textbf{338} & \textbf{87.6\%} & \textbf{2244 ELO} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Kết quả chi tiết giải đấu Gauntlet của Lingine v1.9.0}
+    \label{tab:gauntlet_190}
+\end{table}
+
+Số liệu chỉ ra rằng Lingine v1.9.0 hoàn toàn áp đảo các đối thủ từ FS-1800 trở xuống khi duy trì tỷ lệ điểm trên 95\%. Trước đối thủ mạnh nhất là FS-2200, Lingine vẫn giành thắng lợi chung cuộc với tỷ lệ điểm là 56.5\% (265 thắng, 35 hòa, 200 thua), qua đó khẳng định trình độ thi đấu vượt mức 2200 ELO một cách rõ ràng.
+
+\subsection{Đối đầu trực tiếp phiên bản tiền nhiệm v1.8.0 (Phase 2)}
+
+Trận đấu Neighbor Match giữa Lingine v1.9.0 và v1.8.0 (1000 ván) kết thúc với phần thắng áp đảo nghiêng về phiên bản mới:
+\begin{itemize}
+    \item \textbf{Số ván thắng:} 522 ván.
+    \item \textbf{Số ván hòa:} 307 ván.
+    \item \textbf{Số ván thua:} 171 ván.
+    \item \textbf{Tỷ lệ điểm:} 67.5\%.
+    \item \textbf{Chênh lệch ELO ước lượng:} $\mathbf{+127.4 \pm 9.5}$ ELO 
+    \item \textbf{Khoảng tin cậy 95\%}: $[108.8, 145.9]$ ELO.
+    \item \textbf{Khả năng vượt trội (Likelihood of Superiority):} 100.0\%.
+\end{itemize}
+
+Việc giành tới 52.2\% số ván thắng và chỉ để thua 17.1\% trước một phiên bản rất mạnh như v1.8.0 chứng minh các cải tiến cắt tỉa tìm kiếm nâng cao (như \textit{Reverse Futility Pruning}, \textit{Late Move Pruning} và \textit{Internal Iterative Reductions}) đã giúp Lingine v1.9.0 tiết kiệm hàng triệu nút tìm kiếm, đi sâu hơn vào các phương án chiến thuật sắc bén.
+
+\subsection{Đối đầu trực tiếp phiên bản gốc v1.0.0 (Phase 3)}
+
+Trong trận đấu Base Match chống lại phiên bản sơ khai Lingine v1.0.0 (1000 ván), sự chênh lệch đẳng cấp được thể hiện một cách tuyệt đối:
+\begin{itemize}
+    \item \textbf{Số ván thắng:} 955 ván.
+    \item \textbf{Số ván hòa:} 44 ván.
+    \item \textbf{Số ván thua:} 1 ván duy nhất.
+    \item \textbf{Tỷ lệ điểm:} 97.7\%.
+    \item \textbf{Chênh lệch ELO ước lượng:} $\mathbf{+651.3 \pm 26.2}$ ELO.
+\end{itemize}
+
+Kết quả thắng 95.5\% và chỉ thua duy nhất 1 ván trong tổng số 1000 ván đấu chứng minh Lingine v1.9.0 đã hoàn toàn lột xác. Phiên bản gốc v1.0.0 với bộ thuật toán Negamax thô sơ và hàm đánh giá vật chất đơn giản hoàn toàn không có khả năng chống đỡ trước hệ thống tìm kiếm sâu sắc và định vị quân cờ thông minh của phiên bản mới.
+
+\subsection{Đặc điểm Thống kê Đáng Chú Ý}
+
+Phân tích sâu dữ liệu thống kê từ hàng ngàn trận đấu mang lại các khám phá khoa học thú vị về hành vi của tác tử Lingine v1.9.0:
+
+\begin{enumerate}
+    \item \textbf{Sự biến động của Tỷ lệ Hòa:} Tỷ lệ hòa có xu hướng tăng tỷ lệ thuận với trình độ của đối thủ. Trong giải Gauntlet, tỷ lệ hòa trước FS-1200 gần như bằng không (0.4\%) và trước FS-1400 là 0\%, nhưng đã tăng lên 3.4\% trước FS-2000 và đạt 7.0\% trước FS-2200. Trong trận đối đầu đồng đẳng cao nhất giữa v1.9.0 và v1.8.0, tỷ lệ hòa vọt lên mức \textbf{30.7\%}. Điều này phản ánh quy luật tự nhiên của cờ tướng: khi trình độ của cả hai bên càng cao và ít mắc sai lầm sơ đẳng, khả năng ván đấu kết thúc với kết quả hòa càng lớn.
+    \item \textbf{Phân bố độ dài ván đấu:}
+    \begin{itemize}
+        \item Trong trận đối đầu với v1.0.0, số nước đi trung bình của mỗi ván đấu chỉ là \textbf{60.5 plies} (khoảng 30 nước đi), trung vị là 58 plies. Trận đấu diễn ra vô cùng nhanh gọn vì Lingine v1.9.0 dễ dàng khai thác các sơ hở định vị và dứt điểm đối thủ ở trung cuộc.
+        \item Ngược lại, trong trận đối đầu với v1.8.0, số nước đi trung bình kéo dài đến \textbf{159.8 plies} (khoảng 80 nước đi), trung vị là 133 plies, cá biệt có ván đấu kéo dài kỷ lục tới 519 plies. Trận đấu diễn ra giằng co quyết liệt, đòi hỏi kỹ năng cờ tàn điêu luyện từ cả hai phía.
+    \end{itemize}
+    \item \textbf{Lợi thế đi trước của quân Đỏ:} Trong giải Gauntlet của Lingine v1.9.0, tỷ lệ ghi điểm khi cầm quân Đỏ đi trước là \textbf{87.7\%} (1301 thắng, 29 hòa, 170 thua) và cầm quân Đen đi sau là \textbf{87.6\%} (1296 thắng, 36 hòa, 168 thua). Sự chênh lệch tỷ lệ điểm chỉ là 0.1\%. Đây là một con số đặc biệt ấn tượng, chỉ ra rằng Lingine v1.9.0 đã giải quyết xuất sắc bài toán phòng thủ khi cầm quân Đen đi sau dưới áp lực khai cuộc của đối thủ, đạt độ cân bằng chiến thuật gần như hoàn hảo giữa hai màu quân.
+\end{enumerate}
+
+
+

@@ -1,0 +1,111 @@
+\chapter{Phân tích hệ thống}
+
+\section{Mô hình PEAS}
+
+Để đặc tả bài toán cờ tướng dưới góc nhìn của một tác tử thông minh, chúng ta áp dụng mô hình PEAS bao gồm bốn thành phần: Performance (Độ đo hiệu suất), Environment (Môi trường), Actuators (Bộ phận chấp hành), và Sensors (Bộ phận cảm biến).
+
+\begin{itemize}
+    \item \textbf{Performance (Độ đo hiệu suất):}
+    \begin{itemize}
+        \item Mục tiêu tối cao là chiến thắng ván đấu thông qua việc chiếu hết hoặc dồn đối thủ vào thế hết nước đi -- khác với cờ vua, trong cờ tướng hết nước đi được tính là thua.
+        \item Tối ưu hóa quỹ thời gian suy nghĩ, không để xảy ra trường hợp bị xử thua do hết giờ.
+        \textbf{Nodes Per Second (NPS):} Tốc độ duyệt số nút trên cây trò chơi trên giây phản ánh trực tiếp hiệu năng phần mềm và khả năng khai thác luồng tính toán của CPU.
+    \end{itemize}
+    \item \textbf{Environment (Môi trường):}
+    \begin{itemize}
+        \item Bàn cờ tướng kích thước $10 \times 9 = 90$ ô vuông với 32 quân cờ chia đều cho hai bên Đỏ và Đen.
+        \item Đồng hồ thi đấu quy định thời gian suy nghĩ cố định và thời gian tích lũy.
+        \item Đối thủ (có thể là con người sử dụng giao diện đồ họa hoặc một engine AI khác thông qua giao thức UCI).
+    \end{itemize}
+    \item \textbf{Actuators (Bộ phận chấp hành):}
+    \begin{itemize}
+        \item Tác động lên môi trường bằng cách gửi các nước đi dưới dạng chuỗi văn bản (ví dụ: \texttt{bestmove h2e2}) thông qua luồng đầu ra tiêu chuẩn.
+        \item Truyền tải thông tin phân tích thế cờ (\texttt{info}) để hiển thị trên giao diện người dùng.
+    \end{itemize}
+    \item \textbf{Sensors (Bộ phận cảm biến):}
+    \begin{itemize}
+        \item Nhận biết trạng thái môi trường thông qua luồng đầu vào tiêu chuẩn (\texttt{Stdin}).
+        \item Tiếp nhận chuỗi FEN hoặc chuỗi nước đi lịch sử mô tả trạng thái hiện tại của bàn cờ và các tham số thời gian từ lệnh \texttt{go}.
+    \end{itemize}
+\end{itemize}
+
+\section{Phân tích đặc tính môi trường}
+
+Bài toán cờ tướng sở hữu các đặc tính môi trường chuẩn mực của một trò chơi đối kháng cổ điển:
+
+\begin{itemize}
+    \item \textbf{Quan sát hoàn toàn (Fully Observable):} Trạng thái bàn cờ hoàn toàn công khai tại mọi thời điểm. Vị trí của tất cả các quân cờ trên bàn cờ đều hiển thị rõ ràng, không có yếu tố thông tin ẩn hay ngẫu nhiên.
+    \item \textbf{Xác định và mang tính chiến lược (Deterministic -- Strategic):} Trạng thái tiếp theo của bàn cờ được quyết định tuyệt đối bởi nước đi hiện tại, không có yếu tố may rủi. Tuy nhiên, hành vi của đối thủ là không thể kiểm soát trước, đòi hỏi tác tử phải tính toán chiến lược đối phó tối ưu trước mọi nước đi có thể xảy ra của đối phương.
+    \item \textbf{Liên tiếp (Sequential):} Mỗi quyết định đi quân ở hiện tại đều ảnh hưởng sâu sắc đến thế trận trong tương lai. Lịch sử di chuyển cũng quyết định các quy tắc hòa cờ, lặp nước đi hoặc chiếu dai.
+    \item \textbf{Bán động (Semi-dynamic):} Môi trường bàn cờ vật lý không thay đổi trong khi tác tử suy nghĩ, nhưng thời gian thi đấu vẫn trôi qua liên tục trên đồng hồ. Nếu tác tử suy nghĩ quá lâu, nó sẽ mất lợi thế về thời gian hoặc bị xử thua trực tiếp.
+    \item \textbf{Rời rạc (Discrete):} Không gian trạng thái là rời rạc. Chỉ có tối đa 90 ô cờ, số lượng quân cờ hữu hạn (32), và số lượng nước đi hợp lệ tại mỗi thế cờ là một tập hợp hữu hạn đếm được (thường không quá 120 nước đi).
+    \item \textbf{Đa tác tử đối kháng (Multi-agent):} Hai tác tử tham gia trực tiếp đối đầu (Đỏ và Đen). Trò chơi mang tính chất tổng bằng không, lợi thế của bên này đồng nghĩa với sự suy giảm cơ hội của bên kia.
+\end{itemize}
+
+\section{Kiến trúc hệ thống}
+
+Lingine áp dụng kiến trúc 2 luồng song song tối giản nhưng cực kỳ hiệu quả nhờ tận dụng cơ chế quản lý luồng hiện đại của ngôn ngữ lập trình Rust.
+
+Sơ đồ hoạt động của hệ thống được mô tả như sau:
+\begin{enumerate}
+    \item \textbf{Luồng A -- Luồng lắng nghe (Stdin Listener Thread):}
+    \begin{itemize}
+        \item Hoạt động độc lập, thực hiện nhiệm vụ duy nhất là đọc liên tục các dòng lệnh văn bản từ \texttt{stdin}.
+        \item Phân tích nhanh các lệnh điều khiển. Nếu nhận được lệnh dừng khẩn cấp (\texttt{stop}) hoặc thoát chương trình (\texttt{quit}), Luồng A ngay lập tức đặt cờ hiệu nguyên tử toàn cục \texttt{keep\_running} thành \texttt{false}.
+        \item Các lệnh khác (như thiết lập thế cờ, cấu hình bảng băm) được đẩy vào một kênh truyền thông điệp bất đồng bộ để chuyển giao cho Luồng B.
+    \end{itemize}
+    \item \textbf{Luồng B -- Luồng xử lý chính và Tìm kiếm (Main Search Thread):}
+    \begin{itemize}
+        \item Đóng vai trò là trung tâm điều phối của Engine. Nó nhận thông điệp từ kênh truyền để cập nhật vị trí bàn cờ hiện tại (\texttt{Position}) hoặc cấu hình các thông số.
+        \item Khi nhận lệnh tìm kiếm (\texttt{go}), Luồng B sẽ thiết lập cờ \texttt{keep\_running} thành \texttt{true} và khởi chạy thuật toán tìm kiếm Negamax sâu dần.
+        \item Trong vòng lặp Negamax tại mỗi nút trên cây trò chơi, Luồng B định kỳ kiểm tra giá trị của \texttt{keep\_running}. Nếu cờ chuyển sang \texttt{false}, quá trình tìm kiếm lập tức bị hủy bỏ và thoát ra ngoài, trả về nước đi tốt nhất hiện tại.
+    \end{itemize}
+\end{enumerate}
+
+Kiến trúc 2 luồng này giúp giảm thiểu đáng kể overhead đồng bộ dữ liệu, tránh tình trạng giật cục khi khóa mutex, đồng thời đảm bảo thời gian phản hồi lệnh ngắt \texttt{stop} gần như tức thì.
+
+\subsection{Chức năng các tệp nguồn chính}
+
+Mã nguồn của Lingine được cấu trúc mạch lạc thành các mô-đun chức năng độc lập trong thư mục \texttt{src/}:
+
+\begin{itemize}
+    \item \textbf{Thư mục gốc \texttt{src/}:}
+    \begin{itemize}
+        \item \texttt{main.rs}: Điểm khởi chạy chương trình, khởi tạo kiến trúc 2 luồng và khởi động vòng lặp lệnh UCI chính.
+        \item \texttt{lib.rs}: Khai báo các mô-đun công khai cho toàn bộ thư viện.
+    \end{itemize}
+    \item \textbf{Mô-đun Core (\texttt{src/core/}):} Định nghĩa các cấu trúc dữ liệu nền tảng.
+    \begin{itemize}
+        \item \texttt{bitboard.rs}: Triển khai cấu trúc Bitboard dựa trên biến nguyên 128-bit để đại diện cho bàn cờ $10 \times 9$, kèm theo các phép toán thao tác bit tối ưu.
+        \item \texttt{types/}: Định nghĩa các kiểu thực thể cơ bản như ô cờ (\texttt{Square}), quân cờ (\texttt{Piece}), loại quân (\texttt{PieceType}), bên đi (\texttt{Side}), nước đi (\texttt{Move}), và điểm số (\texttt{Score}).
+        \item \texttt{mod.rs} (trong \texttt{position/}): Cấu trúc dữ liệu trung tâm \texttt{Position} quản lý toàn bộ trạng thái bàn cờ, cập nhật thế cờ và hoàn tác nước đi (\texttt{do\_move}/\texttt{undo\_move}).
+        \item \texttt{attacks.rs} (trong \texttt{position/}): Xác định xem một ô cờ có đang bị tấn công bởi đối phương hay không (phục vụ kiểm tra tính hợp lệ của nước đi).
+        \item \texttt{rule\_judge.rs} (trong \texttt{position/}): Trọng tài luật của ván cờ, xử lý luật 60 nước đi không ăn quân, luật lặp lại thế trận và chiếu dai.
+        \item \texttt{movegen/mod.rs}: Triển khai bộ sinh nước đi giả hợp lệ (pseudo-legal) và nước đi hợp lệ (legal) cho tất cả các loại quân.
+        \item \texttt{movegen/queries.rs}: Các truy vấn tấn công nhanh của quân cờ tận dụng các bảng tra cứu tĩnh và ma thuật.
+    \end{itemize}
+    \item \textbf{Mô-đun Đánh giá (\texttt{src/eval/}):} Hàm lượng hóa ưu thế thế cờ.
+    \begin{itemize}
+        \item \texttt{mod.rs}: Tính toán tổng hợp điểm số thế cờ kết hợp các thành phần.
+        \item \texttt{piece\_material\_value.rs}: Định nghĩa giá trị vật chất của các quân cờ trong hai pha Middlegame và Endgame.
+        \item \texttt{piece\_square\_tables.rs}: Bảng vị trí quân cờ quy định mức độ ưu tiên đứng của từng loại quân trên bàn cờ.
+        \item \texttt{defender\_bonus.rs}: Điểm thưởng khi tồn tại quân cờ hỗ trợ bảo vệ lẫn nhau (đặc biệt là Sĩ, Tượng bảo vệ Tướng).
+        \item \texttt{mobility\_tables.rs}: Bảng điểm thưởng theo mức độ cơ động (số nước đi khả dĩ) của Xe, Pháo, Mã.
+    \end{itemize}
+    \item \textbf{Mô-đun Tìm kiếm (\texttt{src/search/}):} Triển khai trí tuệ nhân tạo duyệt cây đối kháng.
+    \begin{itemize}
+        \item \texttt{mod.rs}: Quản lý ngữ cảnh tìm kiếm và điều phối luồng tìm kiếm chính.
+        \item \texttt{negamax.rs}: Giải thuật Negamax Alpha-Beta làm xương sống cho quá trình duyệt cây.
+        \item \texttt{pv\_search.rs}: Kỹ thuật tìm kiếm biến thể chính.
+        \item \texttt{aspiration\_search.rs}: Kỹ thuật tìm kiếm với cửa sổ kỳ vọng hẹp để tối ưu hóa phạm vi Alpha-Beta.
+        \item \texttt{selectivity.rs}: Tập hợp các kỹ thuật cắt tỉa nhánh và gia tăng độ sâu.
+        \item \texttt{transposition\_table.rs}: Triển khai bảng chuyển vị (bảng băm ghi nhớ các trạng thái đã duyệt).
+        \item \texttt{move\_ordering.rs}: Bộ sắp xếp nước đi dựa để tối ưu hóa tốc độ cắt tỉa Alpha-Beta.
+    \end{itemize}
+    \item \textbf{Mô-đun UCI (\texttt{src/uci/}):}
+    \begin{itemize}
+        \item \texttt{command.rs}: Phân tích cú pháp chuỗi lệnh nhận từ stdin.
+        \item \texttt{engine.rs}: Quản lý trạng thái kết nối và phản hồi UCI.
+        \item \texttt{output.rs}: Định dạng và xuất dữ liệu phân tích ra stdout theo đúng chuẩn giao thức.
+    \end{itemize}
+\end{itemize}

@@ -1,41 +1,39 @@
-# Lingine — High-Performance Rust Xiangqi (Chinese Chess) Engine
+<div align="center">
+  <img
+    width="240"
+    height="240"
+    alt="Lingine"
+    src="./assets/logo.png"
+  />
+  <h1><code>Lingine</code></h1>
+</div>
+
+A UCI-compliant Xiangqi (Chinese Chess) engine written in Rust.
+
+Challenge me on [Playstrategy](https://playstrategy.org/@/lingine)!
+
+## Table of Contents
 
 <!--toc:start-->
 
-- [Lingine — High-Performance Rust Xiangqi (Chinese Chess) Engine](#lingine-high-performance-rust-xiangqi-chinese-chess-engine)
-  - [👥 Developers & Contributors](#👥-developers-contributors)
-  - [🚀 Engine Evolutionary Path](#🚀-engine-evolutionary-path)
-  - [🛠️ Getting Started & Setup](#🛠️-getting-started-setup)
-    - [Automated Toolchain Setup](#automated-toolchain-setup)
-  - [📖 Script Tutorials & Usage Guide](#📖-script-tutorials-usage-guide)
-    - [⚔️ Tutorial 1: Head-to-Head Matches (`run_match.sh`)](#️-tutorial-1-head-to-head-matches-runmatchsh)
-      - [Command-Line Arguments](#command-line-arguments)
-      - [Practical Examples](#practical-examples)
-    - [🛡️ Tutorial 2: ELO Gauntlet Evaluator (`run_gauntlet.py`)](#🛡️-tutorial-2-elo-gauntlet-evaluator-rungauntletpy)
-      - [Command-Line Arguments](#command-line-arguments-1)
-      - [ELO Estimation Methodology](#elo-estimation-methodology)
-      - [Practical Examples](#practical-examples-1)
-    - [⏳ Tutorial 3: Historical Regression Suite (`run_historical_evals.sh`)](#tutorial-3-historical-regression-suite-runhistoricalevalssh)
-      - [Available Modes](#available-modes)
-      - [Configuration Options](#configuration-options)
-      - [Practical Examples](#practical-examples-2)
-  - [💻 Developer Commands & Testing](#💻-developer-commands-testing)
-    - [1. Compile Lingine](#1-compile-lingine)
-    - [2. Run PERFT (Performance Move Generation) Tests](#2-run-perft-performance-move-generation-tests)
-    - [3. Run Rule Judge and Position Tests](#3-run-rule-judge-and-position-tests)
-    - [4. Interactive Command-Line Testing (UCI Protocol)](#4-interactive-command-line-testing-uci-protocol)
-
-    <!--toc:end-->
-
-Lingine is a state-of-the-art, high-performance Xiangqi (Chinese Chess) engine
-written in Rust. It utilizes modern chess programming techniques including
-advanced bitboard architectures, compile-time static lookup tables,
-parallel-safe 3-threaded actor communication, and a highly optimized search
-algorithm featuring Singular, Check, and One-Reply extensions.
+- [Table of Contents](#table-of-contents)
+- [Developers](#developers)
+- [Releases](#releases)
+- [Getting Started](#getting-started)
+  - [Precompiled Binaries](#precompiled-binaries)
+  - [Building from source](#building-from-source)
+  - [Running `Lingine` with a GUI](#running-lingine-with-a-gui)
+- [Development Guide](#development-guide)
+  - [Automated Toolchain Setup](#automated-toolchain-setup)
+  - [Scripts](#scripts)
+  - [Working with the source](#working-with-the-source)
+- [Acknowledgemments](#acknowledgemments)
+- [License](#license)
+<!--toc:end-->
 
 ---
 
-## 👥 Developers & Contributors
+## Developers
 
 | Name               | Student ID |
 | :----------------- | :--------- |
@@ -45,291 +43,112 @@ algorithm featuring Singular, Check, and One-Reply extensions.
 
 ---
 
-## 🛠️ Getting Started & Setup
+## Releases
 
-Before running matches or benchmarks, you must download the third-party
-tournament manager, standard baseline opponent engine, and opening databases.
+| Version                                                           | Estimated ELO | Release Date  | What's new                                                                                                                                             |
+| :---------------------------------------------------------------- | :------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [1.9.0](https://github.com/tuasananh/lingine/releases/tag/v1.9.0) | 2244 ± 10.9   | June 17, 2026 | - Aspiration Window Fail-high Reductions<br>- Reverse Futility Pruning<br>- Futility Pruning<br>- Late Move Pruning<br>- Internal Iterative Reductions |
+| [1.8.0](https://github.com/tuasananh/lingine/releases/tag/v1.8.0) | 2189 ± 10.3   | June 16, 2026 | - Mobility Bonus<br>- Defender Bonus<br>- Texel Tuned Evaluation Parameters                                                                            |
+| [1.7.0](https://github.com/tuasananh/lingine/releases/tag/v1.7.0) | 2027 ± 9.2    | June 13, 2026 | - Tapered Evaluation<br>- Principal Variation Search<br>- Late Move Reductions<br>- Null Move Pruning                                                  |
+| [1.6.5](https://github.com/tuasananh/lingine/releases/tag/v1.6.5) | 1936 ± 8.9    | June 9, 2026  | - Better tooling with better project stucture<br>- Transposition Table in Quiescence-Search                                                            |
+| [1.6.0](https://github.com/tuasananh/lingine/releases/tag/v1.6.0) | 1916 ± 8.8    | June 1, 2026  | - Check Extensions<br>- Singular Extensions<br>- One-Reply Extensions                                                                                  |
+| [1.5.0](https://github.com/tuasananh/lingine/releases/tag/v1.5.0) | 1854 ± 8.7    | June 1, 2026  | - Piece-square Tables                                                                                                                                  |
+| [1.4.0](https://github.com/tuasananh/lingine/releases/tag/v1.4.0) | 1612 ± 8.6    | May 31, 2026  | - Move Ordering with Killers and History Heuristics                                                                                                    |
+| [1.3.0](https://github.com/tuasananh/lingine/releases/tag/v1.3.0) | 1572 ± 8.7    | May 31, 2026  | - Aspiration Window                                                                                                                                    |
+| [1.2.0](https://github.com/tuasananh/lingine/releases/tag/v1.2.0) | 1567 ± 8.7    | May 31, 2026  | - Transposition Table                                                                                                                                  |
+| [1.1.0](https://github.com/tuasananh/lingine/releases/tag/v1.1.0) | 1460 ± 8.9    | May 29, 2026  | - Follow Rules of Xiangqi                                                                                                                              |
+| [1.0.0](https://github.com/tuasananh/lingine/releases/tag/v1.0.0) | 1465 ± 8.8    | May 28, 2026  | - Bitboard move generation <br>- Fail-soft Negamax Alpha-Beta Search<br>- Quiescence Search<br>- Basic Material Evaluation                             |
 
-### Automated Toolchain Setup
+## Getting Started
 
-The project provides a setup script [`setup_tools.sh`](scripts/setup_tools.sh)
-to automate this setup:
+### Precompiled Binaries
 
-```bash
-chmod +x ./scripts/setup_tools.sh
-./scripts/setup_tools.sh
-```
+You can download precompiled builds from the [Releases page](https://github.com/tuasananh/lingine/releases).
 
-**What the script sets up:**
+### Building from source
 
-- Creates the local `tools/` directory.
-- Downloads **Sylvan-CLI** (`sylvan-cli`): The tournament manager and
-  engine-coordinating protocol interface.
-- Downloads **Fairy-Stockfish** (`fairy-stockfish_x86-64`): A multi-variant
-  strength-limited baseline opponent engine.
-- Downloads **Masters Opening Database** (`xqdb_masters_40711_UCI_games.pgn`): A
-  database of 40,711 master-level opening games to seed different opening
-  positions during testing.
+To build `Lingine`, you just need a Rust compiler, here is the [installation guide](https://www.rust-lang.org/tools/install).
 
----
-
-## 📖 Script Tutorials & Usage Guide
-
-Lingine includes a comprehensive python/bash script suite under
-[`scripts/`](scripts) to automate engine validation, ELO estimation, and
-regression testing.
-
-### ⚔️ Tutorial 1: Head-to-Head Matches (`run_match.sh`)
-
-Use [`run_match.sh`](scripts/run_match.sh) to run a round-robin tournament
-between any two engine binaries to determine ELO differences, draw ratios, and
-victory margins.
-
-```bash
-./scripts/run_match.sh [options]
-```
-
-#### Command-Line Arguments
-
-- `-a`, `--engine-a PATH`: Absolute or relative path to Engine A executable
-  **(Required)**.
-- `--name-a NAME`: Custom display name for Engine A (Default: derived from file
-  name).
-- `--options-a "OPTIONS"`: Custom UCI options passed to Engine A (e.g.
-  `"option.Hash=64"`).
-- `-b`, `--engine-b PATH`: Absolute or relative path to Engine B executable
-  **(Required)**.
-- `--name-b NAME`: Custom display name for Engine B (Default: derived from file
-  name).
-- `--options-b "OPTIONS"`: Custom UCI options passed to Engine B.
-- `-g`, `--games N`: Total number of games to play in the match (Default: `40`).
-- `-t`, `--tc TIMECONTROL`: Time control setting in minutes/increment format
-  (Default: `"3+0.03"`).
-- `-c`, `--concurrency N`: Number of games to run in parallel (Default:
-  automatically optimized to `Cores / 2`).
-- `-d`, `--depth N`: Opening book ply depth to feed engines before they start
-  searching (Default: `12`).
-- `-f`, `--openings PATH`: Path to the opening book PGN (Default:
-  `tools/xqdb_masters_40711_UCI_games.pgn`).
-- `-o`, `--outdir DIR`: Output directory to store results (Default:
-  `matches/NAME_A-vs-NAME_B_TIMESTAMP`).
-- `-s`, `--skip-build`: Skips the automatic `cargo build --release` step for
-  target/release.
-- `--sprt "PARAMS"`: Configures Sequential Probability Ratio Testing to
-  terminate early when statistical significance is met (e.g.,
-  `"elo0=0 elo1=10 alpha=0.05 beta=0.05"`).
-
-#### Practical Examples
-
-**Example A: Compare the current release build against a historical version
-(e.g., 1.5.0):**
-
-```bash
-./scripts/run_match.sh \
-  -a ./target/release/lingine --name-a Current-Dev \
-  -b ./historical/lingine-1.5.0-piece-square-tables --name-b Ver-1.5.0 \
-  -g 100 -t 5/10+0.1
-```
-
-**Example B: Compare current development against Fairy-Stockfish limited to 1600
-ELO with SPRT:**
-
-```bash
-./scripts/run_match.sh \
-  -a ./target/release/lingine --name-a Lingine-Dev \
-  -b ./tools/fairy-stockfish_x86-64 --name-b FS-1600 \
-  --options-b "option.UCI_LimitStrength=true option.UCI_Elo=1600" \
-  -g 200 --sprt "elo0=0 elo1=15 alpha=0.05 beta=0.05"
-```
-
-_Output:_ The script automatically launches parallel threads, aggregates
-outcomes, and invokes `analyze_match.py` to generate a beautiful, comprehensive
-markdown report `summary.md` inside your output folder containing score margins,
-ELO delta, error bars, and game outcomes.
-
----
-
-### 🛡️ Tutorial 2: ELO Gauntlet Evaluator (`run_gauntlet.py`)
-
-Use [`run_gauntlet.py`](scripts/run_gauntlet.py) to assess the absolute ELO
-rating of an engine by putting it through a gauntlet tournament against a series
-of strength-limited standard baseline bots.
-
-```bash
-./scripts/run_gauntlet.py [options]
-```
-
-#### Command-Line Arguments
-
-- `-a`, `--engine PATH`: Path to the engine binary under evaluation (Default:
-  `./target/release/lingine`).
-- `--name NAME`: Display name for the target engine (Default: `Lingine`).
-- `-g`, `--games N`: Number of games to play against **each** ELO level
-  (Default: `10`).
-- `-t`, `--tc TIMECONTROL`: Time control setting (Default: `"3+0.03"`).
-- `-d`, `--depth N`: Opening book ply depth (Default: `12`).
-- `-e`, `--elos LIST`: Comma-separated list of Fairy-Stockfish ELO ratings to
-  play against (Default: `"1200,1400,1600,1800,2000,2200"`).
-- `-c`, `--cores N`: Number of parallel games (Default: auto-optimized based on
-  CPU).
-- `-f`, `--openings-file`: Path to the opening book PGN (Default:
-  `tools/xqdb_masters_40711_UCI_games.pgn`).
-- `-o`, `--pgnout DIR`: Output folder directory to store PGN files and logs.
-- `-s`, `--skip-build`: Skips the automatic Rust compilation.
-
-#### ELO Estimation Methodology
-
-The script computes the estimated ELO rating using the Bradley-Terry model. For
-each opponent with a known ELO $E_{\text{opp}}$, the ELO delta is calculated
-from the win-draw-loss percentage:
-
-$$\Delta\text{ELO} = 400 \times \log_{10}\left(\frac{\text{Score\%}}{1 - \text{Score\%}}\right)$$
-
-$$\text{Estimated ELO} = E_{\text{opp}} + \Delta\text{ELO}$$
-
-The final ELO is calculated as the average of the estimations across all ELO
-levels.
-
-#### Practical Examples
-
-**Example A: Run a rapid ELO test (4 games per level) against a standard
-range:**
-
-```bash
-./scripts/run_gauntlet.py -g 4 --skip-build
-```
-
-**Example B: Run an extensive ELO validation against high-tier bots:**
-
-```bash
-./scripts/run_gauntlet.py \
-  -a ./target/release/lingine --name Lingine-v1.6 \
-  -g 50 -e "1600,1800,2000,2200,2400" -t "10/15+0.2"
-```
-
-_Output:_ After the tournament completes, the script displays a detailed
-analysis table including game scores per level, score percentages, and ELO
-calculations, and outputs a `summary.md` file inside the output directory.
-
----
-
-### ⏳ Tutorial 3: Historical Regression Suite (`run_historical_evals.sh`)
-
-Use [`run_historical_evals.sh`](scripts/run_historical_evals.sh) to run a
-comprehensive suite of matches and gauntlets across all historical engine
-versions. This is used to map out the regression, progression, and absolute ELO
-impact of every single commit in Lingine's development history.
-
-```bash
-./scripts/run_historical_evals.sh [options]
-```
-
-#### Available Modes
-
-The suite executes three phases of benchmarks. By default, it runs all three,
-but you can filter them:
-
-- `-n`, `--neighbor-only`: Runs neighbor matches (100 games per match: e.g.
-  `1.1.0 vs 1.2.0`, `1.2.0 vs 1.3.0`). This determines the **incremental ELO
-  delta** added by each new feature.
-- `-b`, `--base-only`: Runs base matches (100 games per match: e.g.
-  `1.1.0 vs 1.0.0-base`, `1.5.0 vs 1.0.0-base`). This measures the **cumulative
-  ELO improvement** from the baseline.
-- `-g`, `--gauntlets-only`: Runs gauntlet matches (300 games per version) to
-  measure the **absolute ELO rating** of every historical version.
-- `-m`, `--matches-only`: Runs both neighbor and base matches, skipping the
-  gauntlets.
-
-#### Configuration Options
-
-- `-v`, `--version <VER>`: Filters tasks to only run matches/gauntlets involving
-  a specific historical version (e.g. `1.6.0a-check-extensions`).
-- `-t`, `--tc TIMECONTROL`: Custom time control setting to override default
-  `3+0.03`.
-- `-c`, `--concurrency N`: Adjusts parallel game execution limit.
-- `-f`, `--force`: Overwrites any previous benchmark reports and forces a
-  complete recalculation.
-- `-d`, `--dry-run`: Prints the planned Sylvan-CLI and python commands without
-  running them.
-
-#### Practical Examples
-
-**Example A: Dry-run the entire benchmark suite to verify the active plan:**
-
-```bash
-./scripts/run_historical_evals.sh --dry-run
-```
-
-**Example B: Benchmark only the Check Extensions release (`1.6.0a`):**
-
-```bash
-./scripts/run_historical_evals.sh -v 1.6.0a-check-extensions
-```
-
-**Example C: Run matches only (both base and neighbor) with optimized
-concurrency:**
-
-```bash
-./scripts/run_historical_evals.sh --matches-only -c 12
-```
-
-_Cache & Resume:_ The script features automatic state persistence. If a match or
-gauntlet has already completed and generated a `summary.md`, it is skipped,
-allowing you to stop and resume the comprehensive suite at any time.
-
----
-
-## 💻 Developer Commands & Testing
-
-### 1. Compile Lingine
-
-To compile the latest engine binary with full release-mode optimizations:
+After cloning the repository, run this command
 
 ```bash
 cargo build --release
 ```
 
-The resulting executable will be saved at `./target/release/lingine`.
+to get the release version with all optimizations. The binary will be generated
+in `target/release/lingine`.
 
-### 2. Run PERFT (Performance Move Generation) Tests
+### Running `Lingine` with a GUI
 
-Validate the correctness of the bitboard move generator against standardized
-deep search coordinates:
+Because `Lingine` is fully UCI-compliant, you can play against it with any GUI
+that support UCI engines. The guide below is for development on Linux, where the
+tools installed will contain a `sylvan` binary that supports UCI engines out of
+the box.
+
+## Development Guide
+
+For development, you also need to have `python` installed in your system.
+Development happens on Linux, if you use Windows (why do you even use
+Microslop), don't bother.
+
+### Automated Toolchain Setup
+
+The project provides a setup script [`setup_tools.py`](scripts/setup_tools.py)
+to automate this setup:
 
 ```bash
-cargo test --lib core::movegen
+python3 ./scripts/setup_tools.py
 ```
 
-### 3. Run Rule Judge and Position Tests
+**What the script sets up:**
 
-Verify that the engine correctly handles checkmate detection, stalemates,
-repetitions, and the 60-move rule:
+- Creates the local `tools/` directory.
+- Downloads `sylvan-cli`: The tournament manager and engine-coordinating protocol
+  interface.
+- Downloads `sylvan`: The GUI to play against `Lingine` locally.
+- Downloads `fairy-stockfish_x86-64`: A multi-variant strength-limited baseline
+  opponent engine.
+- Downloads **Masters Opening Database** (`xqdb_masters_40711_UCI_games.pgn`): A
+  database of 40,711 master-level opening games to seed different opening
+  positions during testing.
+
+### Scripts
+
+Lingine includes a comprehensive python script suite under [`scripts/`](scripts)
+to automate engine validation, ELO estimation, and regression testing.
+
+| Script                  | Usage                                                                                                                                                                                                                           |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| run_match.py            | Run a round-robin tournament between any two engine binaries to determine ELO differences, draw ratios, and victory margins.                                                                                                    |
+| run_gauntlet.py         | Assess the absolute ELO rating of an engine by putting it through a gauntlet tournament against a series of strength-limited standard baseline bots.                                                                            |
+| run_historical_evals.py | Run a comprehensive suite of matches and gauntlets across all historical engine versions. This is used to map out the regression, progression, and absolute ELO impact of every single commit in Lingine's development history. |
+
+### Working with the source
+
+Build the debug build:
 
 ```bash
-cargo test --lib core::position::tests
+cargo build
 ```
 
-### 4. Interactive Command-Line Testing (UCI Protocol)
+Run tests:
 
-You can launch and interact with the engine directly through the command line.
-Run `./target/release/lingine` and type the standard UCI commands:
-
-```text
-$ ./target/release/lingine
-uci
-id name Lingine
-id author Tran Tuan Anh, Le Thanh Trung, Bui Tien Dung
-option name Hash type spin default 16 min 1 max 1024
-uciok
-isready
-readyok
-position startpos moves h2e2 h9g7 h0g2 i9h9 r
-go depth 6
-info depth 1 score 12 nodes 21 nps 21000 pv h0g2
-...
-info depth 6 score 25 nodes 8792 nps 920000 pv h0g2
-bestmove h0g2
-quit
+```bash
+cargo test
 ```
 
----
+## Acknowledgemments
+
+- `Sylvan` by Wilbert Lee and [contributors to the now deleted repository](https://github.com/EterCyber/Sylvan/graphs/contributors).
+- [Reckless](https://github.com/codedeliveryservice/Reckless) and
+  [Viridithas](https://github.com/cosmobobak/viridithas) for incredible Rust examples.
+- [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) and
+  [Pikafish](https://github.com/official-pikafish/Pikafish) for
+  being great Xiangqi engines that helps with testing and code examples.
+- [Chess Programming Wiki](https://www.chessprogramming.org/) for resources on
+  computer engines.
+- [Gemini 3.1 Pro](https://gemini.google.com/app) for the logo (I am sorry).
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0](./LICENSE).
