@@ -1,236 +1,80 @@
 \section{Sinh Nước Đi}
 
 \begin{frame}{Pipeline sinh nước đi}
-  \centering
-  \begin{fitdiagram}
-    \begin{tikzpicture}[node distance=0.58cm]
-      \node[flowbox, text width=3.3cm] (call) {\code{generate\_moves}\\\code{(pos, type)}};
-      \node[flowbox, text width=3.3cm, below=of call] (pseudo) {Sinh pseudo-legal\\cho từng quân};
-      \node[flowbox, text width=3.3cm, below=of pseudo] (legal) {Lọc \code{pos.legal(m)}};
-      \node[flowbox, text width=3.3cm, below=of legal] (type) {Lọc Legal/Capture/Quiet};
-      \node[redbox, text width=3.3cm, below=of type] (out) {$\actions(s)$};
+  \vspace{-0.5cm}
+  \begin{figure}[0.88\linewidth]
+    \begin{tikzpicture}[node distance=0.58cm, scale=0.9, transform shape]
+      \node[flowbox, text width=8cm] (call) {Gọi hàm \code{generate\_moves}\code{(pos, type, \&mut moves)}};
+      \pause
+      \node[flowbox, text width=8cm, below=of call] (pseudo) {Sinh pseudo-legal moves cho từng quân};
       \draw[arrow] (call) -- (pseudo);
-      \draw[arrow] (pseudo) -- (legal);
-      \draw[arrow] (legal) -- (type);
+    \pause
+      \node[flowbox, text width=8cm, below=of pseudo] (type) {Lọc Legal\slash Capture\slash Quiet tùy theo \code{type}};
+      \draw[arrow] (pseudo) -- (type);
+      \pause
+      \node[redbox, text width=8cm, below=of type] (out) {Sinh ra \code{moves} = $\actions(s)$};
       \draw[arrow] (type) -- (out);
     \end{tikzpicture}
-  \end{fitdiagram}
-
-  \vspace{0.6em}
-  \small \code{MoveList} dùng \code{ArrayVec<Move, 128>}: tránh cấp phát heap trong search.
+    \caption{Pipeline sinh nước đi}
+  \end{figure}
+  \onslide<5->{Biến \code{moves} có kiểu \texttt{MoveList} sử dụng \texttt{ArrayVec<Move, 128>} nằm hoàn toàn trên stack để tránh heap allocation.}
 \end{frame}
 
 \begin{frame}{Nhóm quân và kỹ thuật sinh move}
   \small
-  \begin{tabular}{p{0.22\textwidth}p{0.28\textwidth}p{0.40\textwidth}}
+  \begin{tabular}{L{0.22\textwidth} L{0.28\textwidth} L{0.40\textwidth}}
     \toprule
     Nhóm & Quân & Kỹ thuật \\
     \midrule
+    \pause
     Không bị cản & Tướng, Sĩ, Tốt & Lookup table tĩnh, mask quân nhà. \\
-    Nhảy có blocker & Mã, Tượng & Magic Bitboards cho chân/mắt. \\
+    \pause
+    Bị cản & Mã, Tượng & Magic Bitboards cho chân/mắt. \\
+    \pause
     Trượt đường thẳng & Xe, Pháo & Rank/File table; Pháo tách quiet và capture. \\
-    Kiểm tra chiếu & Tướng, Tốt, Mã, Xe, Pháo & Backward attack scanner. \\
     \bottomrule
   \end{tabular}
 \end{frame}
 
-\begin{frame}{Mã bị cản chân}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Mã có tối đa 8 nước.
-        \item Nước nhảy phụ thuộc 4 ô chân Mã.
-        \item Blocker mask có $2^4=16$ trạng thái.
-      \end{itemize}
-      \begin{alertblock}{Ý tưởng}
-        Occupancy quanh Mã ánh xạ sang attack table.
-      \end{alertblock}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-02a-horse-leg.png}}
-      \figcaption{3.a}{Mã bị cản chân.}
-    \end{column}
-  \end{columns}
+\begin{frame}{Nhóm bị cản sử dụng Magic Bitboards}
+  Ở đây ta lấy ví dụ với quân Mã, quân Tượng làm tương tự.
+  \begin{itemize}[<+->]
+    \item Mã có tối đa 8 nước.
+    \item Nước nhảy phụ thuộc 4 ô chân Mã.
+    \item $\Rightarrow$ Có $2^4=16$ cách chặn khác nhau tại mỗi vị trí trên bàn cờ.
+    \item $\Rightarrow$ Sinh ra toàn bộ các trường hợp có thể xảy ra.
+  \end{itemize}
+  \onslide<5->{\begin{alertblock}{Vấn đề}
+    Mỗi một trường hợp chặn được biểu diễn trên Bitboard có thể có giá trị rất lớn.
+
+    \onslide<6->{$\Rightarrow$ Cần có một cách ánh xạ chúng về 1 chỉ số từ $0$ đến $15$.}
+\end{alertblock}}
 \end{frame}
 
-\begin{frame}{Magic Bitboards cho Mã}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.45\textwidth}
-      \[
-        index=\frac{(occupied \& mask)\times magic}{2^{128-bits}}
-      \]
-      \begin{itemize}
-        \item \code{mask}: các ô blocker liên quan.
-        \item \code{magic}: hằng số để nén pattern.
-        \item \code{table[index]}: tập ô đi được.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.51\textwidth}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}[node distance=0.6cm]
-          \node[flowbox] (occ) {occupied};
-          \node[flowbox, below=of occ] (mask) {\code{\& mask}};
-          \node[flowbox, below=of mask] (mul) {$\times magic$};
-          \node[redbox, below=of mul] (idx) {table index};
-          \draw[arrow] (occ) -- (mask);
-          \draw[arrow] (mask) -- (mul);
-          \draw[arrow] (mul) -- (idx);
-        \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
+\begin{frame}{Nhóm bị cản sử dụng Magic Bitboards}
+  \vspace{-0.5cm}
+  \begin{table}[htbp]
+    \centering
+    \small % Thu nhỏ font chữ một chút để tránh tràn lề
+    \setlength{\tabcolsep}{4pt} % Chỉnh khoảng cách giữa các cột
+    \begin{tabular}{cccccc}
+        \textbf{Occupied \& Mask} & & \textbf{Số ma thuật 128-bit} & & \textbf{Chỉ số ánh xạ} & \\
+        \textit{Quân Mã (10 $\times$ 9)} & & & & \textit{4 bit cao nhất chứa [A B C D]} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{[A B C D] . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . A . . . .} & & \onslide<3->{\texttt{. . . một số. . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . D x C . . .} & \onslide<2->{$\times$} & \onslide<3->{\texttt{. bit ma thuật. .}} & \onslide<4->{$=$} & \onslide<5->{\texttt{. . . bit rác . .}} &  \\
+        \texttt{. . . . B . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+    \end{tabular}
+\end{table}
+
+\onslide<6->{Khi này ta chỉ cần lấy số nhận được shift phải cho 124 thì sẽ ra được một số 4 bit.}
+\vspace{0.5cm}
+ 
 \end{frame}
-
-\begin{frame}{Tượng bị cản mắt}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Tượng đi chéo hai ô.
-        \item Ô giữa đường là mắt Tượng.
-        \item Bị chặn mắt thì hướng đó không hợp lệ.
-      \end{itemize}
-      \begin{block}{Điểm khác cờ vua}
-        Tượng cờ tướng không qua sông và bị blocker bởi mắt Tượng.
-      \end{block}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-02b-elephant-eye.png}}
-      \figcaption{3.b}{Tượng bị cản mắt.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Tốt qua sông}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Trước khi qua sông: Tốt chỉ tiến.
-        \item Sau khi qua sông: có thêm nước ngang.
-        \item Direction phụ thuộc bên Đỏ/Đen.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-02c-pawn-river.png}}
-      \figcaption{3.c}{Tốt đổi hướng sau khi qua sông.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Pháo qua ngòi}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Pháo đi như Xe trên ô trống.
-        \item Muốn ăn quân phải có đúng một quân làm ngòi.
-        \item Lingine tách quiet slides và leap captures.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-03a-cannon-screen.png}}
-      \figcaption{4.a}{Pháo cần đúng một ngòi để ăn.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Xe quét rank/file}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Xe di chuyển theo các tia ngang và dọc.
-        \item Tập ô đi được phụ thuộc vào trạng thái chiếm đóng (occupancy) trên rank/file.
-        \item Sử dụng lookup table để xác định nước đi hợp lệ với độ phức tạp $O(1)$.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-03b-rook-rays.png}}
-      \figcaption{4.b}{Xe quét rank/file.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Lộ mặt Tướng}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Hai Tướng không được đối mặt trên cùng file nếu không có quân chắn.
-        \item Luật này ảnh hưởng trực tiếp tới \code{legal(m)}.
-        \item Move hợp lệ phải đảm bảo Tướng không bị chiếu sau khi đi.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-03c-flying-general.png}}
-      \figcaption{4.c}{Lộ mặt Tướng.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Backward attack scanner}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      Thay vì sinh toàn bộ nước đi của đối thủ:
-      \begin{itemize}
-        \item Lấy ô Tướng làm gốc.
-        \item Quét các hướng có thể có attacker.
-        \item Kiểm tra Tốt, Mã, Xe, Pháo, Tướng.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-04a-backward-scanner.png}}
-      \figcaption{4.d}{Quét ngược từ ô Tướng.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Lọc move hợp lệ}
-  \centering
-  \begin{fitdiagram}
-    \begin{tikzpicture}[node distance=0.55cm]
-      \node[flowbox] (m) {pseudo move};
-      \node[flowbox, below=of m] (do) {\code{do\_move}};
-      \node[flowbox, below=of do] (check) {Tướng bị chiếu?};
-      \node[goodbox, below left=0.65cm and 0.55cm of check] (legal) {giữ};
-      \node[redbox, below right=0.65cm and 0.55cm of check] (drop) {loại};
-      \draw[arrow] (m) -- (do);
-      \draw[arrow] (do) -- (check);
-      \draw[arrow] (check) -- (legal);
-      \draw[arrow] (check) -- (drop);
-    \end{tikzpicture}
-  \end{fitdiagram}
-\end{frame}
-
-\begin{frame}{MoveList trên stack}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.48\textwidth}
-      \begin{block}{Thiết kế}
-        \code{ArrayVec<Move, 128>}
-      \end{block}
-      \begin{itemize}
-        \item Tránh cấp phát heap ở mỗi node.
-        \item Dung lượng đủ cho branching factor cờ tướng.
-        \item Phù hợp move ordering và search sâu.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}[node distance=0.18cm]
-          \foreach \i in {0,...,7} {
-            \node[draw, minimum width=4.4cm, minimum height=0.42cm, fill=black!3] at (0,-0.45*\i) {\small Move slot \i};
-          }
-          \node[text=hustred, font=\bfseries] at (0,0.7) {stack buffer};
-        \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-
 

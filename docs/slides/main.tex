@@ -6,6 +6,7 @@
 \usepackage{amsthm,amsmath,amssymb}
 \usepackage{subcaption}
 \setbeamertemplate{theorems}[numbered]
+
 %% TYPESET
 \makeatletter
 \newcommand{\leqnomode}{\tagsleft@true}
@@ -39,24 +40,14 @@
 
 \newif\iffirsttoc
 \firsttoctrue
-\AtBeginSubsection[]
+\AtBeginSection[]
 {
     \begin{frame}
         \frametitle{Mục lục}  
-        \iffirsttoc
-            \tableofcontents
-            \global\firsttocfalse
-        \else
-            \tableofcontents[currentsection,
-            % hideothersubsections,
-            subsectionstyle=show/shaded/hide,
-            subsubsectionstyle=show/show/show/hide
-            ]
-        \fi
+        \tableofcontents[currentsection]
+        \vspace{0.5cm}
     \end{frame} 
 }
-\setbeamertemplate{caption}[numbered]
-
 \usetheme{hust}
 
 \usepackage{tikz}
@@ -97,8 +88,8 @@
 
 \title{Lingine}
 \subtitle{\textbf{Kỳ thủ Cờ Tướng nhân tạo sử dụng tìm kiếm đối kháng}}
-\author[Anh, Trung \& Dũng]{Trần Tuấn Anh -- 202416124\\
-\and Lê Thành Trung -- 202400076 \\
+\author[Anh, Trung \& Dũng]{Trần Tuấn Anh -- 202416124\texorpdfstring{\\}{, }
+\and Lê Thành Trung -- 202400076\texorpdfstring{\\}{, }
 \and Bùi Tiến Dũng -- 202416167}
 \date{Hà Nội, \today}
 
@@ -110,14 +101,15 @@
 
 \begin{frame}{Mục lục}
   \tableofcontents
+  \vspace{0.5cm}
 \end{frame}
 
-\include{problem}
-\include{states}
-\include{movegen}
-\include{eval}
-\include{search}
-\include{experiments}
-\include{conclusion}
+ \include{problem}
+ \include{states}
+ \include{movegen}
+ \include{eval}
+ \include{search}
+ \include{experiments}
+ \include{conclusion}
 
 \end{document}
