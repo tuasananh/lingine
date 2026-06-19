@@ -1,0 +1,166 @@
+\section{Hàm Đánh Giá}
+
+\begin{frame}{Vì sao cần hàm đánh giá?}
+    Search không thể duyệt tới kết thúc ván trong mọi lượt.
+    \begin{itemize}[<+->]
+      \item Cây trò chơi bùng nổ theo cấp số nhân.
+      \item Node lá cần được lượng hóa bằng điểm số.
+      \item Điểm dương nghiêng về Đỏ, điểm âm nghiêng về Đen.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Hàm đánh giá thế cờ}
+  \centering
+  \begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        % Định nghĩa phong cách chung cho các khối
+        scale=0.8,
+        transform shape,
+        comp/.style={rectangle, draw, fill=blue!12, minimum width=2.8cm, minimum height=0.8cm, rounded corners, align=center},
+        sum/.style={circle, draw, fill=orange!20, minimum size=0.8cm, font=\normalsize},
+        result/.style={rectangle, draw, fill=green!15, minimum width=3cm, minimum height=0.8cm, rounded corners,  align=center},
+        arrow/.style={-latex, thick}
+    ]
+        % --- KHỐI ĐẦU VÀO (Xếp dọc theo cột bên trái) ---
+        \node[comp] (pst) {PST Scores};
+        \node[comp, right=0.3cm of pst] (mat) {Material Values};
+        \node[comp, right=0.3cm of mat] (mob) {Mobility Bonus};
+        \node[comp, right=0.3cm of mob] (def) {Defender Bonus};
+
+        \pause
+        
+        % --- KHỐI XỬ LÝ TRUNG GIAN ---
+        % Bộ cộng nằm ngang với nhóm đầu vào
+        \node[sum] at ([yshift=-2cm]$(mat)!0.5!(mob)$) (plus) {$+$};
+        % --- VẼ ĐƯỜNG NỐI LUỒNG DỮ LIỆU ---
+        % Đường nối từ các thành phần vào bộ cộng
+        \draw[arrow] (pst) |- (plus);
+        \draw[arrow] (mat) -- (plus);
+        \draw[arrow] (mob) -- (plus);
+        \draw[arrow] (def) |- (plus);
+
+        \pause
+        
+        % --- KHỐI KẾT QUẢ ---
+        % Điểm Tapered nằm ngang hàng với bộ cộng
+        \node[result, below=1cm of plus] (tapered) {TaperedScore};
+        % Đường nối tính toán điểm Tapered
+        \draw[arrow] (plus) -- (tapered);
+
+        % Giai đoạn cờ nằm phía dưới bộ cộng
+        \node[comp, fill=yellow!15, left=1.2cm of tapered] (phase) {Phase = $\sum$PieceWeight};
+        \draw[arrow] (phase) -- (tapered);
+        
+        \pause
+        % Điểm số cuối cùng nằm ở tận cùng bên phải
+        \node[result, fill=red!10, below=1.7cm of tapered] (final) {Final Score};
+        
+        % Đường nối ra kết quả cuối cùng kèm công thức nội suy
+        \draw[arrow] (tapered) -- node[left, font=\large, midway] {$\frac{MG \times \varphi + EG \times (32-\varphi)}{32}$} (final);
+        
+    \end{tikzpicture}
+    \caption{Sơ đồ pipeline hàm đánh giá thế cờ trong Lingine}
+    \label{fig:eval_pipeline}
+\end{figure}
+\end{frame}
+
+% FRAME 1: TỔNG QUAN & DỮ LIỆU
+\begin{frame}{Texel Tuning}
+    \textbf{Mục tiêu:} Thay thế thiết lập trọng số thủ công bằng thuật toán \textit{Học máy Giám sát} (Hồi quy Logistic) trên hàng triệu thế cờ.
+    \definecolor{techblue}{RGB}{0, 150, 255}
+\definecolor{accentorange}{RGB}{255, 110, 0}
+    \pause
+    
+    \vspace{0.5cm}
+    \begin{center}
+        \textbf{Quy trình Sinh \& Tiền xử lý Dữ liệu}
+        
+        \vspace{0.2cm}
+        \begin{tikzpicture}[
+            node distance=0.5cm and 0.6cm,
+            box/.style={draw=techblue, thick, rectangle, rounded corners, minimum height=0.8cm, align=center, fill=gray!10, text=black, font=\small},
+            process/.style={draw=accentorange, thick, rectangle, minimum height=0.8cm, align=center, fill=accentorange!10, text=black, font=\small}
+        ]
+            % Sources
+            \node[box] (masters) {Đại sư\\(40.7K ván)};
+            \node[box] (fairy) [below=of masters, yshift=0.2cm] {Tự đấu\\(100K ván)};
+            
+            \pause
+            % Filters
+            \node[process] (filter) [right=of masters, yshift=-0.5cm] {\textbf{Lọc nhiễu}\\(Bỏ chiếu, bắt quân)};
+            \draw[->, >=Stealth, thick] (masters.east) -- (filter.west);
+            \draw[->, >=Stealth, thick] (fairy.east) -- (filter.west);
+
+            \pause
+            \node[process] (label) [right=of filter] {\textbf{Gán nhãn góc nhìn}\\$R_i \in \{1.0, 0.5, 0.0\}$};
+            \draw[->, >=Stealth, thick] (filter.east) -- (label.west);
+            
+            \pause
+            % Output
+            \node[box, draw=green!70!black, fill=green!5] (output) [right=of label] {\textbf{Tập dữ liệu}\\4.78M thế cờ};
+            % Arrows
+            \draw[->, >=Stealth, thick] (label.east) -- (output.west);
+        \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+% FRAME 2: TOÁN HỌC & TRIỂN KHAI
+\begin{frame}{Mô hình Toán học \& Tối ưu hóa}
+    Mục tiêu: Tối thiểu hóa sai số toàn phương trung bình (\textbf{MSE}) để tìm bộ tham số $\vec{\theta}$:
+    \vspace{-0.2cm}
+    \begin{equation*}
+        \text{MSE}(\vec{\theta}) = \frac{1}{N} \sum_{i=1}^{N} \left( R_i - \sigma\left(E(S_i, \vec{\theta})\right) \right)^2 \quad \text{với} \quad \sigma(x) = \frac{1}{1 + 10^{-\frac{K \cdot x}{400}}}
+    \end{equation*}
+
+    Trong đó:
+\begin{itemize}
+    \item<2-> $R_i \in \{1.0, 0.5, 0.0\}$ là kết quả thực tế của ván đấu chứa thế cờ thứ $i$.
+    \item<3-> $E(S_i, \vec{\theta})$ là hàm đánh giá tĩnh thế cờ $S_i$ bằng bộ tham số $\vec{\theta}$.
+    \item<4-> $\sigma(x)$ là hàm kích hoạt Sigmoid có nhiệm vụ ánh xạ điểm số cờ sang $[0, 1]$ đại diện cho cơ hội chiến thắng dự kiến.
+\end{itemize}
+
+\onslide<5->{\begin{block}{Giải pháp}
+Sử dụng các thuật toán tối ưu để tìm lời giải cho bài toán trên, Lingine đã sử dụng Adam Optimizer.
+\end{block}}
+\vspace{0.5cm}
+
+\end{frame}
+
+% FRAME 3: KẾT QUẢ & THỰC CHIẾN
+\begin{frame}{Kết quả Hội tụ \& Hiệu năng Thực chiến}
+    \begin{columns}[T]
+        \begin{column}{0.3\textwidth}
+            {\small
+            \begin{tabular}{lcc}
+                \toprule
+                \textbf{Giai đoạn} & \textbf{Hệ số $K$} & \textbf{MSE} \\ \midrule
+                Khởi tạo & $0.233$ & $0.0620$ \\ 
+                \textbf{Hội tụ} & $\mathbf{0.549}$ & $\mathbf{0.0550}$ \\
+                \bottomrule
+            \end{tabular}
+            }
+            \pause
+            \begin{alertblock}{Đánh giá}
+                Hàm mất mát MSE giảm \textbf{>11\%}. Bộ tham số tự hiệu chỉnh chính xác theo dữ liệu lớn.
+            \end{alertblock}
+        \end{column}
+        \pause
+        \begin{column}{0.5\textwidth}
+            {\small
+            \begin{table}
+                \begin{tabular}{lcc}
+                    \toprule
+                    \textbf{Chỉ số} & \textbf{Lingine 1.8.0} & \textbf{Lingine 1.7.0} \\ \midrule
+                    W/D/L & \textbf{719} / 156 / 125 & 125 / 156 / 719 \\ 
+                    Win Rate & $\mathbf{79.7\%}$ & $20.3\%$ \\ \midrule
+                    Elo Diff & $\mathbf{+237.6}$ & $-237.6$ \\ 
+                    LOS & $\mathbf{100.0\%}$ & — \\
+                    \bottomrule
+                \end{tabular}
+                \caption{Lingine 1.8.0 vs Lingine 1.7.0}
+            \end{table}
+            }
+        \end{column}
+    \end{columns}
+\end{frame}

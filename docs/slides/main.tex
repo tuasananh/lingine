@@ -1,0 +1,118 @@
+\documentclass[aspectratio=169]{beamer}
+\usepackage{tikz}
+\usepackage{calc}
+\usepackage{polyglossia}
+\setmainlanguage{vietnamese}
+\usepackage{amsthm,amsmath,amssymb}
+\usepackage{subcaption}
+\setbeamertemplate{theorems}[numbered]
+
+%% TYPESET
+\makeatletter
+\newcommand{\leqnomode}{\tagsleft@true}
+\newcommand{\reqnomode}{\tagsleft@false}
+\makeatother
+\let\Mathcal\mathcal
+\usepackage{dutchcal}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\abs}[1]{\left\lvert#1\right\rvert}
+\newcommand{\gr}{\operatorname{gr}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\toto}{\rightrightarrows}%
+\newcommand{\F}{\Mathcal{F}}%
+\newcommand{\K}{\mathbb{K}}%
+\newcommand{\R}{\mathbb{R}}%
+\def\C{\mathbb{C}}%
+\newcommand{\dom}{\operatorname{dom}}%
+% \newcommand{\ker}{\operatorname{ker}}% already defined
+\newcommand{\im}{\operatorname{im}}%
+\newcommand{\g}{\mathcal{g}}%
+\global\long\def\MP{\text{mp}}%
+
+\newcommand{\Image}[1]{%
+	\sbox0{\includegraphics[height=0.65\paperheight]{#1}}%
+	\ifdim\wd0 < \textwidth
+	\includegraphics[height=0.65\paperheight]{#1}%
+	\else
+	\includegraphics[width=\textwidth]{#1}%
+	\fi%
+}
+
+\newif\iffirsttoc
+\firsttoctrue
+\AtBeginSection[]
+{
+    \begin{frame}
+        \frametitle{Mục lục}  
+        \tableofcontents[currentsection]
+        \vspace{0.5cm}
+    \end{frame} 
+}
+\usetheme{hust}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,decorations.pathreplacing}
+\usepackage{pgfplots}
+\usepackage{booktabs}
+\usepackage{array}
+% Định nghĩa cột mới tự động canh lề trái, tự giãn độ rộng và thêm \hspace{0pt} để sửa lỗi baseline của \onslide
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash\hspace{0pt}}p{#1}}
+\usepackage{graphicx}
+\usepackage{adjustbox}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+\usetikzlibrary{overlay-beamer-styles}
+
+\definecolor{lingineInk}{HTML}{231F20}
+\definecolor{lingineGreen}{HTML}{1B7F3A}
+\definecolor{lingineBlue}{HTML}{1D5D9B}
+\definecolor{lingineGold}{HTML}{F3C108}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\figpath}[1]{res/figures/#1}
+\newenvironment{fitdiagram}[1][0.94\linewidth]{%
+  \par\noindent\centering\begin{adjustbox}{max width=#1,max totalheight=0.6\textheight}%
+    }{%
+  \end{adjustbox}\par%
+  }
+\newcommand{\actions}{\mathcal{A}}
+\newcommand{\eval}{\mathrm{Eval}}
+
+\tikzset{
+  flowbox/.style={draw=hustred, thick, rounded corners=2pt, align=center, minimum height=0.62cm, text width=2.55cm, fill=white, font=\small},
+  redbox/.style={draw=hustred, thick, rounded corners=2pt, align=center, minimum height=0.62cm, fill=hustred0, font=\small},
+  darkbox/.style={draw=lingineInk, thick, rounded corners=2pt, align=center, minimum height=0.62cm, fill=black!4, font=\small},
+  goodbox/.style={draw=lingineGreen, thick, rounded corners=2pt, align=center, minimum height=0.62cm, fill=green!7, font=\small},
+  arrow/.style={-{Latex[length=2mm]}, thick},
+  redarrow/.style={-{Latex[length=2mm]}, thick, hustred}
+}
+
+\title{Lingine}
+\subtitle{\textbf{Kỳ thủ Cờ Tướng nhân tạo sử dụng tìm kiếm đối kháng}}
+\author[Anh, Trung \& Dũng]{Trần Tuấn Anh -- 202416124\texorpdfstring{\\}{, }
+\and Lê Thành Trung -- 202400076\texorpdfstring{\\}{, }
+\and Bùi Tiến Dũng -- 202416167}
+\date{Hà Nội, \today}
+
+\begin{document}
+
+\begin{frame}[noframenumbering,Title]
+  \maketitle
+\end{frame}
+
+\begin{frame}{Mục lục}
+  \tableofcontents
+  \vspace{0.5cm}
+\end{frame}
+
+ \include{problem}
+ \include{states}
+ \include{movegen}
+ \include{eval}
+ \include{search}
+ \include{experiments}
+ \include{conclusion}
+% Daniel's proposal for "uncovering" parts of a tikz-tree %
+
+\end{document}

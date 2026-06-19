@@ -1,0 +1,80 @@
+\section{Sinh Nước Đi}
+
+\begin{frame}{Pipeline sinh nước đi}
+  \vspace{-0.5cm}
+  \begin{figure}[0.88\linewidth]
+    \begin{tikzpicture}[node distance=0.58cm, scale=0.9, transform shape]
+      \node[flowbox, text width=8cm] (call) {Gọi hàm \code{generate\_moves}\code{(pos, type, \&mut moves)}};
+      \pause
+      \node[flowbox, text width=8cm, below=of call] (pseudo) {Sinh pseudo-legal moves cho từng quân};
+      \draw[arrow] (call) -- (pseudo);
+    \pause
+      \node[flowbox, text width=8cm, below=of pseudo] (type) {Lọc Legal\slash Capture\slash Quiet tùy theo \code{type}};
+      \draw[arrow] (pseudo) -- (type);
+      \pause
+      \node[redbox, text width=8cm, below=of type] (out) {Sinh ra \code{moves} = $\actions(s)$};
+      \draw[arrow] (type) -- (out);
+    \end{tikzpicture}
+    \caption{Pipeline sinh nước đi}
+  \end{figure}
+  \onslide<5->{Biến \code{moves} có kiểu \texttt{MoveList} sử dụng \texttt{ArrayVec<Move, 128>} nằm hoàn toàn trên stack để tránh heap allocation.}
+\end{frame}
+
+\begin{frame}{Nhóm quân và kỹ thuật sinh move}
+  \small
+  \begin{tabular}{L{0.22\textwidth} L{0.28\textwidth} L{0.40\textwidth}}
+    \toprule
+    Nhóm & Quân & Kỹ thuật \\
+    \midrule
+    \pause
+    Không bị cản & Tướng, Sĩ, Tốt & Lookup table tĩnh, mask quân nhà. \\
+    \pause
+    Bị cản & Mã, Tượng & Magic Bitboards cho chân/mắt. \\
+    \pause
+    Trượt đường thẳng & Xe, Pháo & Rank/File table; Pháo tách quiet và capture. \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Nhóm bị cản sử dụng Magic Bitboards}
+  Ở đây ta lấy ví dụ với quân Mã, quân Tượng làm tương tự.
+  \begin{itemize}[<+->]
+    \item Mã có tối đa 8 nước.
+    \item Nước nhảy phụ thuộc 4 ô chân Mã.
+    \item $\Rightarrow$ Có $2^4=16$ cách chặn khác nhau tại mỗi vị trí trên bàn cờ.
+    \item $\Rightarrow$ Sinh ra toàn bộ các trường hợp có thể xảy ra.
+  \end{itemize}
+  \onslide<5->{\begin{alertblock}{Vấn đề}
+    Mỗi một trường hợp chặn được biểu diễn trên Bitboard có thể có giá trị rất lớn.
+
+    \onslide<6->{$\Rightarrow$ Cần có một cách ánh xạ chúng về 1 chỉ số từ $0$ đến $15$.}
+\end{alertblock}}
+\end{frame}
+
+\begin{frame}{Nhóm bị cản sử dụng Magic Bitboards}
+  \vspace{-0.5cm}
+  \begin{table}[htbp]
+    \centering
+    \small % Thu nhỏ font chữ một chút để tránh tràn lề
+    \setlength{\tabcolsep}{4pt} % Chỉnh khoảng cách giữa các cột
+    \begin{tabular}{cccccc}
+        \textbf{Occupied \& Mask} & & \textbf{Số ma thuật 128-bit} & & \textbf{Chỉ số ánh xạ} & \\
+        \textit{Quân Mã (10 $\times$ 9)} & & & & \textit{4 bit cao nhất chứa [A B C D]} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{[A B C D] . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . A . . . .} & & \onslide<3->{\texttt{. . . một số. . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . D x C . . .} & \onslide<2->{$\times$} & \onslide<3->{\texttt{. bit ma thuật. .}} & \onslide<4->{$=$} & \onslide<5->{\texttt{. . . bit rác . .}} &  \\
+        \texttt{. . . . B . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+        \texttt{. . . . . . . . .} & & \onslide<3->{\texttt{. . . . . . . . .}} & & \onslide<5->{\texttt{. . . . . . . . .}} & \\
+    \end{tabular}
+\end{table}
+
+\onslide<6->{Khi này ta chỉ cần lấy số nhận được shift phải cho 124 thì sẽ ra được một số 4 bit.}
+\vspace{0.5cm}
+ 
+\end{frame}
+

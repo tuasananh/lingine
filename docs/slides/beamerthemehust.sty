@@ -1,0 +1,115 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beamerthemehust}[Beamer HUST theme]
+% Requirement
+\RequirePackage{tikz}
+\RequirePackage{xparse}
+\RequirePackage{calc}
+\usetikzlibrary{positioning,shadows}
+\mode<presentation>
+
+% Detect if using which aspectratio, only support 169 and 43
+\newif\iflongslide
+\pgfmathparse{(\paperwidth / \paperheight) > 1.5}
+\let\longslide\pgfmathresult
+\if\longslide1
+	\longslidetrue
+\else
+	\longslidefalse
+\fi
+
+% Settings
+\usecolortheme{hust}
+\usefonttheme{hust}
+\useinnertheme{hust}
+\useoutertheme{hust}
+
+% sizes
+\setbeamersize{sidebar width left=0pt}
+\setlength{\headsep}{2.25ex}
+
+%
+% Aligning the title
+%
+\def\hust@titlealign{flushleft}
+\DeclareOption{titleleft}{
+    \def\hust@titlealign{flushleft}
+}
+\DeclareOption{titlecenter}{
+    \def\hust@titlealign{center}
+}
+\DeclareOption{titleright}{
+    \def\hust@titlealign{flushright}
+}
+%
+% Aligning the authors
+%
+\def\hust@authoralign{flushright}
+\DeclareOption{authorleft}{
+    \def\hust@authoralign{flushleft}
+}
+\DeclareOption{authorcenter}{
+    \def\hust@authoralign{center}
+}
+\DeclareOption{authorright}{
+    \def\hust@authoralign{flushleft}
+}
+%
+% Show list of section at beginning
+% of every sections
+%
+\newif\ifshowsections
+\DeclareOption{showsections}{\showsectionstrue}
+\DeclareOption{noshowsections}{\showsectionsfalse}
+\AtBeginDocument{
+    \ifshowsections
+        \AtBeginSection[] {
+            \begin{framex}[plain, noframenumbering]
+                \tableofcontents[currentsection]
+            \end{framex}
+        }
+    \fi
+}
+%
+% Foot line show (sub)section or not
+%
+\newif\iffootlinesection
+\DeclareOption{footlinesection}{\footlinesectiontrue}
+\DeclareOption{nofootlinesection}{\footlinesectionfalse}
+\newif\iffootlinesubsection
+\DeclareOption{footlinesubsection}{\footlinesubsectiontrue}
+\DeclareOption{nofootlinesubsection}{\footlinesubsectionfalse}
+%
+% Foot line show total number of pages
+%
+\newif\ifshowtotalpage
+\showtotalpagefalse
+\DeclareOption{showtotalpage}{\showtotalpagetrue}
+\DeclareOption{noshowtotalpage}{\showtotalpagefalse}
+\ProcessOptions
+
+% height for images
+\AtBeginDocument{
+    \newcommand{\imgheight}{0.7\textheight}
+}
+
+% Alt frac for page number instead of nicefrag
+% Source:
+% https://tex.stackexchange.com/questions/515264/nicefrac-or-xfrac-in-displaystyle
+\newcommand{\altfrac}[2]{
+    {%
+        \raisebox{.5\ht\strutbox}{#1}%
+        \kern-2.2pt%
+        \rotatebox{-10}{\scalebox{1.5}[1.8]{/}}%
+        \kern-2.8pt%
+        \raisebox{-.25\ht\strutbox}{#2}%
+    }
+}
+
+\newlength{\mysectionlength}
+\newlength{\mysubsectionlength}
+
+\newdimen\barwidth
+\barwidth=20pt
+\newdimen\fabsize
+\fabsize=13pt
+\newdimen\sectextheight
