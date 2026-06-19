@@ -1,0 +1,7 @@
+#!/bin/sh
+
+for f in *.svg; do
+    convert "$f" "$(basename $f .svg).png"
+done
+convert bg-43-3.svg -matte -channel A +level 0,50% +channel bg-43-3.png
+convert bg-169-3.svg -matte -channel A +level 0,50% +channel bg-169-3.png

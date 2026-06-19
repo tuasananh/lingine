@@ -1,126 +1,210 @@
 
 \section{Thực Nghiệm Và Demo}
 
-\begin{frame}{PERFT kiểm thử move generation}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.40\textwidth}
-      \begin{itemize}
-        \item Đếm toàn bộ node lá ở depth $d$.
-        \item So với bảng chuẩn.
-        \item Bắt lỗi luật cản quân, chiếu, ăn quân, chiếu bí.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.56\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-07a-perft-complex.png}}
-      \figcaption{7.a}{Vị trí PERFT kiểm thử luật.}
-    \end{column}
-  \end{columns}
+% ================= FRAME 1 =================
+\begin{frame}{Kiểm thử bộ sinh nước đi (PERFT)}
+    \begin{itemize}
+        \item<1-> \textbf{Mục tiêu:} Đảm bảo tính chính xác tuyệt đối của bộ sinh nước đi (\textit{Move Generator}) - nền tảng quyết định sự đúng luật của engine.
+        \item<2-> \textbf{Phương pháp (PERFT):} Duyệt cây trò chơi ở độ sâu $d$ từ thế trận ban đầu, đếm tổng số nút lá và đối chiếu với kết quả chuẩn mực trên Internet.
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    \onslide<3->{
+        \begin{table}[htbp]
+            \centering
+            \small
+            \begin{tabular}{crrrr}
+                \toprule
+                \textbf{Độ sâu} & \textbf{Số nút} & \textbf{Chiếu} & \textbf{Ăn quân} & \textbf{Chiếu bí} \\
+                \midrule
+                1 & 44 & 0 & 2 & 0 \\
+                2 & 1,920 & 6 & 72 & 0 \\
+                3 & 79,666 & 384 & 3,159 & 0 \\
+                4 & 3,290,240 & 19,380 & 115,365 & 0 \\
+                5 & 133,312,995 & 953,251 & 4,917,734 & 0 \\
+                6 & 5,392,831,844 & 39,288,662 & 185,194,510 & 584 \\
+                \bottomrule
+            \end{tabular}
+            \caption{Kết quả PERFT của Lingine tại thế cờ khởi đầu}
+        \end{table}
+    }
 \end{frame}
 
-\begin{frame}{Tiến trình tăng ELO}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.36\textwidth}
-      \begin{itemize}
-        \item v1.0.0: engine cơ bản.
-        \item v1.5.0: PST tạo bước nhảy lớn.
-        \item v1.8.0: Texel tuning.
-        \item v1.9.0: pruning/search nâng cao.
-        \item \textbf{Tăng tổng cộng +779 ELO}.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.60\textwidth}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}[x=0.74cm,y=0.0027cm]
-          \fill[hustred1] (0,1400) -- (0,1465) -- (1,1460) -- (2,1567) -- (3,1572) --
-          (4,1612) -- (5,1854) -- (6,1916) -- (7,1936) -- (8,2027) --
-          (9,2189) -- (10,2244) -- (10,1400) -- cycle;
-          \draw[->, thick] (0,1400) -- (10.7,1400) node[right, font=\scriptsize]{version};
-          \draw[->, thick] (0,1400) -- (0,2320) node[above, font=\scriptsize]{ELO};
-          \foreach \y in {1500,1700,1900,2100,2300} {
-            \draw[black!20] (0,\y) -- (10,\y);
-            \node[left,font=\tiny] at (0,\y) {\y};
-          }
-          \draw[hustred, very thick]
-          (0,1465) -- (1,1460) -- (2,1567) -- (3,1572) -- (4,1612) --
-          (5,1854) -- (6,1916) -- (7,1936) -- (8,2027) -- (9,2189) -- (10,2244);
-          \foreach \x/\y in {0/1465,2/1567,5/1854,8/2027,9/2189,10/2244} {
-            \fill[hustred] (\x,\y) circle (2.4pt);
-          }
-          \node[font=\tiny, above right] at (0,1465) {v1.0};
-          \node[font=\tiny, above] at (2,1567) {v1.2};
-          \node[font=\tiny, above] at (5,1854) {v1.5};
-          \node[font=\tiny, above] at (8,2027) {v1.7};
-          \node[font=\tiny, above] at (9,2189) {v1.8};
-          \node[font=\tiny, above] at (10,2244) {v1.9};
-
-          \node[redbox, text width=2.3cm] at (8.2,1600) {+779 Elo};
-        \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
+% ================= FRAME 2 =================
+\begin{frame}{Hiệu năng và Tốc độ sinh nước đi}
+    \begin{itemize}
+        \item<1-> \textbf{Kiến trúc tối ưu:} Sử dụng bàn cờ \textit{Bitboard} và kỹ thuật tra cứu bảng tĩnh (\textit{Magic Bitboards}).
+        \item<2-> \textbf{Đo lường thực tế:}
+        \begin{itemize}
+            \item \textbf{Khối lượng:} Duyệt hơn \textbf{5.3 tỷ} trạng thái (độ sâu $d=6$).
+            \item \textbf{Thời gian:} Hoàn thành trong vỏn vẹn \textbf{54.65 giây} (Intel Core i9-13900HX).
+        \end{itemize}
+        \item<3-> \textbf{Tốc độ trung bình:}
+        \begin{center}
+            \Large \textbf{\textcolor{blue}{$\approx 98.68$ triệu nút / giây}}
+        \end{center}
+        \item<4-> \textbf{Kết luận:} Loại bỏ hoàn toàn vòng lặp quét tia truyền thống, thay bằng phép toán thao tác bit song song trên thanh ghi 64-bit $\rightarrow$ Đạt hiệu năng cực hạn.
+    \end{itemize}
 \end{frame}
 
-\begin{frame}{Gauntlet v1.9.0}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.34\textwidth}
-      \begin{itemize}
-        \item 3000 ván đấu với Fairy-Stockfish nhiều mức Elo.
-        \item Tỉ số: \textbf{+2597, =65, -338} (Thắng, Hòa, Thua).
-        \item Tổng điểm: \textbf{87.6\%} (LOS 100\%).
-        \item ELO ước lượng: \textbf{2244 $\pm$ 10.9}.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.62\textwidth}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}[x=0.075cm,y=0.64cm]
-          \foreach \x in {0,25,50,75,100} {
-            \draw[black!15] (\x,0.45) -- (\x,6.55);
-            \node[font=\tiny] at (\x,0.05) {\x\%};
-          }
-          \foreach \lab/\score/\y in {
-            FS-1200/98.8/6,
-            FS-1400/99.4/5,
-            FS-1600/98.0/4,
-            FS-1800/95.3/3,
-            FS-2000/77.9/2,
-            FS-2200/56.5/1
-          } {
-            \node[left, font=\scriptsize] at (0,\y) {\lab};
-            \draw[fill=black!8, draw=black!25] (0,\y-0.18) rectangle (100,\y+0.18);
-            \draw[fill=hustred1, draw=hustred, thick] (0,\y-0.18) rectangle (\score,\y+0.18);
-            \node[right, font=\scriptsize, text=hustred] at (\score,\y) {\score\%};
-          }
-        \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
+% ================= FRAME 3 =================
+\begin{frame}{Quy trình tự động đánh giá sức mạnh chơi cờ}
+    \begin{itemize}
+        \item<1-> \textbf{Hệ thống kiểm thử:} Sử dụng các scripts (\texttt{run\_match.py}, \texttt{run\_gauntlet.py}) và trình quản lý giải đấu \texttt{sylvan-cli} qua giao thức UCI.
+    \end{itemize}
+    
+    \vspace{0.2cm}
+    \onslide<2->{
+        \begin{figure}[htbp]
+            \centering
+            \begin{tikzpicture}[
+                scale=0.7, transform shape,
+                >=latex, font=\sffamily,
+                db blue/.style={cylinder, draw=blue!70!black, thick, fill=blue!15, text=blue!70!black, shape border rotate=90, aspect=0.25,minimum height=2.6cm, align=center},
+                db green/.style={cylinder, draw=green!60!black, thick, fill=green!20, text=green!60!black, shape border rotate=90, aspect=0.25,minimum height=2.6cm, align=center},
+                proc teal/.style={rectangle, draw=teal!80!black, thick, fill=teal!20, text=teal!80!black, minimum height=1.6cm, align=center},
+                eng purple/.style={rectangle, draw=purple!70!black, thick, fill=purple!15, text=purple!70!black, minimum height=1.5cm, align=center},
+                labelbox/.style={rectangle, fill=gray!25, text=black!80, inner sep=4pt, font=\small\sffamily}
+            ]
+            \node[db blue] (book) at (-4.5, 0) {Opening\\Book};
+            \node[proc teal] (sylvan) at (0, 0) {Sylvan CLI\\Tournament};
+            \node[eng purple] (lingine) at (6.5, 2.5) {Lingine\\v1.9.0};
+            \node[eng purple] (fairy) at (6.5, 0) {Fairy-\\Stockfish};
+            \node[db green] (db) at (6.5, -2.5) {Result DB\\PGN};
+            
+            \node[labelbox] (lbl_fen) at (-2.5, 0) {Cấp FEN};
+            \node[labelbox] (lbl_giao1) at (3.2, 2.5) {UCI};
+            \node[labelbox] (lbl_giao2) at (3.2, 0) {UCI};
+            \node[labelbox] (lbl_luu) at (3.2, -2.5) {Lưu kết quả};
+            
+            \draw[thick] (book.east) -- (lbl_fen.west);
+            \draw[->, thick] (lbl_fen.east) -- (sylvan.west);
+            \draw[thick] ([yshift=0.4cm]sylvan.east) -- (lbl_giao1.west);
+            \draw[->, thick] (lbl_giao1.east) -- (lingine.west);
+            \draw[thick] (sylvan.east) -- (lbl_giao2.west);
+            \draw[->, thick] (lbl_giao2.east) -- (fairy.west);
+            \draw[thick] ([yshift=-0.4cm]sylvan.east) -- (lbl_luu.west);
+            \draw[->, thick] (lbl_luu.east) -- (db.west);
+            \end{tikzpicture}
+        \end{figure}
+    }
 \end{frame}
 
-\begin{frame}{Các mốc cải tiến chính}
-  \centering
-  \begin{fitdiagram}
-    \begin{tikzpicture}[x=1.75cm,y=0.95cm]
-      \draw[->, thick] (-0.2,0) -- (6.1,0);
-      \foreach \x/\ver/\elo/\txt in {
-        0/{v1.0}/{1465}/{Bitboard\\AB},
-        1/{v1.2}/{1567}/{TT},
-        2/{v1.5}/{1854}/{PST},
-        3/{v1.7}/{2027}/{PVS\\LMR/NMP},
-        4/{v1.8}/{2189}/{Mobility\\Texel},
-        5/{v1.9}/{2244}/{RFP/FP\\LMP/IIR}
-      } {
-        \draw[hustred, thick] (\x,0) -- (\x,0.25);
-        \node[redbox, text width=1.05cm] at (\x,0.72) {\ver};
-        \node[font=\bfseries, text=hustred] at (\x,1.32) {\elo};
-        \node[darkbox, text width=1.34cm, minimum height=1.0cm, font=\scriptsize] at (\x,2.15) {\txt};
-      }
-      \draw[hustred, very thick, -Latex] (0,3.05) -- (5,3.05)
-      node[midway, above, font=\small, text=hustred] {biểu diễn tốt hơn $\rightarrow$ search sâu hơn $\rightarrow$ evaluation chính xác hơn};
+% ================= FRAME 4 =================
+\begin{frame}{3 Giai đoạn Kiểm định \& Cấu hình đấu}
+    \textbf{Kiểm định nghiêm ngặt qua 3 giai đoạn độc lập:}
+    \vspace{0.2cm}
+    \begin{enumerate}
+        \item<1-> \textbf{Gauntlet Performance:} Đấu 3000 ván với 6 cấp độ \textit{Fairy-Stockfish} (ELO từ 1200 đến 2200). Đổi màu quân luân phiên để triệt tiêu lợi thế đi trước.
+        \item<2-> \textbf{Neighbor Match:} Đấu 1000 ván với phiên bản tiền nhiệm ($N$ vs $N-1$) đo lường mức cải tiến ELO trực tiếp.
+        \item<3-> \textbf{Base Match:} Đấu 1000 ván với bản sơ khai ($1.0.0$) đo tổng tiến bộ lũy kế.
+    \end{enumerate}
+    
+    \vspace{0.4cm}
+    \onslide<4->{
+        \textbf{Cấu hình môi trường:}
+        \begin{itemize}
+            \item \textit{Kiểm soát thời gian:} 3 giây + 0.03 giây/nước.
+            \item \textit{Đa dạng hóa:} Dùng \textit{Masters Opening Database} (40,711 ván) tạo thế cờ ngẫu nhiên, tránh lặp ván.
+        \end{itemize}
+    }
+\end{frame}
+
+% ================= FRAME 6 =================
+\begin{frame}{Bảng tổng hợp tiến trình 15 phiên bản}
+  \vspace{-0.75cm}
+    \begin{table}[H]
+        \centering
+        \resizebox{\textwidth}{!}{ % Tự động bóp nhỏ bảng để vừa khung hình
+        \begin{tabular}{ccccp{7.5cm}}
+            \toprule
+            \textbf{Phiên bản} & \textbf{ELO uớc lượng} & \textbf{Diff/Trước} & \textbf{Diff/Gốc} & \textbf{Các cải tiến cốt lõi} \\
+            \midrule
+            1.0.0  & 1465 ± 8.9 & N/A & N/A & Sinh nước đi Bitboard, Negamax Fail-soft, Quiescence Search. \\
+            \pause
+            1.1.0  & 1460 ± 8.8 & -9.0 & -2.1 & Hoàn thiện luật cờ tướng (Cản Mã, Tướng lộ mặt). \\
+            \pause
+            1.2.0  & 1567 ± 8.7 & +96.2 & +85.0 & Transposition Table (TT). \\
+            \pause
+            1.3.0  & 1572 ± 8.7 & +20.2 & +100.3 & Aspiration Window. \\
+            \pause
+            1.4.0  & 1612 ± 8.6 & +69.4 & +145.5 & Killer Moves, History Heuristics. \\
+            \pause
+            1.5.0  & 1854 ± 8.7 & +358.8 & +556.7 & Piece-Square Tables (PST). \\
+            \pause
+            1.6.0  & 1916 ± 8.8 & +80.6 & +640.0 & Search Extensions (Check, Singular, One-Reply). \\
+            1.6.1 - 1.6.5  & ~ 1920 & Biến động & ~ 600 & Tái cấu trúc, tối ưu hóa TT trong Q-Search. \\
+            \pause
+            1.7.0  & 2027 ± 9.2 & +152.2 & +536.9 & Tapered Eval, PVS, LMR, Null Move Pruning. \\
+            \pause
+            1.8.0  & 2189 ± 10.3 & +237.6 & +619.4 & Mobility/Defender Bonus, Texel Tuning. \\
+            \pause
+            1.9.0  & 2244 ± 10.9 & +127.4 & +651.3 & RFP, Futility Pruning, LMP, IIR. \\
+            \bottomrule
+        \end{tabular}
+        }
+        \caption{Tiến trình phát triển và tăng trưởng sức mạnh ELO}
+    \end{table}
+\end{frame}
+
+
+% ================= FRAME 7 =================
+\begin{frame}{Biểu đồ tăng trưởng ELO}
+  \begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[scale=0.8]
+        \begin{axis}[
+            width=\textwidth,
+            height=7cm,
+            xlabel={Phiên bản},
+            ylabel={ELO ước lượng},
+            xlabel style={yshift=-0.3cm},
+            ylabel style={yshift=0.2cm},
+            xtick={1,2,...,15},
+            xticklabels={1.0,1.1,1.2,1.3,1.4,1.5,1.6.0,1.6.1,1.6.2,1.6.3,1.6.4,1.6.5,1.7,1.8,1.9},
+            xticklabel style={rotate=45, anchor=east, font=\footnotesize},
+            ytick={1400,1600,1800,2000,2200},
+            yticklabel style={font=\footnotesize},
+            ymin=1400, ymax=2350,
+            grid=major,
+            grid style={dashed, gray!30},
+            legend style={at={(0.02,0.98)}, anchor=north west, font=\footnotesize},
+        ]
+        
+        % Thay đổi sang mark=square* (hình chữ nhật/vuông) và thêm error bars
+        \addplot[
+            blue, thick, 
+            mark=square*, mark options={fill=blue, scale=0.8},
+            error bars/.cd,
+            y dir=both, y explicit,
+            error bar style={line width=1pt, blue!80},
+            error mark=-
+        ] coordinates {
+            (1,1465)  +- (0,8.9)
+            (2,1460)  +- (0,8.8)
+            (3,1567)  +- (0,8.7)
+            (4,1572)  +- (0,8.7)
+            (5,1612)  +- (0,8.6)
+            (6,1854)  +- (0,8.7)
+            (7,1916)  +- (0,8.8)
+            (8,1919)  +- (0,8.8)
+            (9,1912)  +- (0,8.8)
+            (10,1902) +- (0,8.8)
+            (11,1920) +- (0,8.8)
+            (12,1936) +- (0,8.9)
+            (13,2027) +- (0,9.2)
+            (14,2189) +- (0,10.3)
+            (15,2244) +- (0,10.9)
+        };
+        \addlegendentry{ELO $\pm$ Sai số}
+        
+        % Milestone annotations (đẩy nhẹ sang left để không đè lên thanh sai số)
+        \node[above left, font=\footnotesize, text=red] at (axis cs:6,1854) {+358 PST};
+        \node[above left, font=\footnotesize, text=red] at (axis cs:14,2189) {+237 Texel};
+        
+        \end{axis}
     \end{tikzpicture}
-  \end{fitdiagram}
+    \caption{Biểu đồ tăng trưởng ELO của Lingine qua 15 phiên bản}
+    \label{fig:elo_chart}
+\end{figure}
 \end{frame}
-
-

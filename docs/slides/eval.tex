@@ -1,177 +1,166 @@
 \section{Hàm Đánh Giá}
 
-\begin{frame}{Vì sao cần heuristic?}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.50\textwidth}
-      Search không thể duyệt tới kết thúc ván trong mọi lượt.
-      \begin{itemize}
-        \item Cây trò chơi bùng nổ theo depth.
-        \item Node lá cần được lượng hóa bằng điểm số.
-        \item Điểm dương nghiêng về Đỏ, điểm âm nghiêng về Đen.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.46\textwidth}
-      \begin{block}{Heuristic}
-        \[
-          \eval(S)\approx \text{lợi thế của Đỏ so với Đen}
-        \]
-      \end{block}
-    \end{column}
-  \end{columns}
+\begin{frame}{Vì sao cần hàm đánh giá?}
+    Search không thể duyệt tới kết thúc ván trong mọi lượt.
+    \begin{itemize}[<+->]
+      \item Cây trò chơi bùng nổ theo cấp số nhân.
+      \item Node lá cần được lượng hóa bằng điểm số.
+      \item Điểm dương nghiêng về Đỏ, điểm âm nghiêng về Đen.
+    \end{itemize}
 \end{frame}
 
-\begin{frame}{Thành phần evaluation}
+\begin{frame}{Hàm đánh giá thế cờ}
   \centering
-  \begin{fitdiagram}
-    \begin{tikzpicture}[node distance=0.55cm]
-      \node[flowbox, text width=2.45cm] (mat) {Material};
-      \node[flowbox, text width=2.45cm, right=0.35cm of mat] (pst) {Piece-Square\\Tables};
-      \node[flowbox, text width=2.45cm, right=0.35cm of pst] (mob) {Mobility};
-      \node[flowbox, text width=2.45cm, right=0.35cm of mob] (def) {Defender\\Bonus};
-      \node[redbox, text width=3.4cm, below=1.0cm of pst] (tap) {Tapered Evaluation};
-      \node[goodbox, text width=3.4cm, right=0.6cm of tap] (score) {Score};
-      \draw[arrow] (mat) -- (tap);
-      \draw[arrow] (pst) -- (tap);
-      \draw[arrow] (mob) -- (tap);
-      \draw[arrow] (def) -- (tap);
-      \draw[arrow] (tap) -- (score);
+  \begin{figure}[htbp]
+    \centering
+    \begin{tikzpicture}[
+        % Định nghĩa phong cách chung cho các khối
+        scale=0.8,
+        transform shape,
+        comp/.style={rectangle, draw, fill=blue!12, minimum width=2.8cm, minimum height=0.8cm, rounded corners, align=center},
+        sum/.style={circle, draw, fill=orange!20, minimum size=0.8cm, font=\normalsize},
+        result/.style={rectangle, draw, fill=green!15, minimum width=3cm, minimum height=0.8cm, rounded corners,  align=center},
+        arrow/.style={-latex, thick}
+    ]
+        % --- KHỐI ĐẦU VÀO (Xếp dọc theo cột bên trái) ---
+        \node[comp] (pst) {PST Scores};
+        \node[comp, right=0.3cm of pst] (mat) {Material Values};
+        \node[comp, right=0.3cm of mat] (mob) {Mobility Bonus};
+        \node[comp, right=0.3cm of mob] (def) {Defender Bonus};
+
+        \pause
+        
+        % --- KHỐI XỬ LÝ TRUNG GIAN ---
+        % Bộ cộng nằm ngang với nhóm đầu vào
+        \node[sum] at ([yshift=-2cm]$(mat)!0.5!(mob)$) (plus) {$+$};
+        % --- VẼ ĐƯỜNG NỐI LUỒNG DỮ LIỆU ---
+        % Đường nối từ các thành phần vào bộ cộng
+        \draw[arrow] (pst) |- (plus);
+        \draw[arrow] (mat) -- (plus);
+        \draw[arrow] (mob) -- (plus);
+        \draw[arrow] (def) |- (plus);
+
+        \pause
+        
+        % --- KHỐI KẾT QUẢ ---
+        % Điểm Tapered nằm ngang hàng với bộ cộng
+        \node[result, below=1cm of plus] (tapered) {TaperedScore};
+        % Đường nối tính toán điểm Tapered
+        \draw[arrow] (plus) -- (tapered);
+
+        % Giai đoạn cờ nằm phía dưới bộ cộng
+        \node[comp, fill=yellow!15, left=1.2cm of tapered] (phase) {Phase = $\sum$PieceWeight};
+        \draw[arrow] (phase) -- (tapered);
+        
+        \pause
+        % Điểm số cuối cùng nằm ở tận cùng bên phải
+        \node[result, fill=red!10, below=1.7cm of tapered] (final) {Final Score};
+        
+        % Đường nối ra kết quả cuối cùng kèm công thức nội suy
+        \draw[arrow] (tapered) -- node[left, font=\large, midway] {$\frac{MG \times \varphi + EG \times (32-\varphi)}{32}$} (final);
+        
     \end{tikzpicture}
-  \end{fitdiagram}
+    \caption{Sơ đồ pipeline hàm đánh giá thế cờ trong Lingine}
+    \label{fig:eval_pipeline}
+\end{figure}
 \end{frame}
 
-\begin{frame}{Defender bonus}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Sĩ/Tượng giữ cung tạo cấu trúc phòng thủ.
-        \item Feature này không phải vật chất thuần túy.
-        \item Điểm cộng được tách theo phase trung cuộc/tàn cuộc.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-05a-defender-bonus.png}}
-      \figcaption{5.a}{Cấu trúc phòng thủ.}
-    \end{column}
-  \end{columns}
-\end{frame}
+% FRAME 1: TỔNG QUAN & DỮ LIỆU
+\begin{frame}{Texel Tuning}
+    \textbf{Mục tiêu:} Thay thế thiết lập trọng số thủ công bằng thuật toán \textit{Học máy Giám sát} (Hồi quy Logistic) trên hàng triệu thế cờ.
+    \definecolor{techblue}{RGB}{0, 150, 255}
+\definecolor{accentorange}{RGB}{255, 110, 0}
+    \pause
+    
+    \vspace{0.5cm}
+    \begin{center}
+        \textbf{Quy trình Sinh \& Tiền xử lý Dữ liệu}
+        
+        \vspace{0.2cm}
+        \begin{tikzpicture}[
+            node distance=0.5cm and 0.6cm,
+            box/.style={draw=techblue, thick, rectangle, rounded corners, minimum height=0.8cm, align=center, fill=gray!10, text=black, font=\small},
+            process/.style={draw=accentorange, thick, rectangle, minimum height=0.8cm, align=center, fill=accentorange!10, text=black, font=\small}
+        ]
+            % Sources
+            \node[box] (masters) {Đại sư\\(40.7K ván)};
+            \node[box] (fairy) [below=of masters, yshift=0.2cm] {Tự đấu\\(100K ván)};
+            
+            \pause
+            % Filters
+            \node[process] (filter) [right=of masters, yshift=-0.5cm] {\textbf{Lọc nhiễu}\\(Bỏ chiếu, bắt quân)};
+            \draw[->, >=Stealth, thick] (masters.east) -- (filter.west);
+            \draw[->, >=Stealth, thick] (fairy.east) -- (filter.west);
 
-\begin{frame}{Mobility}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.42\textwidth}
-      \begin{itemize}
-        \item Quân hoạt động tốt thường có nhiều nước hữu ích.
-        \item Mobility dựa trên tập move hoặc attack.
-        \item Feature này giúp phân biệt hai thế cờ cùng vật chất.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.54\textwidth}
-      \centering
-      \includegraphics[height=0.68\textheight]{\figpath{figure-05b-mobility.png}}
-      \figcaption{5.b}{Không gian hoạt động của quân.}
-    \end{column}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Tapered evaluation}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.48\textwidth}
-      \begin{itemize}
-        \item Trung cuộc và tàn cuộc cần trọng số khác nhau.
-        \item Lingine pha trộn theo \code{phase}.
-        \item Xe, Pháo, Mã ảnh hưởng phase nhiều hơn Tốt/Tướng.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      \begin{block}{Công thức}
-        \[
-          Score=\frac{MG\cdot phase+EG\cdot(32-phase)}{32}
-        \]
-      \end{block}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}
-          \draw[fill=hustred1, draw=hustred, thick] (0,0) rectangle (5,0.5);
-          \draw[fill=hustyellow, draw=lingineGold, thick] (5,0) rectangle (8,0.5);
-          \node[below] at (0,0) {\scriptsize tàn cuộc};
-          \node[below] at (8,0) {\scriptsize trung cuộc};
-          \node[above] at (5,0.5) {\scriptsize phase};
+            \pause
+            \node[process] (label) [right=of filter] {\textbf{Gán nhãn góc nhìn}\\$R_i \in \{1.0, 0.5, 0.0\}$};
+            \draw[->, >=Stealth, thick] (filter.east) -- (label.west);
+            
+            \pause
+            % Output
+            \node[box, draw=green!70!black, fill=green!5] (output) [right=of label] {\textbf{Tập dữ liệu}\\4.78M thế cờ};
+            % Arrows
+            \draw[->, >=Stealth, thick] (label.east) -- (output.west);
         \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
+    \end{center}
 \end{frame}
 
-\begin{frame}{Texel tuning}
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.43\textwidth}
-      \begin{itemize}
-        \item 40.711 ván đại sư.
-        \item 100.000 ván Fairy-Stockfish tự đấu.
-        \item 4.783.928 thế cờ sau lọc.
-        \item Tối ưu MSE bằng Adam.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.53\textwidth}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}[node distance=0.55cm]
-          \node[flowbox] (data) {Masters +\\self-play};
-          \node[flowbox, below=of data] (filter) {Lọc nhiễu\\gán nhãn};
-          \node[flowbox, below=of filter] (loss) {MSE +\\Sigmoid};
-          \node[flowbox, below=of loss] (adam) {Adam};
-          \node[redbox, below=of adam] (params) {Eval params};
-          \draw[arrow] (data) -- (filter);
-          \draw[arrow] (filter) -- (loss);
-          \draw[arrow] (loss) -- (adam);
-          \draw[arrow] (adam) -- (params);
-        \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
+% FRAME 2: TOÁN HỌC & TRIỂN KHAI
+\begin{frame}{Mô hình Toán học \& Tối ưu hóa}
+    Mục tiêu: Tối thiểu hóa sai số toàn phương trung bình (\textbf{MSE}) để tìm bộ tham số $\vec{\theta}$:
+    \vspace{-0.2cm}
+    \begin{equation*}
+        \text{MSE}(\vec{\theta}) = \frac{1}{N} \sum_{i=1}^{N} \left( R_i - \sigma\left(E(S_i, \vec{\theta})\right) \right)^2 \quad \text{với} \quad \sigma(x) = \frac{1}{1 + 10^{-\frac{K \cdot x}{400}}}
+    \end{equation*}
+
+    Trong đó:
+\begin{itemize}
+    \item<2-> $R_i \in \{1.0, 0.5, 0.0\}$ là kết quả thực tế của ván đấu chứa thế cờ thứ $i$.
+    \item<3-> $E(S_i, \vec{\theta})$ là hàm đánh giá tĩnh thế cờ $S_i$ bằng bộ tham số $\vec{\theta}$.
+    \item<4-> $\sigma(x)$ là hàm kích hoạt Sigmoid có nhiệm vụ ánh xạ điểm số cờ sang $[0, 1]$ đại diện cho cơ hội chiến thắng dự kiến.
+\end{itemize}
+
+\onslide<5->{\begin{block}{Giải pháp}
+Sử dụng các thuật toán tối ưu để tìm lời giải cho bài toán trên, Lingine đã sử dụng Adam Optimizer.
+\end{block}}
+\vspace{0.5cm}
+
 \end{frame}
 
-\begin{frame}{Hiệu quả tuning}
-  \small
-  \begin{columns}[T,totalwidth=\textwidth]
-    \begin{column}{0.46\textwidth}
-      \begin{itemize}
-        \item Hệ số $K$ tự dịch chuyển về vùng khớp dữ liệu tốt hơn.
-        \item MSE giảm từ $0.0620$ xuống $0.0551$ (giảm 11.18\%).
-        \item Đấu máy kiểm chứng: \textbf{719 thắng, 156 hòa, 125 thua}.
-        \item Điểm Elo kiểm thử tăng thêm: \textbf{+237.6 Elo}.
-      \end{itemize}
-    \end{column}
-    \begin{column}{0.50\textwidth}
-      \centering
-      \begin{fitdiagram}
-        \begin{tikzpicture}[x=0.78cm,y=0.72cm]
-          \node[font=\bfseries, text=hustred] at (2.8,3.5) {Loss tuning};
-          \draw[->, thick] (0,0) -- (6.2,0);
-          \draw[fill=black!12, draw=black!45] (0,2.45) rectangle (3.0,2.9);
-          \draw[fill=hustred1, draw=hustred, thick] (0,1.7) rectangle (5.35,2.15);
-          \node[left, font=\scriptsize] at (0,2.68) {Trước};
-          \node[left, font=\scriptsize] at (0,1.93) {Sau};
-          \node[right, font=\scriptsize] at (3.0,2.68) {$K=0.233$};
-          \node[right, font=\scriptsize, text=hustred] at (5.35,1.93) {$K=0.549$};
-          \draw[hustred, very thick, -Latex] (1.2,0.85) -- (4.9,0.85)
-          node[midway, above, font=\scriptsize] {MSE giảm 11.18\%};
-          \node[darkbox, text width=2.2cm] at (0.8,0.25) {$0.0620$};
-          \node[redbox, text width=2.2cm] at (5.2,0.25) {$0.0551$};
-
-          \node[font=\bfseries, text=hustred] at (2.8,-1.0) {Match kiểm chứng};
-          \draw[fill=hustred1, draw=hustred, thick] (0,-1.75) rectangle (4.95,-1.25);
-          \draw[fill=black!12, draw=black!45, thick] (4.95,-1.75) rectangle (6.02,-1.25);
-          \draw[fill=black!35, draw=black!55, thick] (6.02,-1.75) rectangle (6.88,-1.25);
-          \node[font=\scriptsize] at (2.47,-1.5) {719};
-          \node[font=\scriptsize] at (5.49,-1.5) {156};
-          \node[font=\scriptsize, text=white] at (6.45,-1.5) {125};
-          \node[redbox, text width=2.3cm] at (8.5,-0.35) {+237.6 Elo};
-        \end{tikzpicture}
-      \end{fitdiagram}
-    \end{column}
-  \end{columns}
+% FRAME 3: KẾT QUẢ & THỰC CHIẾN
+\begin{frame}{Kết quả Hội tụ \& Hiệu năng Thực chiến}
+    \begin{columns}[T]
+        \begin{column}{0.3\textwidth}
+            {\small
+            \begin{tabular}{lcc}
+                \toprule
+                \textbf{Giai đoạn} & \textbf{Hệ số $K$} & \textbf{MSE} \\ \midrule
+                Khởi tạo & $0.233$ & $0.0620$ \\ 
+                \textbf{Hội tụ} & $\mathbf{0.549}$ & $\mathbf{0.0550}$ \\
+                \bottomrule
+            \end{tabular}
+            }
+            \pause
+            \begin{alertblock}{Đánh giá}
+                Hàm mất mát MSE giảm \textbf{>11\%}. Bộ tham số tự hiệu chỉnh chính xác theo dữ liệu lớn.
+            \end{alertblock}
+        \end{column}
+        \pause
+        \begin{column}{0.5\textwidth}
+            {\small
+            \begin{table}
+                \begin{tabular}{lcc}
+                    \toprule
+                    \textbf{Chỉ số} & \textbf{Lingine 1.8.0} & \textbf{Lingine 1.7.0} \\ \midrule
+                    W/D/L & \textbf{719} / 156 / 125 & 125 / 156 / 719 \\ 
+                    Win Rate & $\mathbf{79.7\%}$ & $20.3\%$ \\ \midrule
+                    Elo Diff & $\mathbf{+237.6}$ & $-237.6$ \\ 
+                    LOS & $\mathbf{100.0\%}$ & — \\
+                    \bottomrule
+                \end{tabular}
+                \caption{Lingine 1.8.0 vs Lingine 1.7.0}
+            \end{table}
+            }
+        \end{column}
+    \end{columns}
 \end{frame}
-
-
-
