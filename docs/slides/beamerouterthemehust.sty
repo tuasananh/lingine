@@ -1,8 +1,7 @@
 \ProvidesPackage{beamerouterthemehust}[HUST outer theme]
+\RequirePackage{etoolbox} % Required for \BeforeBeginEnvironment
 
 \mode<presentation>
-
-\newlength{\titlepagepadding}
 
 % images
 % 0.261 for 169, 0.282 for 43
@@ -10,88 +9,70 @@
 % the relative left edge to the "one love one future" text
 \newlength{\logoheight}
 \setlength{\logoheight}{0.15\paperheight}
-\pgfdeclareimage[height=\logoheight]{logo}{res/logo-169t.png}
-\iflongslide
-	\newcommand{\titlepagetextwidth}{0.8\paperwidth}
-	\pgfdeclareimage[width=0.261\paperwidth]{logo}{./res/logo-169t.png}
-	\pgfdeclareimage[width=\paperwidth]{framebg}{./res/bg-169-4.png}
-	\pgfdeclareimage[width=\paperwidth]{titleframebg}{./res/bg-169-3.png}
-	\pgfdeclareimage[width=\paperwidth]{thankframebg}{./res/bg-169-5.png}
-	\pgfdeclareimage[width=\paperwidth]{textslidebg}{./res/text-slide-169.png}
-	\pgfdeclareimage[width=\paperwidth]{imageslidebg}{./res/image-slide-169.png}
-	\setlength{\titlepagepadding}{0.04431314623338257\paperwidth}
-\else
-	\newcommand{\titlepagetextwidth}{0.7\paperwidth}
-	\pgfdeclareimage[width=0.282\paperwidth]{logo}{./res/logo-169t.png}
-	\pgfdeclareimage[width=\paperwidth]{framebg}{./res/bg-43-4.png}
-	\pgfdeclareimage[width=\paperwidth]{titleframebg}{./res/bg-43-3.png}
-	\pgfdeclareimage[width=\paperwidth]{thankframebg}{./res/bg-43-5.png}
-	\pgfdeclareimage[width=\paperwidth]{textslidebg}{./res/text-slide-43.png}
-	\pgfdeclareimage[width=\paperwidth]{imageslidebg}{./res/image-slide-43.png}
-	% 47.10 / 677
-	\setlength{\titlepagepadding}{0.069423929098966\paperwidth}
-\fi
+\pgfdeclareimage[height=\logoheight]{logo}{res/logo-169.png}
+\newcommand{\titlepagetextwidth}{0.8\paperwidth}
+\pgfdeclareimage[width=0.261\paperwidth]{logo}{./res/logo-169.png}
+\pgfdeclareimage[width=\paperwidth]{framebg}{./res/bg-169-4.png}
+\pgfdeclareimage[width=\paperwidth]{titleframebg}{./res/bg-169-3.png}
+\pgfdeclareimage[width=\paperwidth]{thankframebg}{./res/bg-169-5.png}
+\pgfdeclareimage[width=\paperwidth]{textslidebg}{./res/text-slide-169.png}
+\pgfdeclareimage[width=\paperwidth]{imageslidebg}{./res/image-slide-169.png}
+\pgfdeclareimage[width=\paperwidth]{textsubslidebg}{./res/text-slide-sub-169.png}
 
-
-% DEFAULTS
-
-\newcommand{\frametitlehook}[1]{%
-}
+% --- 2. THE RESET HOOK ---
+% This restores BOTH the background and the footline before every frame
 \BeforeBeginEnvironment{frame}{%
-	\setbeamertemplate{background canvas}{%
-		%\pgfuseimage{textslidebg}
-	}
-
-	\setbeamertemplate{headline}{%
-		\nointerlineskip % get rid of the weird blankspace
-		\newcommand{\ls}{0.05\paperwidth}
-		\usebeamerfont{frametitle}
-		\begin{beamercolorbox}[wd=\paperwidth]{none}
-			\begin{beamercolorbox}[left,leftskip=\ls,wd=0.9\paperwidth,ht=2.25ex,dp=1ex]{frametitle}%
-				\ifx\insertframetitle\empty\else
-					\insertframetitle
-				\fi
-			\end{beamercolorbox}%
-			\begin{beamercolorbox}[center,wd=0.1\paperwidth,ht=2.25ex,dp=1ex]{page number in head/foot}%
-				\insertframenumber{}/\inserttotalframenumber%
-			\end{beamercolorbox}%
-		\end{beamercolorbox}
-		\usebeamerfont{framesubtitle}
-		\ifx\insertframesubtitle\empty
-			\begin{beamercolorbox}[sep=0pt,wd=\paperwidth,ht=2pt,dp=2pt,vmode]{framesubtitle}%
-			\end{beamercolorbox}%
-		\else
-			\begin{beamercolorbox}[left,wd=\paperwidth,ht=2.25ex,dp=1ex,leftskip=\ls]{framesubtitle}%
-				\insertframesubtitle
-			\end{beamercolorbox}%
-		\fi
-		\ifx\insertframetitle\empty
-			\gdef\beamer@frametitle{~}
-		\fi
-	}
-
-	\setbeamertemplate{frametitle}{\vspace{2.25ex}}
-	\setbeamertemplate{footline}{}
-	\setbeamertemplate{navigation symbol}{}
-
-	% END OF BEFORE FRAME
+	\setbeamertemplate{background canvas}{\pgfuseimage{textslidebg}}
+	\setbeamertemplate{footline}[standard] % <-- Prevents [Title] from leaking
 }
 
+% --- GLOBAL TEMPLATE DEFINITIONS ---
+% These stay outside the hook so Beamer can calculate their dimensions properly
+
+\makeatletter
+\setbeamertemplate{frametitle}{%
+	\vspace*{-0.3cm} % <-- Adjust vertical position of the main title
+	{\usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle\par}%
+	% Conditionally add the subtitle if it exists
+	\ifx\insertframesubtitle\@empty\else
+		\vspace*{0.38cm} % <-- Adjust spacing between title and subtitle
+		{\usebeamerfont{framesubtitle}\usebeamercolor[fg]{framesubtitle}\insertframesubtitle\par}%
+	\fi
+}
+\makeatother
+
+\addtobeamertemplate{navigation symbols}{%
+    \vspace{0.1cm}\color{hustred}%
+}{%
+    \hspace{2em}%
+    \usebeamerfont{footline}%
+    \footnotesize % Increased from \Large. Use \LARGE or \Huge if you want it slightly smaller/bigger
+    \raisebox{0.095em}{\insertframenumber}% Adjust the 0.15em value to fine-tune vertical alignment
+    \hspace{2em}%
+}
+
+
+% --- CUSTOM FRAME KEYS ---
 \defbeamertemplate{background canvas}{Title}{%
 	\pgfuseimage{titleframebg}
 }
 
 \makeatletter
 \define@key{beamerframe}{Title}[true]{
-	\setbeamertemplate{background canvas}[Title]
-	\setbeamertemplate{headline}{}
-	\setbeamertemplate{footline}
+    \setbeamertemplate{background canvas}[Title]
+    \setkeys{beamerframe}{plain}%
 }
 \define@key{beamerframe}{Image}[true]{
 	\setbeamertemplate{background canvas}{\pgfuseimage{imageslidebg}}
 }
+% --- NEW ---
+\define@key{beamerframe}{Subtitle}[true]{
+	\setbeamertemplate{background canvas}{\pgfuseimage{textsubslidebg}}
+}
 \makeatother
 
+
+% --- TITLE PAGE TEMPLATE ---
 \setbeamertemplate{title page}{	
 	\nointerlineskip
 	\newlength{\titlepad}
@@ -125,14 +106,9 @@
 		\end{beamercolorbox}
 		\vfill
 		\setbeamercolor{tmp}{fg=hustred2}
-		\begin{beamercolorbox}[wd=\titleareawidth]{tmp}
-			\fontsize{2.25ex}{2.25ex}\selectfont%
-			\textbf{\uppercase{ONE LOVE. ONE FUTURE}}
-		\end{beamercolorbox}%
 		\vspace{\headsep}
 	}
 }
 
 
 \mode<all>
-
