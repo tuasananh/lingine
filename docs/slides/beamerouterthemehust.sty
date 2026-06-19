@@ -46,7 +46,7 @@
 		\nointerlineskip % get rid of the weird blankspace
 		\newcommand{\ls}{0.05\paperwidth}
 		\usebeamerfont{frametitle}
-		\hbox{%
+		\begin{beamercolorbox}[wd=\paperwidth]{none}
 			\begin{beamercolorbox}[left,leftskip=\ls,wd=0.9\paperwidth,ht=2.25ex,dp=1ex]{frametitle}%
 				\ifx\insertframetitle\empty\else
 					\insertframetitle
@@ -55,7 +55,7 @@
 			\begin{beamercolorbox}[center,wd=0.1\paperwidth,ht=2.25ex,dp=1ex]{page number in head/foot}%
 				\insertframenumber{}/\inserttotalframenumber%
 			\end{beamercolorbox}%
-		}%
+		\end{beamercolorbox}
 		\usebeamerfont{framesubtitle}
 		\ifx\insertframesubtitle\empty
 			\begin{beamercolorbox}[sep=0pt,wd=\paperwidth,ht=2pt,dp=2pt,vmode]{framesubtitle}%
@@ -70,7 +70,7 @@
 		\fi
 	}
 
-	\setbeamertemplate{frametitle}{}
+	\setbeamertemplate{frametitle}{\vspace{2.25ex}}
 	\setbeamertemplate{footline}{}
 	\setbeamertemplate{navigation symbol}{}
 
@@ -135,3 +135,4 @@
 
 
 \mode<all>
+
