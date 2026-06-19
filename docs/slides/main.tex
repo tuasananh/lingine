@@ -1,39 +1,75 @@
-\documentclass[aspectratio=169,t]{beamer}
-
-\usepackage{iftex}
-\ifPDFTeX
-\usepackage[utf8]{inputenc}
-\usepackage[T5]{fontenc}
-\usepackage[vietnamese]{babel}
-\else
-\usepackage{fontspec}
+\documentclass[aspectratio=169]{beamer}
+\usepackage{tikz}
+\usepackage{calc}
 \usepackage{polyglossia}
 \setmainlanguage{vietnamese}
-\IfFontExistsTF{DejaVu Sans}{\setsansfont{DejaVu Sans}}{}
-\IfFontExistsTF{DejaVu Serif}{\setmainfont{DejaVu Serif}}{}
-\IfFontExistsTF{DejaVu Sans Mono}{\setmonofont{DejaVu Sans Mono}}{}
-\fi
+\usepackage{amsthm,amsmath,amssymb}
+\usepackage{subcaption}
+\setbeamertemplate{theorems}[numbered]
+%% TYPESET
+\makeatletter
+\newcommand{\leqnomode}{\tagsleft@true}
+\newcommand{\reqnomode}{\tagsleft@false}
+\makeatother
+\let\Mathcal\mathcal
+\usepackage{dutchcal}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\abs}[1]{\left\lvert#1\right\rvert}
+\newcommand{\gr}{\operatorname{gr}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\toto}{\rightrightarrows}%
+\newcommand{\F}{\Mathcal{F}}%
+\newcommand{\K}{\mathbb{K}}%
+\newcommand{\R}{\mathbb{R}}%
+\def\C{\mathbb{C}}%
+\newcommand{\dom}{\operatorname{dom}}%
+% \newcommand{\ker}{\operatorname{ker}}% already defined
+\newcommand{\im}{\operatorname{im}}%
+\newcommand{\g}{\mathcal{g}}%
+\global\long\def\MP{\text{mp}}%
+
+\newcommand{\Image}[1]{%
+	\sbox0{\includegraphics[height=0.65\paperheight]{#1}}%
+	\ifdim\wd0 < \textwidth
+	\includegraphics[height=0.65\paperheight]{#1}%
+	\else
+	\includegraphics[width=\textwidth]{#1}%
+	\fi%
+}
+
+\newif\iffirsttoc
+\firsttoctrue
+\AtBeginSubsection[]
+{
+    \begin{frame}
+        \frametitle{Mục lục}  
+        \iffirsttoc
+            \tableofcontents
+            \global\firsttocfalse
+        \else
+            \tableofcontents[currentsection,
+            % hideothersubsections,
+            subsectionstyle=show/shaded/hide,
+            subsubsectionstyle=show/show/show/hide
+            ]
+        \fi
+    \end{frame} 
+}
+\setbeamertemplate{caption}[numbered]
+
+\usetheme{hust}
 
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,decorations.pathreplacing}
 \usepackage{booktabs}
 \usepackage{array}
+% Định nghĩa cột mới tự động canh lề trái, tự giãn độ rộng và thêm \hspace{0pt} để sửa lỗi baseline của \onslide
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash\hspace{0pt}}p{#1}}
 \usepackage{graphicx}
 \usepackage{adjustbox}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{caption}
-
-
-\usetheme{hust}
-\setbeamertemplate{caption}[numbered]
-
-% Tự động chèn mục lục trước mỗi section và highlight section hiện tại
-\AtBeginSection[]{
-  \begin{frame}{Mục lục}
-    \tableofcontents[currentsection]
-  \end{frame}
-}
 
 \definecolor{lingineInk}{HTML}{231F20}
 \definecolor{lingineGreen}{HTML}{1B7F3A}
@@ -42,14 +78,10 @@
 
 \newcommand{\code}[1]{\texttt{\small #1}}
 \newcommand{\figpath}[1]{res/figures/#1}
-\newcommand{\figcaption}[2]{%
-  \par\smallskip
-  {\centering\footnotesize\textcolor{hustred}{Hình #1:} #2\par}%
-}
 \newenvironment{fitdiagram}[1][0.94\linewidth]{%
-  \par\noindent\begin{center}\begin{adjustbox}{max width=#1,max totalheight=0.70\textheight}%
+  \par\noindent\centering\begin{adjustbox}{max width=#1,max totalheight=0.6\textheight}%
     }{%
-  \end{adjustbox}\end{center}\par%
+  \end{adjustbox}\par%
   }
 \newcommand{\actions}{\mathcal{A}}
 \newcommand{\eval}{\mathrm{Eval}}
@@ -65,7 +97,9 @@
 
 \title{Lingine}
 \subtitle{\textbf{Kỳ thủ Cờ Tướng nhân tạo sử dụng tìm kiếm đối kháng}}
-\author{Trần Tuấn Anh -- 202416124\\Lê Thành Trung -- 202400076\\Bùi Tiến Dũng -- 202416167}
+\author[Anh, Trung \& Dũng]{Trần Tuấn Anh -- 202416124\\
+\and Lê Thành Trung -- 202400076 \\
+\and Bùi Tiến Dũng -- 202416167}
 \date{Hà Nội, \today}
 
 \begin{document}
@@ -73,7 +107,6 @@
 \begin{frame}[noframenumbering,Title]
   \maketitle
 \end{frame}
-
 
 \begin{frame}{Mục lục}
   \tableofcontents
