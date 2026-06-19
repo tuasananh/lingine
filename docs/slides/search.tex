@@ -1,0 +1,256 @@
+
+\section{Tìm Kiếm}
+
+\begin{frame}{Negamax Alpha-Beta}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.42\textwidth}
+      \[
+        V(s)=\max_{a\in\actions(s)} -V(Result(s,a))
+      \]
+      \begin{itemize}
+        \item Negamax gộp MAX/MIN bằng đổi dấu.
+        \item Alpha-Beta cắt nhánh không ảnh hưởng quyết định cuối.
+        \item Fail-soft trả về bound chính xác hơn.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[level distance=0.95cm,
+          level 1/.style={sibling distance=3.0cm},
+          level 2/.style={sibling distance=1.35cm},
+          every node/.style={circle, draw, minimum size=0.62cm, font=\scriptsize}]
+          \node[fill=hustred1] {MAX}
+          child { node[fill=black!5] {MIN}
+          child { node {3} }
+          child { node {5} }
+          }
+          child { node[fill=black!5] {MIN}
+          child { node {2} }
+          child { node[draw=hustred, thick] {cut} edge from parent[hustred, thick] }
+          }
+          child { node[fill=black!5] {MIN}
+          child { node {7} }
+          child { node {1} }
+          };
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Pipeline tìm kiếm}
+  \centering
+  \begin{fitdiagram}
+    \begin{tikzpicture}[node distance=0.52cm]
+      \node[flowbox, text width=3.1cm] (id) {Iterative\\Deepening};
+      \node[flowbox, text width=3.1cm, below=of id] (asp) {Aspiration\\Windows};
+      \node[flowbox, text width=3.1cm, below=of asp] (neg) {Negamax\\Alpha-Beta};
+      \node[flowbox, text width=3.1cm, below=of neg] (q) {Quiescence\\Search};
+      \node[redbox, text width=3.1cm, below=of q] (best) {\code{bestmove}};
+      \node[darkbox, text width=2.7cm, right=1.0cm of asp] (tt) {TT};
+      \node[darkbox, text width=2.7cm, right=1.0cm of neg] (order) {Move\\Ordering};
+      \node[darkbox, text width=2.7cm, left=1.0cm of neg] (time) {Time\\Manager};
+      \draw[arrow] (id) -- (asp);
+      \draw[arrow] (asp) -- (neg);
+      \draw[arrow] (neg) -- (q);
+      \draw[arrow] (q) -- (best);
+      \draw[arrow] (tt) -- (asp);
+      \draw[arrow] (order) -- (neg);
+      \draw[arrow] (time) -- (neg);
+    \end{tikzpicture}
+  \end{fitdiagram}
+\end{frame}
+
+\begin{frame}{Root state trước search}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item Đây là state gốc mà engine nhận từ GUI/UCI.
+        \item Từ state này, engine sinh toàn bộ legal moves.
+        \item Chưa có nước nào được chọn ở bước này.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \centering
+      \includegraphics[height=0.68\textheight]{\figpath{figure-06a-search-before.png}}
+      \figcaption{6.a}{Root state trước search.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Candidate move}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item Move ordering chọn một root move để thử trước.
+        \item Mũi tên đỏ là nước ứng viên đang được search.
+        \item Nếu score tốt, nó trở thành PV tạm thời.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \centering
+      \includegraphics[height=0.68\textheight]{\figpath{figure-06b-search-candidate.png}}
+      \figcaption{6.b}{Nước ứng viên ở root.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{State sau candidate}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item \code{do\_move} áp dụng candidate để tạo state con.
+        \item Search đổi lượt và tiếp tục ở depth nhỏ hơn.
+        \item Root so sánh điểm các state con để trả \code{bestmove}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \centering
+      \includegraphics[height=0.68\textheight]{\figpath{figure-06c-search-after.png}}
+      \figcaption{6.c}{State con sau nước ứng viên.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Move ordering}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.46\textwidth}
+      Nước tốt xét trước giúp Alpha-Beta cắt sớm hơn.
+      \begin{enumerate}
+        \item TT best move.
+        \item Capture theo MVV-LVA.
+        \item Killer moves.
+        \item History heuristic.
+      \end{enumerate}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[node distance=0.35cm]
+          \node[redbox, text width=4.2cm] (a) {1. TT Move};
+          \node[flowbox, text width=4.2cm, below=of a] (b) {2. Capture};
+          \node[flowbox, text width=4.2cm, below=of b] (c) {3. Killer};
+          \node[flowbox, text width=4.2cm, below=of c] (d) {4. History};
+          \draw[arrow] (a) -- (b);
+          \draw[arrow] (b) -- (c);
+          \draw[arrow] (c) -- (d);
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{PVS và aspiration window}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Principal Variation Search}
+        Nước đầu tiên search full window; các nước sau dùng null window để xác nhận chúng không vượt PV.
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Aspiration Window}
+        Dùng score depth trước làm trung tâm cửa sổ hẹp; fail high/low thì mở rộng.
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{0.6em}
+  \centering
+  \begin{fitdiagram}
+    \begin{tikzpicture}
+      \draw[thick, ->] (0,0) -- (9,0);
+      \draw[hustred, very thick] (3.6,-0.15) -- (5.4,-0.15);
+      \node[below] at (4.5,-0.15) {\small aspiration};
+      \node[above] at (4.5,0) {\small score dự đoán};
+    \end{tikzpicture}
+  \end{fitdiagram}
+\end{frame}
+
+\begin{frame}{Cắt tỉa và giảm độ sâu}
+  \centering
+  \begin{fitdiagram}
+    \begin{tikzpicture}[node distance=0.42cm and 0.55cm]
+      \node[redbox, text width=3.2cm] (root) {Search node};
+      \node[flowbox, text width=3.2cm, below left=0.75cm and 1.4cm of root] (nmp) {NMP\\bỏ lượt vẫn $\ge\beta$};
+      \node[flowbox, text width=3.2cm, below=of nmp] (rfp) {RFP\\eval vượt $\beta$};
+      \node[flowbox, text width=3.2cm, below=of rfp] (fp) {FP\\eval không cứu $\alpha$};
+      \node[flowbox, text width=3.2cm, below right=0.75cm and 1.4cm of root] (lmp) {LMP\\quiet move quá muộn};
+      \node[flowbox, text width=3.2cm, below=of lmp] (lmr) {LMR\\search nông trước};
+      \node[flowbox, text width=3.2cm, below=of lmr] (iir) {IIR\\thiếu TT move};
+      \node[redbox, text width=3.4cm, below=1.0cm of fp] (cut) {Cắt hẳn nhánh};
+      \node[darkbox, text width=3.4cm, below=1.0cm of iir] (reduce) {Giảm độ sâu};
+      \draw[arrow] (root) -- (nmp);
+      \draw[arrow] (root) -- (lmp);
+      \draw[arrow] (nmp) -- (rfp);
+      \draw[arrow] (rfp) -- (fp);
+      \draw[arrow] (lmp) -- (lmr);
+      \draw[arrow] (lmr) -- (iir);
+      \draw[redarrow] (fp) -- (cut);
+      \draw[arrow] (iir) -- (reduce);
+      \node[font=\small, text=hustred, align=center] at ($(cut)!0.5!(reduce)+(0,-0.9)$)
+      {Mục tiêu: dành depth cho các nhánh có xác suất đổi bestmove cao.};
+    \end{tikzpicture}
+  \end{fitdiagram}
+\end{frame}
+
+\begin{frame}{Quiescence search}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item Xử lý horizon effect.
+        \item Nếu đang bị chiếu: sinh mọi nước né chiếu.
+        \item Nếu không bị chiếu: chỉ sinh capture.
+        \item Dừng ở thế tương đối tĩnh.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[node distance=0.5cm]
+          \node[flowbox] (leaf) {Depth = 0};
+          \node[flowbox, below=of leaf] (capture) {Còn capture/chiếu?};
+          \node[flowbox, below left=0.6cm and 0.45cm of capture] (more) {Search tiếp};
+          \node[redbox, below right=0.6cm and 0.45cm of capture] (evaln) {Static Eval};
+          \draw[arrow] (leaf) -- (capture);
+          \draw[arrow] (capture) -- (more);
+          \draw[arrow] (capture) -- (evaln);
+          \draw[arrow] (more) |- (capture);
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Quản lý thời gian}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.47\textwidth}
+      \begin{itemize}
+        \item Trừ overhead để tránh rớt giờ.
+        \item Có \code{movestogo}: chia thời gian theo số nước.
+        \item Mặc định dùng soft/hard bound.
+        \item Thread UCI có thể nhận \code{stop}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}
+          \draw[fill=green!15, draw=lingineGreen, thick] (0,0) rectangle (2.4,0.65);
+          \draw[fill=hustyellow2, draw=lingineGold, thick] (2.4,0) rectangle (4.6,0.65);
+          \draw[fill=hustred1, draw=hustred, thick] (4.6,0) rectangle (5.8,0.65);
+          \node at (1.2,0.325) {\scriptsize tiếp};
+          \node at (3.5,0.325) {\scriptsize \shortstack{dừng sau\\depth}};
+          \node at (5.2,0.325) {\scriptsize abort};
+          \node[below] at (2.4,0) {\tiny soft};
+          \node[below] at (4.6,0) {\tiny hard};
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\input{added_ai_slides}
+
+
+
+

@@ -1,0 +1,69 @@
+\section{Kết Luận}
+
+\begin{frame}{Đóng góp chính}
+  \begin{itemize}
+    \item Mô hình hóa cờ tướng như một tác tử thông minh trong môi trường đối kháng.
+    \item Biểu diễn trạng thái bằng bitboard \code{u128}, move 16-bit và Zobrist hash.
+    \item Sinh nước đi đúng luật cờ tướng: Mã cản chân, Tượng cản mắt, Pháo qua ngòi, lộ mặt Tướng.
+    \item Kết hợp Negamax Alpha-Beta với TT, PVS, QSearch, move ordering và pruning.
+    \item Tối ưu evaluation bằng Texel Tuning và xác thực bằng PERFT/ELO.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Hạn chế}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Hiện tại}
+        \begin{itemize}
+          \item Classical/symbolic AI, chưa dùng neural eval.
+          \item Search chủ yếu đơn luồng.
+          \item Bestmove tuyệt đối có thể khiến lối chơi lặp lại.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Tác động}
+        \begin{itemize}
+          \item Evaluation tuyến tính khó bắt pattern sâu.
+          \item Tận dụng CPU đa nhân còn hạn chế.
+          \item Cần đa dạng hóa trong chế độ chơi người.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Hướng phát triển}
+  \begin{itemize}
+    \item Softmax Sampling để đa dạng hóa nước đi.
+    \item NNUE để học tương tác phi tuyến giữa quân.
+    \item Multi-threaded search.
+    \item Opening book và tablebase.
+    \item Tối ưu hóa bộ nhớ đệm băm (transposition table) và lưu trữ song song.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Tổng kết}
+  \begin{alertblock}{Kết luận}
+    Lingine chứng minh tính hiệu quả của phương pháp tìm kiếm đối kháng truyền thống trong cờ tướng. Hiệu năng chơi cờ được tối ưu hóa đồng bộ thông qua biểu diễn bitboard, cắt tỉa chọn lọc và cân chỉnh tham số tự động.
+  \end{alertblock}
+
+  \begin{itemize}
+    \item Cờ tướng tạo ra nhiều thách thức đặc thù về cấu trúc luật so với cờ vua.
+    \item Cân chỉnh hàm lượng giá đóng vai trò then chốt trong việc cải thiện trình độ chơi cờ.
+    \item Các kỹ thuật cắt tỉa chọn lọc tối ưu hóa chiều sâu tìm kiếm trong giới hạn thời gian.
+    \item Quy trình kiểm thử (PERFT và đấu máy) đảm bảo tính chính xác của luật và sức mạnh thực chiến.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{~}
+  \centering
+  \vfill
+  {\Huge \textcolor{hustred}{Cảm ơn mọi người đã lắng nghe!}}
+
+  \vspace{1.2em}
+  {\large Q \& A}
+  \vfill
+\end{frame}
+
+

@@ -1,0 +1,225 @@
+\section{Biểu Diễn Trạng Thái}
+
+\begin{frame}{State của agent}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \[
+        S=\langle B,p,c_h,h\rangle
+      \]
+      \begin{itemize}
+        \item $B$: bàn cờ $10 \times 9$.
+        \item $p$: bên đi.
+        \item $c_h$: bộ đếm luật 60 nước.
+        \item $h$: lịch sử để undo và phát hiện lặp.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[node distance=0.45cm]
+          \node[redbox, text width=1.55cm] (b) {$B$\\Board};
+          \node[darkbox, text width=1.55cm, right=0.25cm of b] (p) {$p$\\Side};
+          \node[darkbox, text width=1.55cm, right=0.25cm of p] (c) {$c_h$\\Clock};
+          \node[darkbox, text width=1.55cm, right=0.25cm of c] (h) {$h$\\History};
+          \node[fit=(b)(p)(c)(h), draw=hustred, rounded corners=2pt, inner sep=0.18cm] {};
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{FEN là biên giao tiếp}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item FEN mô tả vị trí quân trên 10 hàng.
+        \item UCI truyền FEN/moves từ GUI vào engine.
+        \item Engine chuyển FEN thành \code{Position} nội bộ.
+      \end{itemize}
+      \begin{block}{Ví dụ}
+        \code{rheakaehr/9/1c5c1/... w - - 0 1}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \includegraphics[height=0.64\textheight]{\figpath{figure-01a-startpos.png}}
+      \figcaption{2.b}{Vị trí khởi đầu.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Trạng thái trung cuộc}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.44\textwidth}
+      Đặc điểm của trạng thái trung cuộc:
+      \begin{itemize}
+        \item Số lượng quân còn lại ảnh hưởng trực tiếp đến hệ số nhánh (branching factor).
+        \item Lịch sử nước đi cần thiết để kiểm tra trạng thái lặp và thực hiện hoàn tác (undo).
+        \item Hàm lượng giá (evaluation) tích hợp cả điểm vật chất lẫn vị trí quân cờ.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \centering
+      \includegraphics[height=0.65\textheight]{\figpath{figure-01c-master-midgame.png}}
+      \figcaption{2.c}{Một state trung cuộc.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Position nội bộ}
+  \centering
+  \begin{fitdiagram}
+    \begin{tikzpicture}[node distance=0.62cm]
+      \node[redbox, text width=3.1cm] (pos) {\textbf{Position}};
+      \node[flowbox, text width=3.1cm, below left=0.8cm and 1.0cm of pos] (board) {\code{board[90]}\\ô $\rightarrow$ quân};
+      \node[flowbox, text width=3.7cm, align=left, below=0.8cm of pos] (bb) {\code{bitboard\_by\_type}\\\code{bitboard\_by\_color}};
+      \node[flowbox, text width=3.1cm, below right=0.8cm and 1.0cm of pos] (state) {\code{StateInfo}\\hash, score, phase};
+      \node[darkbox, text width=3.1cm, below=0.8cm of bb] (hist) {\code{history}\\undo/lặp thế};
+      \draw[arrow] (pos) -- (board);
+      \draw[arrow] (pos) -- (bb);
+      \draw[arrow] (pos) -- (state);
+      \draw[arrow] (state) -- (hist);
+    \end{tikzpicture}
+  \end{fitdiagram}
+
+  \vspace{0.7em}
+  \small Mục tiêu là \code{do\_move}/\code{undo\_move} nhanh trong hàng triệu node search.
+\end{frame}
+
+\begin{frame}{Bitboard \code{u128}}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item Cờ tướng có 90 ô nên \code{u64} không đủ.
+        \item Lingine dùng \code{u128}; 90 bit đầu biểu diễn 90 ô.
+        \item Bitboard theo màu và theo loại quân giúp query nhanh.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[scale=0.42]
+          \foreach \y in {0,...,9} {
+            \foreach \x in {0,...,8} {
+              \pgfmathtruncatemacro{\idx}{\y*9+\x}
+              \draw[fill=black!4] (\x,\y) rectangle ++(1,1);
+              \node[font=\tiny] at (\x+0.5,\y+0.5) {\idx};
+            }
+          }
+          \draw[hustred, very thick] (0,0) rectangle (9,10);
+          \node[font=\small, text=hustred] at (4.5,10.55) {90 bit dùng trong \code{u128}};
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Nén nước đi 16-bit}
+  \centering
+  \begin{fitdiagram}
+    \begin{tikzpicture}
+      \node[draw, minimum height=0.9cm, minimum width=3.2cm, fill=hustred1] (to) {bits 0--6: ô đến};
+      \node[draw, minimum height=0.9cm, minimum width=3.2cm, fill=hustyellow2, right=0pt of to] (from) {bits 7--13: ô đi};
+      \node[draw, minimum height=0.9cm, minimum width=2.5cm, fill=black!8, right=0pt of from] (r) {bits 14--15};
+      \node[below=0.35cm of to] {\small 0..89};
+      \node[below=0.35cm of from] {\small 0..89};
+      \node[below=0.35cm of r] {\small dự phòng};
+    \end{tikzpicture}
+  \end{fitdiagram}
+
+  \vspace{1em}
+  \begin{itemize}
+    \item \code{Move} là \code{NonZeroU16}.
+    \item Nhỏ, truyền theo value, hợp cache.
+    \item Phù hợp khi search cần duyệt hàng triệu nước đi.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Zobrist hashing}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \[
+        H(S)=Z_{side}\oplus\bigoplus_{sq=0}^{89} Z_{piece(sq),sq}
+      \]
+      \begin{itemize}
+        \item Mỗi cặp quân--ô có khóa 64-bit.
+        \item Cập nhật hash vi phân sau mỗi move.
+        \item Hash dùng cho repetition và Transposition Table.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[node distance=0.45cm]
+          \node[flowbox] (old) {$H_{old}$};
+          \node[flowbox, below=of old] (a) {$\oplus K_{piece,from}$};
+          \node[flowbox, below=of a] (b) {$\oplus K_{piece,to}$};
+          \node[flowbox, below=of b] (c) {$\oplus K_{side}$};
+          \node[redbox, below=of c] (new) {$H_{new}$};
+          \draw[arrow] (old) -- (a);
+          \draw[arrow] (a) -- (b);
+          \draw[arrow] (b) -- (c);
+          \draw[arrow] (c) -- (new);
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Luật lặp thế}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.46\textwidth}
+      Cờ tướng không chỉ có hòa do lặp:
+      \begin{itemize}
+        \item Chiếu dai.
+        \item Đuổi dai.
+        \item Lặp thường.
+      \end{itemize}
+      Lingine cần history và hash để phân biệt các trường hợp này.
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[node distance=0.55cm]
+          \node[flowbox] (hash) {Hash hiện tại};
+          \node[flowbox, below=of hash] (scan) {Duyệt ngược\\history};
+          \node[flowbox, below=of scan] (rep) {Trùng state?};
+          \node[redbox, below left=0.65cm and 0.6cm of rep] (loss) {Chiếu/đuổi dai};
+          \node[goodbox, below right=0.65cm and 0.6cm of rep] (draw) {Lặp thường};
+          \draw[arrow] (hash) -- (scan);
+          \draw[arrow] (scan) -- (rep);
+          \draw[arrow] (rep) -- (loss);
+          \draw[arrow] (rep) -- (draw);
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Transposition Table}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.45\textwidth}
+      \begin{itemize}
+        \item Key: Zobrist hash.
+        \item Entry lưu best move, score, depth, bound.
+        \item Giảm tính lại các state đạt được từ nhiều thứ tự move.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.51\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[node distance=0.55cm]
+          \node[flowbox] (pos) {Position};
+          \node[flowbox, below=of pos] (hash) {Zobrist hash};
+          \node[redbox, text width=4.2cm, below=of hash] (tt) {Transposition Table};
+          \node[darkbox, text width=4.2cm, below=of tt] (entry) {best move | score | depth | bound};
+          \draw[arrow] (pos) -- (hash);
+          \draw[arrow] (hash) -- node[right]{probe/store} (tt);
+          \draw[arrow] (tt) -- (entry);
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+

@@ -1,0 +1,207 @@
+\ProvidesPackage{beamerinnerthemehust}[HUST inner theme]
+
+\mode<presentation>
+\setbeamertemplate{caption}[numbered]
+
+\setbeamertemplate{itemize item}{%
+	\large\usebeamercolor[fg]{item}{\(\diamond\)}%
+}
+\setbeamertemplate{itemize subitem}{%
+	\large\usebeamercolor[fg]{item}{\(\circ\)}%
+}
+\setbeamertemplate{itemize subsubitem}{%
+	\large\usebeamercolor[fg]{item}{\(\star\)}%
+}
+
+%\setbeamertemplate{footnote}{
+%	\hbox{%
+%	\begin{beamercolorbox}[wd=1em]{footnote mark}
+%		\usebeamerfont{footnote mark}\insertfootnotemark
+%	\end{beamercolorbox}
+%	\begin{beamercolorbox}[wd={0.9\textwidth}]{footnote}
+%		\insertfootnotetext
+%	\end{beamercolorbox}
+%	}
+%}
+
+%\setbeamertemplate{framenumber}{
+%    \normalsize
+%    \insertframenumber
+%}
+%\setbeamertemplate{framenumber with total}{
+%    \scriptsize\altfrac{\insertframenumber}{\inserttotalframenumber}
+%}
+%
+%\setbeamertemplate{section}{\small\insertsection}
+%\setbeamertemplate{subsection}{\footnotesize\insertsubsection}
+%
+%\def\maketitle{%
+%    \ifbeamer@inframe
+%        \titlepage
+%    \else
+%        {
+%            \begingroup
+%            \usebackgroundtemplate{
+%                \includegraphics[
+%                width=\paperwidth
+%                ]{title-background.jpg}
+%            }
+%            \begin{frame}[plain,noframenumbering]
+%                \titlepage
+%            \end{frame}
+%            \endgroup
+%        }
+%    \fi
+%}
+%\def\titlepage{%
+%    \usebeamertemplate{title page}
+%}
+%
+%
+%\setbeamertemplate{background canvas}{
+%    \includegraphics[
+%    width=\beamer@paperwidth,
+%    height=\beamer@paperheight
+%    ]{content-background.jpg}
+%}
+%
+%\NewDocumentEnvironment{framex}{O{c} b}
+%{
+%    \begingroup
+%    \setbeamertemplate{background}{
+%        \includegraphics[
+%        width=\beamer@paperwidth,
+%        height=\beamer@paperheight
+%        ]{content-background-2.jpg}
+%    }
+%    \setbeamertemplate{footline}{
+%        \hfill\begin{tikzpicture}[overlay]
+%            % Shadow on FAB
+%            %\fill[hustyellow!10] %
+%            %   (0, \barwidth-0.5pt) %
+%            %   circle(\fabsize);
+%            %\fill[black!20!hustyellow] %
+%            %   (0, \barwidth-0.5pt) %
+%            %   circle(\fabsize);
+%            % FAB
+%            \fill[circular drop shadow,
+%                white!20!hustyellow] %
+%                (0, \barwidth) %
+%                circle(\fabsize);
+%            \draw[circular drop shadow, black!75] %
+%                (0,\barwidth)%
+%                node [rectangle, text centered]%
+%                {%
+%                    \ifshowtotalpage%
+%                        \usebeamertemplate{framenumber with total}%
+%                    \else%
+%                        \usebeamertemplate{framenumber}%
+%                    \fi%
+%                };
+%        \end{tikzpicture}
+%        \hspace*{\fabsize + 7pt}
+%    }
+%    \setbeamertemplate{noframetitle}{
+%        \vspace{-3mm}
+%    }
+%    \setbeamertemplate{frametitle}{
+%        \vspace{0.166\paperwidth}
+%        \hspace{-14mm}
+%        \hspace{0.166\paperwidth}
+%        \color{fggrey}\insertframetitle
+%        \vspace{-0.166\paperwidth}
+%    }
+%    \begin{frame}[#1]
+%        \vspace{0.166\paperwidth}
+%        \makebox[\paperwidth][c]{
+%            \begin{minipage}{0.834\paperwidth}
+%                #2
+%            \end{minipage}
+%        }
+%    \end{frame}
+%    \endgroup
+%}
+%
+%
+%\def\@supervisor{}
+%\newcommand{\supervisor}[1]{
+%    \renewcommand{\@supervisor}{#1}
+%}
+%\def\@supervisorname{Supervisor:~}
+%\newcommand{\supervisorname}[1]{
+%    \renewcommand{\@supervisorname}{#1}
+%}
+%
+%\setbeamertemplate{title page}{
+%    \makebox[\textwidth][c] {
+%        \begin{minipage}[c][0.35\paperheight]{1.0555\textwidth}
+%            \vfill
+%            \begin{\hust@titlealign}
+%                \LARGE\inserttitle
+%            \end{\hust@titlealign}
+%        \end{minipage}
+%    }
+%    \par
+%    \vspace*{0.15\paperheight}
+%    \makebox[\textwidth][c] {
+%        \begin{minipage}[c][0.35\paperheight]{1.0555\textwidth}
+%            \begin{\hust@authoralign}
+%                \color{white}
+%                \Large
+%                \insertauthor\par
+%                \ifx\@supervisor\@empty\else
+%                    \@supervisorname\@supervisor\par
+%                \fi
+%                \insertdate
+%                \vspace*{1mm}
+%            \end{\hust@authoralign}
+%        \end{minipage}
+%    }
+%}
+%
+%\defbeamertemplate*{section page}{hust}[1][]
+%{
+%    \begin{beamercolorbox}[wd=\paperwidth]{section page}
+%        \begin{tikzpicture}
+%            \useasboundingbox[fill=white](0,0) rectangle(\the\paperwidth,\the\paperheight);
+%            \node (bg) at (0.5\paperwidth, 0.5\paperheight)  {
+%                    \includegraphics[
+%                    width=\paperwidth
+%                    ]{content-background-2.jpg}
+%                };
+%            \node[] at (0, 0) {}{};
+%        \end{tikzpicture}
+%    \end{beamercolorbox}
+%}
+%
+%\setbeamertemplate{noframetitle}{
+%    \vspace*{0.0194\paperheight}
+%    {\large\phantom{\bf Title}}
+%    \vspace*{0.0679\paperheight}
+%}
+%
+%\setbeamertemplate{frametitle}{
+%    \ifx\insertframesubtitle\@empty%
+%        {
+%            \begin{minipage}[][0.09\paperheight][c]{\textwidth}
+%                \vspace*{0.03\paperheight}
+%                \large\bf\color{white}\insertframetitle
+%            \end{minipage}
+%        }
+%    \else%
+%        {
+%            \begin{minipage}[][0.05\paperheight][c]{\textwidth}
+%                \large\bf\color{white}\insertframetitle
+%            \end{minipage}
+%            \begin{minipage}[][0.04\paperheight][c]{\textwidth}
+%                {\small\bf\color{white}\insertframesubtitle}
+%            \end{minipage}
+%        }%
+%    \fi
+%}
+%
+%\setbeamertemplate{itemize item}{\color{hustred}\textbullet}
+%\setbeamertemplate{itemize subitem}{--}
+%\setbeamertemplate{itemize subsubitem}{--}
+
+\mode<all>

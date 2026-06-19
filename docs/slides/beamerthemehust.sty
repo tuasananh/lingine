@@ -1,0 +1,301 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beamerthemehust}[Beamer HUST theme]
+% Requirement
+\RequirePackage{tikz}
+\RequirePackage{xparse}
+\RequirePackage{calc}
+\usetikzlibrary{positioning,shadows}
+\mode<presentation>
+
+% Detect if using which aspectratio, only support 169 and 43
+\newif\iflongslide
+\pgfmathparse{(\paperwidth / \paperheight) > 1.5}
+\let\longslide\pgfmathresult
+\if\longslide1
+	\longslidetrue
+\else
+	\longslidefalse
+\fi
+
+% Settings
+\usecolortheme{hust}
+\usefonttheme{hust}
+\useinnertheme{hust}
+\useoutertheme{hust}
+
+% sizes
+\setbeamersize{sidebar width left=0pt}
+\setlength{\headsep}{2.25ex}
+
+%
+% Aligning the title
+%
+\def\hust@titlealign{flushleft}
+\DeclareOption{titleleft}{
+    \def\hust@titlealign{flushleft}
+}
+\DeclareOption{titlecenter}{
+    \def\hust@titlealign{center}
+}
+\DeclareOption{titleright}{
+    \def\hust@titlealign{flushright}
+}
+%
+% Aligning the authors
+%
+\def\hust@authoralign{flushright}
+\DeclareOption{authorleft}{
+    \def\hust@authoralign{flushleft}
+}
+\DeclareOption{authorcenter}{
+    \def\hust@authoralign{center}
+}
+\DeclareOption{authorright}{
+    \def\hust@authoralign{flushleft}
+}
+%
+% Show list of section at beginning
+% of every sections
+%
+\newif\ifshowsections
+\DeclareOption{showsections}{\showsectionstrue}
+\DeclareOption{noshowsections}{\showsectionsfalse}
+\AtBeginDocument{
+    \ifshowsections
+        \AtBeginSection[] {
+            \begin{framex}[plain, noframenumbering]
+                \tableofcontents[currentsection]
+            \end{framex}
+        }
+    \fi
+}
+%
+% Foot line show (sub)section or not
+%
+\newif\iffootlinesection
+\DeclareOption{footlinesection}{\footlinesectiontrue}
+\DeclareOption{nofootlinesection}{\footlinesectionfalse}
+\newif\iffootlinesubsection
+\DeclareOption{footlinesubsection}{\footlinesubsectiontrue}
+\DeclareOption{nofootlinesubsection}{\footlinesubsectionfalse}
+%
+% Foot line show total number of pages
+%
+\newif\ifshowtotalpage
+\showtotalpagefalse
+\DeclareOption{showtotalpage}{\showtotalpagetrue}
+\DeclareOption{noshowtotalpage}{\showtotalpagefalse}
+\ProcessOptions
+
+% height for images
+\AtBeginDocument{
+    \newcommand{\imgheight}{0.7\textheight}
+}
+
+% Alt frac for page number instead of nicefrag
+% Source:
+% https://tex.stackexchange.com/questions/515264/nicefrac-or-xfrac-in-displaystyle
+\newcommand{\altfrac}[2]{
+    {%
+        \raisebox{.5\ht\strutbox}{#1}%
+        \kern-2.2pt%
+        \rotatebox{-10}{\scalebox{1.5}[1.8]{/}}%
+        \kern-2.8pt%
+        \raisebox{-.25\ht\strutbox}{#2}%
+    }
+}
+
+% navigation and foot line
+\setbeamertemplate{navigation symbols}{}
+
+\newlength{\mysectionlength}
+\newlength{\mysubsectionlength}
+
+\newdimen\barwidth
+\barwidth=20pt
+\newdimen\fabsize
+\fabsize=13pt
+\newdimen\sectextheight
+%\setbeamertemplate{footline}{%
+%    % Determine what to display on the
+%    % section part of the footline
+%    \iffootlinesection
+%        \iffootlinesubsection
+%            \newcommand{\flsectext}{%
+%                \usebeamertemplate{section}%
+%            \ifx\insertsubsection\empty\else%
+%                ${}\blacktriangleright{}$%
+%                \usebeamertemplate{subsection}%
+%            \fi%
+%        }
+%        \else
+%        \newcommand{\flsectext}{\usebeamertemplate{section}}
+%        \fi
+%        \else
+%        \iffootlinesubsection
+%            \newcommand{\flsectext}{\usebeamertemplate{subsection}}
+%        \else
+%            \newcommand{\flsectext}{}
+%        \fi
+%        \fi %
+%        \iffootlinesection
+%            \vspace*{\barwidth}
+%        \fi
+%        \begin{tikzpicture}[overlay]
+%            \settoheight{\sectextheight}{\flsectext}
+%            \iffootlinesection
+%                \fill[hustred] (0,0) %
+%                    rectangle(\paperwidth, \barwidth);
+%                % Draw section text
+%                \draw[white!75] node %
+%                    [align = left,anchor = west]%
+%                    at (\barwidth-\fabsize, 0.5\barwidth - 0.5\sectextheight)
+%                    {\flsectext};
+%            \fi
+%
+%            % The white cut
+%            \iffootlinesection
+%                %% Only draw this cut line when
+%                % showing section
+%                \fill[white] %
+%                    (\paperwidth -\barwidth, \barwidth) %
+%                    circle(\fabsize + 2pt);
+%            \fi
+%            % Shadow on FAB
+%            %\fill[hustyellow!10] %
+%            %   (\paperwidth -\barwidth+0.5pt, \barwidth-0.5pt) %
+%            %   circle(\fabsize);
+%            %\fill[black!20!hustyellow] %
+%            %   (\paperwidth -\barwidth, \barwidth-0.5pt) %
+%            %   circle(\fabsize);
+%            % FAB
+%            \fill[circular drop shadow, white!20!hustyellow] %
+%                (\paperwidth -\barwidth, \barwidth) %
+%                circle(\fabsize);
+%            \draw[black!75] %
+%                (\paperwidth -\barwidth, \barwidth)%
+%                node [rectangle, text centered] %
+%                {\centering\ifshowtotalpage
+%                        \usebeamertemplate{framenumber with total}
+%                    \else
+%                        \usebeamertemplate{framenumber}
+%                    \fi
+%                };
+%        \end{tikzpicture}
+%    }
+
+    % redefine base frame
+%
+%    \renewenvironment*{beamer@frameslide}{%
+%        \ifbeamer@autobreak\else%
+%            \ifx\beamer@againname\@empty%
+%                {\let\@elt\beamer@restorecounter\beamer@overlaycounterresets}%
+%            \else%
+%                {\let\@elt\beamer@labelrestorecounter\beamer@overlaycounterresets}%
+%            \fi%
+%            \fi%
+%            \global\c@beamerpauses=1\relax%
+%            \expandafter\ifblank\expandafter{\beamer@framestartpage}{%
+%                    \stepcounter{subsectionslide}%
+%                    \xdef\beamer@framestartpage{\the\c@page}% only first time
+%                }{\clearpage\beamer@notesactions}% cleanup from previous slide
+%                \hypersetup{pdfpagetransition=R}%
+%                \hypersetup{pdfpageduration=}%
+%                \@ifundefined{thispdfpagelabel}{}{%
+%                \thispdfpagelabel{\insertframenumber}}%
+%                \xdef\beamer@frameendpage{\the\c@page}% every time
+%                \xdef\beamer@slidenumber{\the\numexpr\c@page-\beamer@framestartpage+1\relax}%
+%                \xdef\beamer@overlaynumber{\the\beamer@slideinframe}%
+%                \beamer@setuplinks%
+%                \beamer@displaybreak%
+%                \global\setbox\beamer@zoombox=\box\voidb@x%
+%                \def\beamer@zoomer{}%
+%                \beamer@slidehaszoomfalse%
+%                \gdef\insertframetitle{}%
+%                \gdef\insertframesubtitle{}%
+%                \gdef\beamer@frametitle{}%
+%                \gdef\beamer@shortframetitle{}%
+%                \gdef\beamer@framesubtitle{}%
+%                \let\beamer@startcomment=\beamer@startcommentinframe%
+%                % Start slide:
+%                \beamer@framenotesbegin%
+%                \global\setbox\beamer@framebox=\vbox\bgroup%
+%                \beamer@inframetrue%
+%                \let\frame=\framelatex% inside frames, use LaTeX's \frame command
+%                \begin{beamer@framepauses}%
+%                    \refcounter{framenumber}%use frame number for  \label
+%                    \ifbeamer@shrink%
+%                        \hsize=\beamer@shrinkfactorinv\hsize%
+%                        \textwidth=\beamer@shrinkfactorinv\textwidth%
+%                        \linewidth=\beamer@shrinkfactorinv\linewidth%
+%                    \fi%
+%                    % Insert labels if necessary:
+%                    \ifx\beamer@againname\@empty\else%
+%                        \nointerlineskip\vbox to0pt{\vss%
+%                            \label<\the\beamer@slideinframe>{\beamer@againname<\the\beamer@slideinframe>}%
+%                            \ifnum\beamer@slideinframe=1\relax%
+%                                \label<1>{\beamer@againname}%
+%                            \fi%
+%                        }\nointerlineskip%
+%                        \fi%
+%                        \ifx\beamer@framehypertargets\@empty\else%
+%                            \nointerlineskip\vbox to0pt{\vss%
+%                                \beamer@framehypertargets%
+%                                \global\let\beamer@framehypertargets\@empty%
+%                            }\nointerlineskip%
+%                        \fi%
+%                        \vskip-\parskip\vbox{}%
+%                        \ifbeamer@plainframe\nointerlineskip\fi%
+%                    \beamer@checkframetitle}%
+%                    {\par
+%                    \end{beamer@framepauses}%
+%                    \egroup%
+%                    \ifx\beamer@frametitle\@empty%
+%                        \setbox\beamer@frametitlebox=\vbox{%
+%                            \vbox{}%
+%                            {\parskip0pt\usebeamertemplate***{noframetitle}\vskip0.25em}%
+%                        }%
+%                    \else%
+%                        \setbox\beamer@frametitlebox=\vbox{%
+%                            \vbox{}%
+%                            {\parskip0pt\usebeamertemplate***{frametitle}\vskip0.25em}%
+%                        }%
+%                    \fi%
+%                    \ifbeamer@plainframe%
+%                        \beamer@frametextheight=\paperheight%
+%                    \else%
+%                        \beamer@frametextheight=\textheight%
+%                    \fi%
+%                    \advance\beamer@frametextheight by-\ht\beamer@frametitlebox%
+%                    \advance\beamer@frametextheight by-\dp\beamer@frametitlebox%
+%                    \advance\beamer@frametextheight by-\beamer@frametopskip%
+%                    \ifbeamer@shrink%
+%                        \beamer@shrinkframebox%
+%                    \fi%
+%                    \ifx\beamer@zoomer\@empty
+%                        \setbox\beamer@framebox=\vbox{%
+%                            \nobreak\vbox{}\nobreak\par\nobreak\beamer@entrycode\nobreak%
+%                            \nointerlineskip\unvbox\beamer@frametitlebox%
+%                            \nobreak%
+%                            \ifbeamer@autobreak%
+%                                \vskip\beamer@frametopskipautobreak%
+%                            \else%
+%                                \vskip\beamer@frametopskip%
+%                            \fi%
+%                            \nobreak%
+%                            \nointerlineskip\box\beamer@zoombox\nointerlineskip%
+%                            \nobreak%
+%                            \ifbeamer@slidehaszoom\box\beamer@framebox\else\unvbox\beamer@framebox\fi%
+%                            % bottom skip is added in autobreakframebox
+%                        }%
+%                        \beamer@autobreakframebox%
+%                        \else%
+%                        \beamer@zoomer%
+%                        \fi%
+%                        \beamer@undolabels%
+%                        \beamer@framenotesend%
+%                        \box\beamer@framebox
+%                    }
+%
+%
+%                    \endinput

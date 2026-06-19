@@ -1,0 +1,126 @@
+
+\section{Thực Nghiệm Và Demo}
+
+\begin{frame}{PERFT kiểm thử move generation}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.40\textwidth}
+      \begin{itemize}
+        \item Đếm toàn bộ node lá ở depth $d$.
+        \item So với bảng chuẩn.
+        \item Bắt lỗi luật cản quân, chiếu, ăn quân, chiếu bí.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      \centering
+      \includegraphics[height=0.68\textheight]{\figpath{figure-07a-perft-complex.png}}
+      \figcaption{7.a}{Vị trí PERFT kiểm thử luật.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Tiến trình tăng ELO}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.36\textwidth}
+      \begin{itemize}
+        \item v1.0.0: engine cơ bản.
+        \item v1.5.0: PST tạo bước nhảy lớn.
+        \item v1.8.0: Texel tuning.
+        \item v1.9.0: pruning/search nâng cao.
+        \item \textbf{Tăng tổng cộng +779 ELO}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.60\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[x=0.74cm,y=0.0027cm]
+          \fill[hustred1] (0,1400) -- (0,1465) -- (1,1460) -- (2,1567) -- (3,1572) --
+          (4,1612) -- (5,1854) -- (6,1916) -- (7,1936) -- (8,2027) --
+          (9,2189) -- (10,2244) -- (10,1400) -- cycle;
+          \draw[->, thick] (0,1400) -- (10.7,1400) node[right, font=\scriptsize]{version};
+          \draw[->, thick] (0,1400) -- (0,2320) node[above, font=\scriptsize]{ELO};
+          \foreach \y in {1500,1700,1900,2100,2300} {
+            \draw[black!20] (0,\y) -- (10,\y);
+            \node[left,font=\tiny] at (0,\y) {\y};
+          }
+          \draw[hustred, very thick]
+          (0,1465) -- (1,1460) -- (2,1567) -- (3,1572) -- (4,1612) --
+          (5,1854) -- (6,1916) -- (7,1936) -- (8,2027) -- (9,2189) -- (10,2244);
+          \foreach \x/\y in {0/1465,2/1567,5/1854,8/2027,9/2189,10/2244} {
+            \fill[hustred] (\x,\y) circle (2.4pt);
+          }
+          \node[font=\tiny, above right] at (0,1465) {v1.0};
+          \node[font=\tiny, above] at (2,1567) {v1.2};
+          \node[font=\tiny, above] at (5,1854) {v1.5};
+          \node[font=\tiny, above] at (8,2027) {v1.7};
+          \node[font=\tiny, above] at (9,2189) {v1.8};
+          \node[font=\tiny, above] at (10,2244) {v1.9};
+
+          \node[redbox, text width=2.3cm] at (8.2,1600) {+779 Elo};
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Gauntlet v1.9.0}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.34\textwidth}
+      \begin{itemize}
+        \item 3000 ván đấu với Fairy-Stockfish nhiều mức Elo.
+        \item Tỉ số: \textbf{+2597, =65, -338} (Thắng, Hòa, Thua).
+        \item Tổng điểm: \textbf{87.6\%} (LOS 100\%).
+        \item ELO ước lượng: \textbf{2244 $\pm$ 10.9}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.62\textwidth}
+      \centering
+      \begin{fitdiagram}
+        \begin{tikzpicture}[x=0.075cm,y=0.64cm]
+          \foreach \x in {0,25,50,75,100} {
+            \draw[black!15] (\x,0.45) -- (\x,6.55);
+            \node[font=\tiny] at (\x,0.05) {\x\%};
+          }
+          \foreach \lab/\score/\y in {
+            FS-1200/98.8/6,
+            FS-1400/99.4/5,
+            FS-1600/98.0/4,
+            FS-1800/95.3/3,
+            FS-2000/77.9/2,
+            FS-2200/56.5/1
+          } {
+            \node[left, font=\scriptsize] at (0,\y) {\lab};
+            \draw[fill=black!8, draw=black!25] (0,\y-0.18) rectangle (100,\y+0.18);
+            \draw[fill=hustred1, draw=hustred, thick] (0,\y-0.18) rectangle (\score,\y+0.18);
+            \node[right, font=\scriptsize, text=hustred] at (\score,\y) {\score\%};
+          }
+        \end{tikzpicture}
+      \end{fitdiagram}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Các mốc cải tiến chính}
+  \centering
+  \begin{fitdiagram}
+    \begin{tikzpicture}[x=1.75cm,y=0.95cm]
+      \draw[->, thick] (-0.2,0) -- (6.1,0);
+      \foreach \x/\ver/\elo/\txt in {
+        0/{v1.0}/{1465}/{Bitboard\\AB},
+        1/{v1.2}/{1567}/{TT},
+        2/{v1.5}/{1854}/{PST},
+        3/{v1.7}/{2027}/{PVS\\LMR/NMP},
+        4/{v1.8}/{2189}/{Mobility\\Texel},
+        5/{v1.9}/{2244}/{RFP/FP\\LMP/IIR}
+      } {
+        \draw[hustred, thick] (\x,0) -- (\x,0.25);
+        \node[redbox, text width=1.05cm] at (\x,0.72) {\ver};
+        \node[font=\bfseries, text=hustred] at (\x,1.32) {\elo};
+        \node[darkbox, text width=1.34cm, minimum height=1.0cm, font=\scriptsize] at (\x,2.15) {\txt};
+      }
+      \draw[hustred, very thick, -Latex] (0,3.05) -- (5,3.05)
+      node[midway, above, font=\small, text=hustred] {biểu diễn tốt hơn $\rightarrow$ search sâu hơn $\rightarrow$ evaluation chính xác hơn};
+    \end{tikzpicture}
+  \end{fitdiagram}
+\end{frame}
+
+

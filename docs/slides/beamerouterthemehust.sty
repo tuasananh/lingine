@@ -1,0 +1,137 @@
+\ProvidesPackage{beamerouterthemehust}[HUST outer theme]
+
+\mode<presentation>
+
+\newlength{\titlepagepadding}
+
+% images
+% 0.261 for 169, 0.282 for 43
+% 0.4431 == 30/677,
+% the relative left edge to the "one love one future" text
+\newlength{\logoheight}
+\setlength{\logoheight}{0.15\paperheight}
+\pgfdeclareimage[height=\logoheight]{logo}{res/logo-169t.png}
+\iflongslide
+	\newcommand{\titlepagetextwidth}{0.8\paperwidth}
+	\pgfdeclareimage[width=0.261\paperwidth]{logo}{./res/logo-169t.png}
+	\pgfdeclareimage[width=\paperwidth]{framebg}{./res/bg-169-4.png}
+	\pgfdeclareimage[width=\paperwidth]{titleframebg}{./res/bg-169-3.png}
+	\pgfdeclareimage[width=\paperwidth]{thankframebg}{./res/bg-169-5.png}
+	\pgfdeclareimage[width=\paperwidth]{textslidebg}{./res/text-slide-169.png}
+	\pgfdeclareimage[width=\paperwidth]{imageslidebg}{./res/image-slide-169.png}
+	\setlength{\titlepagepadding}{0.04431314623338257\paperwidth}
+\else
+	\newcommand{\titlepagetextwidth}{0.7\paperwidth}
+	\pgfdeclareimage[width=0.282\paperwidth]{logo}{./res/logo-169t.png}
+	\pgfdeclareimage[width=\paperwidth]{framebg}{./res/bg-43-4.png}
+	\pgfdeclareimage[width=\paperwidth]{titleframebg}{./res/bg-43-3.png}
+	\pgfdeclareimage[width=\paperwidth]{thankframebg}{./res/bg-43-5.png}
+	\pgfdeclareimage[width=\paperwidth]{textslidebg}{./res/text-slide-43.png}
+	\pgfdeclareimage[width=\paperwidth]{imageslidebg}{./res/image-slide-43.png}
+	% 47.10 / 677
+	\setlength{\titlepagepadding}{0.069423929098966\paperwidth}
+\fi
+
+
+% DEFAULTS
+
+\newcommand{\frametitlehook}[1]{%
+}
+\BeforeBeginEnvironment{frame}{%
+	\setbeamertemplate{background canvas}{%
+		%\pgfuseimage{textslidebg}
+	}
+
+	\setbeamertemplate{headline}{%
+		\nointerlineskip % get rid of the weird blankspace
+		\newcommand{\ls}{0.05\paperwidth}
+		\usebeamerfont{frametitle}
+		\hbox{%
+			\begin{beamercolorbox}[left,leftskip=\ls,wd=0.9\paperwidth,ht=2.25ex,dp=1ex]{frametitle}%
+				\ifx\insertframetitle\empty\else
+					\insertframetitle
+				\fi
+			\end{beamercolorbox}%
+			\begin{beamercolorbox}[center,wd=0.1\paperwidth,ht=2.25ex,dp=1ex]{page number in head/foot}%
+				\insertframenumber{}/\inserttotalframenumber%
+			\end{beamercolorbox}%
+		}%
+		\usebeamerfont{framesubtitle}
+		\ifx\insertframesubtitle\empty
+			\begin{beamercolorbox}[sep=0pt,wd=\paperwidth,ht=2pt,dp=2pt,vmode]{framesubtitle}%
+			\end{beamercolorbox}%
+		\else
+			\begin{beamercolorbox}[left,wd=\paperwidth,ht=2.25ex,dp=1ex,leftskip=\ls]{framesubtitle}%
+				\insertframesubtitle
+			\end{beamercolorbox}%
+		\fi
+		\ifx\insertframetitle\empty
+			\gdef\beamer@frametitle{~}
+		\fi
+	}
+
+	\setbeamertemplate{frametitle}{}
+	\setbeamertemplate{footline}{}
+	\setbeamertemplate{navigation symbol}{}
+
+	% END OF BEFORE FRAME
+}
+
+\defbeamertemplate{background canvas}{Title}{%
+	\pgfuseimage{titleframebg}
+}
+
+\makeatletter
+\define@key{beamerframe}{Title}[true]{
+	\setbeamertemplate{background canvas}[Title]
+	\setbeamertemplate{headline}{}
+	\setbeamertemplate{footline}
+}
+\define@key{beamerframe}{Image}[true]{
+	\setbeamertemplate{background canvas}{\pgfuseimage{imageslidebg}}
+}
+\makeatother
+
+\setbeamertemplate{title page}{	
+	\nointerlineskip
+	\newlength{\titlepad}
+	\setlength{\titlepad}{0.15\paperwidth}
+	\newlength{\titleareaheight}
+	\newlength{\titleareawidth}
+	\newlength{\titleareadepth}
+	\setlength{\titleareaheight}{\paperheight - 0.5\titlepad}
+	\setlength{\titleareawidth}{\paperwidth - 0.5\titlepad}
+	\parbox[t][\titleareaheight]{\titleareawidth}{%
+		\begin{beamercolorbox}[wd=\titleareawidth]{none}
+			\pgfuseimage{logo}
+		\end{beamercolorbox}
+		\vfill
+		\begin{beamercolorbox}[wd=\titleareawidth]{title}
+			\usebeamerfont{title}\inserttitle
+		\end{beamercolorbox}
+        \smallskip
+		\ifx\insertsubtitle\empty\relax\else
+			\begin{beamercolorbox}[wd=\titleareawidth]{subtitle}
+				\usebeamerfont{subtitle}\insertsubtitle
+			\end{beamercolorbox}
+		\fi
+		\vfill
+		\begin{beamercolorbox}[wd=\titleareawidth]{author}
+			\usebeamerfont{author}\insertauthor
+		\end{beamercolorbox}
+		\smallskip
+		\begin{beamercolorbox}[wd=\titleareawidth]{author}
+			\usebeamerfont{date}\insertdate
+		\end{beamercolorbox}
+		\vfill
+		\setbeamercolor{tmp}{fg=hustred2}
+		\begin{beamercolorbox}[wd=\titleareawidth]{tmp}
+			\fontsize{2.25ex}{2.25ex}\selectfont%
+			\textbf{\uppercase{ONE LOVE. ONE FUTURE}}
+		\end{beamercolorbox}%
+		\vspace{\headsep}
+	}
+}
+
+
+\mode<all>

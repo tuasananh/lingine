@@ -1,0 +1,261 @@
+\section{Bài Toán}
+
+\begin{frame}{Tổng quan đề tài}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.46\textwidth}
+  \vspace{0.5cm}
+      \only<-5>{\begin{itemize}[<+->]
+        \item Xây dựng AI chơi Cờ Tướng.
+        \item AI được mô hình hóa như một Intelligent Agent.
+        \item Quan sát và phân tích trạng thái bàn cờ.
+        \item Đưa ra nước đi tốt nhất trong môi trường đối kháng.
+        \item Một trong những bài toán kinh điển của AI: Game playing.
+      \end{itemize}}
+      \only<6->{
+        \begin{itemize}
+          \item<6-> Cờ Tướng là bài toán:
+            \begin{enumerate}
+              \item Hai người chơi.
+              \item Đối kháng Zero-Sum.
+            \end{enumerate}
+          \item<7-> Không gian tìm kiếm rất lớn ($\approx 10^{150}$)
+          \item<8-> Vì vậy, đòi hỏi:
+            \begin{enumerate}
+              \item Tìm kiếm thông minh.
+              \item Đánh giá chính xác.
+              \item Hiệu năng cao.
+            \end{enumerate}
+        \end{itemize}
+      }
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[height=0.64\textheight]{\figpath{fig-00-board-start.png}}
+        \caption{Bàn cờ khởi đầu.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[t]{Kiến trúc hệ thống}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.4\textwidth}
+      \begin{block}{Agent}
+        \textbf{Đầu vào}
+        \begin{itemize}[<+->]
+          \item Trạng thái hiện tại của bàn cờ.
+          \item Lượt chơi hiện tại.
+          \item Chuỗi các nước đi.
+        \end{itemize}
+        \onslide<4->{\textbf{Đầu ra}}
+        \begin{itemize}[<+->]
+          \item Nước đi tốt nhất cho trạng thái bàn cờ hiện tại.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.6\textwidth}
+      \begin{figure}[htbp]
+        \centering
+        \definecolor{blueFill}{HTML}{E1EDFF}
+        \definecolor{blueStroke}{HTML}{2B70E4}
+        \definecolor{greenFill}{HTML}{E6F9EC}
+        \definecolor{greenStroke}{HTML}{28A745}
+        \definecolor{redFill}{HTML}{FFEBEB}
+        \definecolor{redStroke}{HTML}{DC3545}
+        \begin{tikzpicture}[
+            scale=0.5,
+            transform shape,
+            % --- Node Styles ---
+            blueNode/.style={
+              rectangle, 
+              draw=blueStroke, 
+              fill=blueFill, 
+              line width=2pt, 
+              rounded corners=4pt,
+              align=center,
+              inner sep=10pt,
+            },
+            greenNode/.style={
+              rectangle, 
+              draw=greenStroke, 
+              fill=greenFill, 
+              line width=2pt, 
+              rounded corners=4pt,
+              align=center,
+              inner sep=10pt,
+            },
+            redNode/.style={
+              rectangle, 
+              draw=redStroke, 
+              fill=redFill, 
+              line width=2pt, 
+              dashed,
+              rounded corners=4pt,
+              align=center,
+              inner sep=10pt,
+            },
+            % --- Fixed Cylinder Style ---
+            dbNode/.style={
+              cylinder, 
+              draw=greenStroke, 
+              fill=greenFill, 
+              line width=2pt, 
+              shape border rotate=90, 
+              align=center, 
+              inner sep=10pt,            % Reduced inner padding
+              aspect = 0.25
+            },
+            % --- Arrow Styles ---
+            arrow/.style={
+              -{Stealth}, 
+              draw=black!80
+            },
+            dashedArrow/.style={
+              -{Stealth}, 
+              dashed, 
+              draw=black!80
+            },
+            biArrow/.style={
+              {Stealth}-{Stealth}, 
+              draw=black!80
+            },
+            ]
+
+            %% --- Nodes Placement ---
+            \node (GUI) [blueNode] at (0,-0.92) {GUI};
+            \node (ThreadA) [blueNode, right=of GUI, xshift=1.5cm] {Luồng A: Stdin Listener};
+            \node (Engine) [greenNode, below=of ThreadA] {Luồng B: UCI Engine};
+
+            % Right Side Node
+            \node (State) [redNode, right=of ThreadA, xshift=1.5cm] {Cờ trạng\\thái};
+
+            % Core Engine Stack
+            \node (ID) [greenNode, below=of Engine] {Iterative Deepening};
+            \node (Algo) [greenNode, below=of ID, xshift=1.5cm] {Negamax Alpha-Beta};
+
+            % Bottom & Left Nodes
+            \node (Eval) [greenNode, below=of Algo] {Hàm đánh giá tĩnh};
+            \node (Trans) [dbNode, left=2.2cm of Algo] {Transposition\\Table}; % Adjusted spacing slightly for balance
+
+            %% --- Connections & Labels ---
+            % GUI -> ThreadA
+            \draw [arrow] (GUI) -- node[below, font=\small, align=center] {Lệnh\\qua stdin} (ThreadA);
+
+            % ThreadA -> Engine
+            \draw [arrow] (ThreadA) -- node[left, font=\small] {Chuyển lệnh} (Engine);
+
+            % Engine -> GUI (Loop back loop on the left side)
+            \draw [arrow] (Engine.west) .. controls +(-3.5,0) and +(0,0) .. node[font=\small, align=center, below, yshift=-0.25cm] {Trả về\\bestmove} (GUI.south);
+
+            % ThreadA -> State
+            \draw [arrow] (ThreadA) -- node[below, font=\small, align=center] {Ngắt khẩn\\cấp} (State);
+
+            % Engine -> ID -> Algo
+            \draw [arrow] (Engine) -- (ID);
+            \draw [arrow] (ID) -- (Algo);
+
+            % State -> Algo (Dashed routing down to the side of Algo)
+            \draw [dashedArrow] (State.south) -- node[font=\small, align=left, right, xshift=0.2cm] {Đọc liên tục\\để dừng} (Algo.east);
+
+            % Algo -> Eval
+            \draw [arrow] (Algo) -- node[midway, right, font=\small] {} (Eval);
+
+            % Algo <-> Trans (Bidirectional)
+            \draw [biArrow] (Algo) -- node[midway, below, font=\small, align=center] {Lưu\\/Đọc thế} (Trans);
+
+          \end{tikzpicture}
+          \caption{Sơ đồ kiến trúc của Lingine}
+        \end{figure}
+
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Giao thức UCI}
+  \begin{figure}
+      \centering
+        \begin{tikzpicture}[
+            scale=1,
+            transform shape,
+            % Styles for lifelines and boxes
+            guiBox/.style={draw=lingineBlue, fill=lingineBlue!10, thick, rounded corners=2pt, minimum width=2.0cm, minimum height=0.6cm, align=center, font=\small},
+            engBox/.style={draw=lingineGreen, fill=lingineGreen!10, thick, rounded corners=2pt, minimum width=2.0cm, minimum height=0.6cm, align=center, font=\small},
+            lifeline/.style={draw=black!30, dashed, thick},
+            % Arrow styles
+            toEngine/.style={-{Stealth}, draw=lingineBlue, thick},
+            toGui/.style={-{Stealth}, draw=lingineGreen, thick},
+            infoLine/.style={-{Stealth}, draw=black!40, dashed, thick},
+            % Text style
+            lbl/.style={font=\scriptsize\ttfamily, midway, above, yshift=-1pt}
+          ]
+          
+          % Lifeline Headers
+          \node[guiBox] (GUI) at (0,0) {Chess GUI};
+          \node[engBox] (Engine) at (7.5,0) {Lingine (Engine)};
+
+          \path let \p1 = (GUI) in 
+            \pgfextra{\xdef\guix{\x1}}; % Store x-coordinate in a macro
+          \path let \p1 = (Engine) in 
+            \pgfextra{\xdef\enginex{\x1}}; % Store x-coordinate in a macro
+          
+          % Lifeline Paths
+          \coordinate[below=5.2cm of GUI] (GUIbottom);
+          \coordinate[below=5.2cm of Engine] (Enginebottom);
+          \draw[lifeline] (GUI) -- (GUIbottom);
+          \draw[lifeline] (Engine) -- (Enginebottom);
+          
+          % Communication Steps
+          % Step 1: Handshake
+         \onslide<1-> \draw[toEngine] (\guix,-0.7) -- node[lbl] {uci} (\enginex,-0.7);
+          \onslide<2-> \draw[toGui] (\enginex,-1.3) -- node[lbl] {uciok} (\guix,-1.3);
+          
+          % Step 2: Ready Check
+          \onslide<3-> \draw[toEngine] (0,-2.0) -- node[lbl] {isready} (\enginex,-2.0);
+          \onslide<4-> \draw[toGui] (\enginex,-2.6) -- node[lbl] {readyok} (0,-2.6);
+          
+          % Step 3: Calculation Flow
+       \onslide<5->    \draw[toEngine] (\guix,-3.3) -- node[lbl] {position startpos moves ...} (\enginex,-3.3);
+          \onslide<6-> \draw[toEngine] (\guix,-3.9) -- node[lbl] {go depth 10} (\enginex,-3.9);
+          
+          % Step 4: Search Info & Bestmove
+ \onslide<7->          \draw[infoLine] (\enginex,-4.5) -- node[lbl] {info depth 1 ...} (\guix,-4.5);
+        \onslide<8->  \draw[toGui] (\enginex,-5.0) -- node[lbl] {bestmove h0g2} (\guix,-5.0);
+          
+        \end{tikzpicture}
+      \caption{Luồng giao tiếp qua giao thức UCI}
+    \end{figure}
+\end{frame}
+
+% Định nghĩa cột mới tự động canh lề trái, tự giãn độ rộng và thêm \hspace{0pt} để sửa lỗi baseline của \onslide
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash\hspace{0pt}}p{#1}}
+
+\begin{frame}{Các trở ngại khi lập trình cờ tướng}
+  \begin{columns}[T,totalwidth=\textwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{tabular}{L{2.2cm} L{3.8cm}}
+        \toprule
+        Thành phần & Cờ tướng \\[0.25cm]
+        \midrule
+        % CÁCH SỬA: Đặt \onslide ở đầu dòng và tuyệt đối KHÔNG bao trọn dòng bằng dấu {}
+        \onslide<2-> Bàn cờ & $10 \times 9 = 90$ giao điểm rất lớn \\ \addlinespace
+        \onslide<3-> Vùng luật & Cung và sông \\ \addlinespace
+        \onslide<4-> Cản quân & Chân Mã, mắt Tượng, ngòi Pháo \\ \addlinespace
+        \onslide<5-> Hàm đánh giá & Phức tạp, yêu cầu nhiều kiến thức cho tàn cuộc \\ \addlinespace
+        \onslide<6-> Bộ luật đặc biệt & Lộ mặt Tướng, chiếu/đuổi dai \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+    \onslide<1->
+    \begin{column}{0.50\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[height=0.64\textheight]{\figpath{fig-01-blocking.png}}
+        \caption{Cản mắt tượng và chân mã.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+
+
