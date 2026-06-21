@@ -24,7 +24,7 @@ impl super::Searcher<'_> {
 
         // Base case: to avoid infinite recursion and stack overflow from perpetual
         // checks
-        if depth <= -12 || ply >= MAX_PLY as u8 {
+        if ply >= MAX_PLY as u8 {
             return self.pos.evaluate();
         }
 
