@@ -87,7 +87,16 @@ impl super::Searcher<'_> {
         // Sort captures using MVV-LVA
         self.sort_moves(&mut moves, best_move, ply);
 
-        for m in moves {
+        for (moves_played, m) in moves.iter().copied().enumerate() {
+            // Late move pruning
+            const LMP_MOVES_PLAYED_THRESHOLD: usize = 3;
+            if !score::is_losing(best_score)
+                && moves_played >= LMP_MOVES_PLAYED_THRESHOLD
+                && !self.pos.gives_check(m)
+            {
+                break;
+            }
+
             self.pos.do_move(m);
             let score = -self.quiescence_search(depth - 1, ply + 1, -beta, -alpha);
             self.pos.undo_move(m);
